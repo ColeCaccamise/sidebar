@@ -25,6 +25,10 @@ export const errorCodes = {
   user_deleted:
     "You're not authorized to take this action, your account has been deleted.",
   session_expired: 'Your session has expired. Please log in again.',
+  subscription_flow_canceled:
+    'Could not complete the subscription signup process. Please try again.',
+  checkout_canceled:
+    'Your checkout session was canceled. No charges have been made to your account.',
   default: DEFAULT_ERROR_MESSAGE,
 } as const;
 
@@ -36,6 +40,7 @@ export const responseCodes = {
   password_reset_sent:
     "You'll receive an email if your are registered in our system.",
   user_restored: 'Your account has been restored successfully.',
+  subscription_successful: 'Subscription successful!',
   default: DEFAULT_RESPONSE_MESSAGE,
 } as const;
 
