@@ -1,31 +1,66 @@
 import { CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons';
 import Button from './button';
 import { useState } from 'react';
+import axios from 'axios';
+import { useRouter } from 'next/navigation';
+import toast from '@/lib/toast';
+import { getErrorMessage } from '@/messages';
 
 export default function PricingBox({
   planName,
   planPrice,
-  billingOption = 'monthly',
+  billingOption = 'month',
   features,
   customPricing = false,
   subscribedTo = false,
+  priceLookupKey,
 }: {
   planName: string;
   planPrice?: number;
-  billingOption?: 'monthly' | 'annualy';
+  billingOption?: 'month' | 'year';
   features?: Array<{
     featureName: string;
     featureIncluded: boolean;
   }>;
   customPricing?: boolean;
   subscribedTo?: boolean;
+  priceLookupKey?: string;
 }) {
   const billingOptions = {
-    monthly: 'mo',
-    annualy: 'yr',
+    month: 'mo',
+    year: 'yr',
   };
 
+  const router = useRouter();
+
   const [selectedPlan, setSelectedPlan] = useState(false);
+
+  async function handleSelectPlan() {
+    setSelectedPlan(!selectedPlan);
+
+    await axios
+      .post(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/checkout`,
+        {
+          price_lookup_key: priceLookupKey,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response?.data?.code),
+          mode: 'error',
+        });
+      });
+  }
 
   return (
     <div className="flex w-full flex-col gap-2 rounded-md border border-stroke-weak p-4">
@@ -53,7 +88,7 @@ export default function PricingBox({
         <Button
           disabled={subscribedTo}
           className="w-full"
-          handleClick={() => setSelectedPlan(!selectedPlan)}
+          handleClick={() => {}}
         >
           Contact us
         </Button>
@@ -61,7 +96,7 @@ export default function PricingBox({
         <Button
           disabled={subscribedTo}
           className="w-full"
-          handleClick={() => setSelectedPlan(!selectedPlan)}
+          handleClick={handleSelectPlan}
         >
           {selectedPlan ? 'Selected' : `Select ${planName}`}
         </Button>
