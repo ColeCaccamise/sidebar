@@ -11,6 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/stripe/stripe-go/v81/checkout/session"
+
+	portalsession "github.com/stripe/stripe-go/v81/billingportal/session"
+	"github.com/stripe/stripe-go/v81/price"
+	"github.com/stripe/stripe-go/v81/product"
+
 	"github.com/go-chi/httprate"
 
 	"github.com/colecaccamise/go-backend/middleware"
@@ -23,8 +29,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/h2non/filetype"
 	"github.com/rs/cors"
-	"github.com/stripe/stripe-go/v80"
-	"github.com/stripe/stripe-go/v80/subscription"
+	"github.com/stripe/stripe-go/v81"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -56,7 +61,6 @@ func NewServer(listenAddr string, store storage.Storage) *Server {
 
 func (s *Server) Start() error {
 	r := chi.NewRouter()
-	stripe.Key = os.Getenv("STRIPE_KEY")
 
 	r.NotFound(makeHttpHandleFunc(handleNotFound))
 	r.MethodNotAllowed(makeHttpHandleFunc(handleMethodNotAllowed))
@@ -143,7 +147,11 @@ func (s *Server) Start() error {
 		r.Use(middleware.VerifyAuth)
 		r.Use(s.VerifyUserNotDeleted)
 		r.Use(s.VerifySecurityVersion)
-		r.Get("/subscriptions", makeHttpHandleFunc(s.handleGetSubscriptions))
+		r.Route("/billing", func(r chi.Router) {
+			r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
+			r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
+			r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
+		})
 	})
 
 	stack := middleware.CreateStack(
@@ -1063,8 +1071,12 @@ func getUserIdentity(s *Server, r *http.Request) (user *models.User, authType st
 	}
 
 	// handle api key authentication
+	// todo revert below
 	if apiKey != "" {
-		return nil, "", fmt.Errorf("identity not implemented for api keys")
+		//return nil, "", fmt.Errorf("identity not implemented for api keys")
+		user, _ := s.store.GetUserByID(uuid.MustParse("190798d1-c185-458e-a070-43651074cd05"))
+
+		return user, "authToken", nil
 	}
 
 	return nil, "", fmt.Errorf("no valid authentication method")
@@ -1631,17 +1643,149 @@ func (s *Server) handleGetAllTokens(w http.ResponseWriter, r *http.Request) erro
 	return WriteJSON(w, http.StatusOK, nil)
 }
 
-func (s *Server) handleGetSubscriptions(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = "sk_test_51QWzbYATosx6QLQbAPARQD3lnSU4NvBQffCHrtc4KGcOYPnVlsLGvB6tVEfyrWCHVVpPrdiztbpkHhCjHDDLnRYb00NfHC2mH9"
+func (s *Server) handleGetPlans(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
-	params := &stripe.SubscriptionParams{}
-	result, err := subscription.Get("sub_1MowQVLkdIwHu7ixeRlqHVzs", params)
+	// get prices from stripe
+	priceParams := &stripe.PriceListParams{}
+	prices := price.List(priceParams)
+
+	var plans []models.SubscriptionPlan
+
+	for prices.Next() {
+		p := prices.Price()
+
+		// get the product details
+		prod, err := product.Get(p.Product.ID, nil)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		plan := models.SubscriptionPlan{
+			Name:           prod.Name,
+			ProductID:      p.Product.ID,
+			PriceID:        p.ID,
+			PriceLookupKey: p.LookupKey,
+			ProductActive:  prod.Active,
+			PriceActive:    p.Active,
+			Interval:       string(p.Recurring.Interval),
+			Price:          int(p.UnitAmount),
+		}
+
+		plans = append(plans, plan)
+	}
+
+	if prices.Err() != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Message: "Successfully retrieved plans",
+		Data:    plans,
+	})
+}
+
+func (s *Server) handleCreateCheckoutSession(w http.ResponseWriter, r *http.Request) error {
+	user, _, err := getUserIdentity(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "invaild_token"})
+	}
+
+	// read in price_lookup_key
+	checkoutReq := new(models.CreateCheckoutSessionRequest)
+	if err := json.NewDecoder(r.Body).Decode(checkoutReq); err != nil {
+		if err.Error() == "EOF" {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
+		} else {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+		}
+	}
+
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	params := &stripe.PriceListParams{
+		LookupKeys: stripe.StringSlice([]string{
+			checkoutReq.PriceLookupKey,
+		}),
+	}
+	i := price.List(params)
+	//if !i.Front() {
+	//	return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid lookup key", Code: "invalid_lookup_key"})
+	//}
+	var price *stripe.Price
+	for i.Next() {
+		p := i.Price()
+		price = p
+	}
+
+	if price == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+	}
+	successUrl := fmt.Sprintf("%s/settings/billing?message=subscription_successful", os.Getenv("APP_URL"))
+	cancelUrl := fmt.Sprintf("%s/settings/billing?error=checkout_canceled", os.Getenv("APP_URL"))
+
+	checkoutParams := &stripe.CheckoutSessionParams{
+		Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				Price:    stripe.String(price.ID),
+				Quantity: stripe.Int64(1),
+			},
+		},
+		SuccessURL:    stripe.String(successUrl),
+		CancelURL:     stripe.String(cancelUrl),
+		CustomerEmail: stripe.String(user.Email),
+		Metadata: map[string]string{
+			"user_id": user.ID.String(),
+		},
+		InvoiceCreation: &stripe.CheckoutSessionInvoiceCreationParams{
+			Enabled: stripe.Bool(true),
+		},
+	}
+	checkoutSession, err := session.New(checkoutParams)
+
+	if checkoutSession == nil || err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	customer := checkoutSession.Customer
+
+	user.CustomerID = customer.ID
+	err = s.store.UpdateUser(user)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
 	}
 
-	return WriteJSON(w, http.StatusOK, nil)
+	redirectUrl := checkoutSession.URL
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": redirectUrl,
+	}})
+}
+
+func (s *Server) handleCreatePortalSession(w http.ResponseWriter, r *http.Request) error {
+	user, _, err := getUserIdentity(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+
+	customerID := user.CustomerID
+
+	returnUrl := fmt.Sprintf("%s/settings/billing", os.Getenv("APP_URL"))
+
+	portalParams := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(customerID),
+		ReturnURL: stripe.String(returnUrl),
+	}
+	ps, _ := portalsession.New(portalParams)
+
+	portalUrl := ps.URL
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": portalUrl,
+	}})
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
