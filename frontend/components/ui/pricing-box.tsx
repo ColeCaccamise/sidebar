@@ -5,6 +5,7 @@ import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import toast from '@/lib/toast';
 import { getErrorMessage } from '@/messages';
+import Link from 'next/link';
 
 export default function PricingBox({
   planName,
@@ -14,6 +15,7 @@ export default function PricingBox({
   customPricing = false,
   subscribedTo = false,
   priceLookupKey,
+  planType,
 }: {
   planName: string;
   planPrice?: number;
@@ -25,6 +27,7 @@ export default function PricingBox({
   customPricing?: boolean;
   subscribedTo?: boolean;
   priceLookupKey?: string;
+  planType?: 'current' | 'upgrade' | 'downgrade';
 }) {
   const billingOptions = {
     month: 'mo',
@@ -62,6 +65,80 @@ export default function PricingBox({
       });
   }
 
+  async function handleUpdatePlan() {
+    setSelectedPlan(!selectedPlan);
+
+    await axios
+      .post(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/update`,
+        {
+          price_lookup_key: priceLookupKey,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response?.data?.code),
+          mode: 'error',
+        });
+      });
+  }
+
+  const renderActionButton = () => {
+    if (customPricing) {
+      return (
+        <Link
+          href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}
+          className="btn btn-brand w-full no-underline"
+        >
+          Contact us
+        </Link>
+      );
+    }
+
+    if (planType === 'current') {
+      return (
+        <Button disabled className="w-full">
+          Your current plan
+        </Button>
+      );
+    }
+
+    if (!planType) {
+      // First time subscriber
+      return (
+        <Button
+          disabled={subscribedTo}
+          className="w-full"
+          handleClick={handleSelectPlan}
+        >
+          {selectedPlan ? 'Selected' : `Subscribe to ${planName}`}
+        </Button>
+      );
+    }
+
+    // Existing subscriber changing plans
+    return (
+      <Button
+        className="w-full"
+        handleClick={handleUpdatePlan}
+        variant={planType === 'downgrade' ? 'destructive' : 'default'}
+      >
+        {planType === 'upgrade'
+          ? `Upgrade to ${planName}`
+          : `Downgrade to ${planName}`}
+      </Button>
+    );
+  };
+
   return (
     <div className="flex w-full flex-col gap-2 rounded-md border border-stroke-weak p-4">
       <span className="">{planName}</span>
@@ -84,23 +161,7 @@ export default function PricingBox({
           </div>
         ))}
       </div>
-      {customPricing ? (
-        <Button
-          disabled={subscribedTo}
-          className="w-full"
-          handleClick={() => {}}
-        >
-          Contact us
-        </Button>
-      ) : (
-        <Button
-          disabled={subscribedTo}
-          className="w-full"
-          handleClick={handleSelectPlan}
-        >
-          {selectedPlan ? 'Selected' : `Select ${planName}`}
-        </Button>
-      )}
+      {renderActionButton()}
     </div>
   );
 }

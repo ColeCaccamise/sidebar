@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import Spinner from '@/components/ui/spinner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getErrorMessage, getResponseMessage } from '@/messages';
+import Button from '@/components/ui/button';
 
 export default function BillingPage() {
   const [plans, setPlans] = useState([]);
@@ -15,6 +16,8 @@ export default function BillingPage() {
   const message = searchParams.get('message');
   const error = searchParams.get('error');
   const router = useRouter();
+
+  const [subscription, setSubscription] = useState<any>(null);
 
   const planFeatures = {
     Basic: [
@@ -67,6 +70,90 @@ export default function BillingPage() {
   }, []);
 
   useEffect(() => {
+    handleGetSubscription();
+  }, []);
+
+  async function handleOpenPortal() {
+    const res = await axios
+      .post(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/portal`,
+        {},
+        {
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      })
+      .catch((err) => {
+        toast({
+          message: 'Error opening portal',
+          mode: 'error',
+        });
+      });
+  }
+
+  async function handleCancelSubscription() {
+    const res = await axios
+      .post(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/cancel`,
+        {},
+        {
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response.data.code),
+          mode: 'error',
+        });
+      });
+  }
+
+  async function handleRenewSubscription() {
+    const res = await axios
+      .post(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/renew`,
+        {},
+        {
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        toast({
+          message: 'Subscription renewed successfully',
+          mode: 'success',
+        });
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response.data.code),
+          mode: 'error',
+        });
+      });
+  }
+
+  async function handleGetSubscription() {
+    try {
+      const res = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions`,
+        {
+          withCredentials: true,
+        },
+      );
+
+      console.log(res.data.data);
+
+      setSubscription(res.data.data.subscription);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  useEffect(() => {
     if (message) {
       toast({
         message: getResponseMessage(message),
@@ -84,26 +171,105 @@ export default function BillingPage() {
     }
   }, [message, error]);
 
+  const getPlanType = (planPrice: number) => {
+    if (!subscription) return undefined;
+    const currentPlanPrice = subscription.items.data[0].price.unit_amount;
+
+    if (currentPlanPrice === planPrice) return 'current';
+    if (planPrice > currentPlanPrice) return 'upgrade';
+    return 'downgrade';
+  };
+
   return (
     <>
       {loading ? (
         <Spinner />
       ) : (
         <div className="flex w-full flex-col justify-start gap-4">
-          <h1>Plans</h1>
+          <div className="flex justify-between">
+            <h1>Plans</h1>
+            <Button
+              className="no-underline"
+              variant="link"
+              handleClick={handleOpenPortal}
+            >
+              Manage subscription
+            </Button>
+          </div>
 
-          <div className="flex w-full justify-between gap-4">
-            {plans.map((plan: any) => (
-              <PricingBox
-                key={plan.product_id}
-                planName={plan.name}
-                customPricing={false}
-                features={planFeatures[plan.name as keyof typeof planFeatures]}
-                planPrice={plan.price / 100}
-                billingOption={plan.interval}
-                priceLookupKey={plan.price_lookup_key}
-              />
-            ))}
+          <div className="flex w-full flex-col gap-4">
+            {subscription?.cancel_at ? (
+              <div className="flex w-full flex-col gap-2 rounded-md border border-stroke-weak p-4">
+                <span className="text-lg font-medium">Subscription Status</span>
+                <p>
+                  Your subscription will end in{' '}
+                  {(() => {
+                    try {
+                      if (!subscription?.cancel_at) return '0 days';
+                      // Convert Unix timestamp (seconds) to milliseconds
+                      const cancelDate = new Date(
+                        subscription.cancel_at * 1000,
+                      );
+                      const daysLeft = Math.max(
+                        Math.ceil(
+                          (cancelDate.getTime() - Date.now()) /
+                            (1000 * 60 * 60 * 24),
+                        ),
+                        0,
+                      );
+                      return `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`;
+                    } catch (error) {
+                      return '0 days';
+                    }
+                  })()}
+                </p>
+                <Button
+                  className="w-full"
+                  handleClick={() => {
+                    axios
+                      .post(
+                        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/renew`,
+                        {},
+                        { withCredentials: true },
+                      )
+                      .then((res) => {
+                        setSubscription(res.data.data.subscription);
+
+                        toast({
+                          message: 'Subscription renewed successfully',
+                          mode: 'success',
+                        });
+                      })
+                      .catch((err) => {
+                        toast({
+                          message: getErrorMessage(err.response?.data?.code),
+                          mode: 'error',
+                        });
+                      });
+                  }}
+                >
+                  Renew Subscription
+                </Button>
+              </div>
+            ) : (
+              ''
+            )}
+            <div className="flex w-full justify-between gap-4">
+              {plans.map((plan: any) => (
+                <PricingBox
+                  key={plan.product_id}
+                  planName={plan.name}
+                  customPricing={false}
+                  features={
+                    planFeatures[plan.name as keyof typeof planFeatures]
+                  }
+                  planPrice={plan.price / 100}
+                  billingOption={plan.interval}
+                  priceLookupKey={plan.price_lookup_key}
+                  planType={getPlanType(plan.price)}
+                />
+              ))}
+            </div>
           </div>
 
           <div className="flex w-full justify-between gap-4">
