@@ -25,16 +25,28 @@ export default function BillingPage() {
         featureName: 'Email support',
         featureIncluded: true,
       },
+      {
+        featureName: '2 teams',
+        featureIncluded: true,
+      },
     ],
     Pro: [
       {
         featureName: 'Priority email support',
         featureIncluded: true,
       },
+      {
+        featureName: '5 teams',
+        featureIncluded: true,
+      },
     ],
     Premium: [
       {
         featureName: 'Private slack channel',
+        featureIncluded: true,
+      },
+      {
+        featureName: '10 teams',
         featureIncluded: true,
       },
     ],
