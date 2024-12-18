@@ -29,6 +29,9 @@ export const errorCodes = {
     'Could not complete the subscription signup process. Please try again.',
   checkout_canceled:
     'Your checkout session was canceled. No charges have been made to your account.',
+  subscription_already_canceled: 'Your subscription has already been canceled.',
+  subscription_active:
+    "Your subscription is currently active, it can't be renewed.",
   default: DEFAULT_ERROR_MESSAGE,
 } as const;
 
