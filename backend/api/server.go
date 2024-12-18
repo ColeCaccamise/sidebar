@@ -2204,6 +2204,10 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
 		}
 		log.Printf("Subscription updated for %s.", subscription.ID)
+
+		priceLookupKey := subscription.Items.Data[0].Price.LookupKey
+		fmt.Println("price lookup after update: ", priceLookupKey)
+
 		// Then define and call a func to handle the successful attachment of a PaymentMethod.
 		// handleSubscriptionUpdated(subscription)
 
@@ -2217,6 +2221,8 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 		log.Printf("Subscription created for %s.", subscription.ID)
 		// Then define and call a func to handle the successful attachment of a PaymentMethod.
 		// handleSubscriptionCreated(subscription)
+
+		// get plan version and update DB
 
 	case "customer.subscription.trial_will_end":
 		var subscription stripe.Subscription
@@ -2245,6 +2251,21 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 	}
 
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{}})
+}
+
+func handleSubscriptonUpdate(subscription *stripe.Subscription) error {
+	// handle going to cancel - update the cancel at date
+	// update the billing cycle end date
+	// get current plan
+
+	// handle upgrade
+	// set new plan
+
+	// handle downgrade
+	// set date of downgrade
+	// set plan being downgraded to
+
+	return nil
 }
 
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
