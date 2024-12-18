@@ -14,3 +14,7 @@ type SubscriptionPlan struct {
 type CreateCheckoutSessionRequest struct {
 	PriceLookupKey string `json:"price_lookup_key"`
 }
+
+type UpdateSubscriptionRequest struct {
+	PriceLookupKey string `json:"price_lookup_key"`
+}

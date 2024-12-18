@@ -59,6 +59,10 @@ type User struct {
 	RestoredAt               *time.Time `gorm:"default:null" json:"restored_at"`
 	SecurityVersionChangedAt *time.Time `gorm:"default:null" json:"security_version_changed_at"`
 	CustomerID               string     `json:"customer_id"`
+	RedeemedCouponAt         *time.Time `gorm:"default:null" json:"redeemed_coupon_at"`
+	FreeTrialAt              *time.Time `gorm:"default:null" json:"free_trial_at"`
+	FreeTrialDuration        int64      `gorm:"default:0" json:"free_trial_duration"`
+	SubscriptionTier         string     `gorm:"default:null" json:"subscription_tier"`
 }
 
 type UserIdentityResponse struct {
