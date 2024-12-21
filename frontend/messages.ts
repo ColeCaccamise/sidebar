@@ -46,6 +46,7 @@ export const errorCodes = {
   no_emails_provided: 'No emails provided.',
   too_many_invites: 'You can only invite up to 25 people at a time.',
   invalid_self_invite: 'You cannot invite yourself.',
+  invite_expired: 'This invite has expired. Ask your team for a new one.',
   default: DEFAULT_ERROR_MESSAGE,
 } as const;
 
