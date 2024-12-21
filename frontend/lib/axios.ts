@@ -17,6 +17,8 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    console.log(error);
+
     if (error.response?.status === 401) {
       if (refreshing) {
         // wait for the existing refresh to complete
@@ -29,7 +31,7 @@ api.interceptors.response.use(
       refreshing = true;
 
       try {
-        const response = await axios.post(
+        const response = await api.post(
           '/auth/refresh',
           {},
           {
