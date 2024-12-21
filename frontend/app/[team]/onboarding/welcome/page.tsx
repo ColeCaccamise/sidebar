@@ -26,20 +26,6 @@ export default function WelcomePage() {
       buttonText: 'Continue',
       buttonLinkText: '',
     },
-    {
-      heading: 'Invite your team',
-      description:
-        'Collaborate with your team members by inviting them to join your workspace.',
-      buttonText: 'Invite team members',
-      buttonLinkText: 'Skip for now',
-    },
-    {
-      heading: 'Your plan',
-      description:
-        'Your team is on a 14-day free trial — no credit card required. You can upgrade after the trial ends (or anytime before).',
-      buttonText: 'Upgrade now',
-      buttonLinkText: 'Take me to the dashboard',
-    },
   ];
 
   function getOnboardingCopy(step: number) {
@@ -50,6 +36,17 @@ export default function WelcomePage() {
       setButtonText(copy.buttonText);
       setButtonLinkText(copy.buttonLinkText);
     }
+  }
+
+  function completeOnboarding() {
+    api
+      .post(`/teams/${teamSlug}/onboarding`, {}, { withCredentials: true })
+      .then((res) => {
+        router.push(`/${teamSlug}`);
+      })
+      .catch((err) => {
+        console.error('Failed to complete onboarding:', err);
+      });
   }
 
   // get team slug from url params
@@ -95,14 +92,16 @@ export default function WelcomePage() {
   return (
     <div className="flex max-w-md flex-col items-center gap-8 text-center">
       <div className="flex w-full justify-start">
-        <div className="flex flex-grow gap-4">
-          {onboardingCopy.map((_, index) => (
-            <div
-              key={index + 1}
-              className={`h-2 flex-1 rounded-full ${onboardingStep === index + 1 ? 'bg-brand' : 'bg-brand-secondary'}`}
-            ></div>
-          ))}
-        </div>
+        {onboardingStep > 0 && (
+          <div className="flex flex-grow gap-4">
+            {onboardingCopy.map((_, index) => (
+              <div
+                key={index + 1}
+                className={`h-2 flex-1 rounded-full ${onboardingStep === index + 1 ? 'bg-brand' : 'bg-brand-secondary'}`}
+              ></div>
+            ))}
+          </div>
+        )}
       </div>
       <Logo />
       <div className="flex flex-col items-center gap-2">
@@ -113,7 +112,13 @@ export default function WelcomePage() {
       <div className="flex w-full flex-col items-center gap-4">
         <Button
           className="btn-brand-secondary w-full"
-          handleClick={() => updateStep(onboardingStep + 1)}
+          handleClick={() => {
+            if (onboardingStep + 1 === onboardingCopy.length) {
+              completeOnboarding();
+            } else {
+              updateStep(onboardingStep + 1);
+            }
+          }}
         >
           {buttonText}
         </Button>
@@ -125,7 +130,9 @@ export default function WelcomePage() {
       <div className="mt-10 flex w-full justify-start">
         {onboardingStep > 0 && (
           <Button
-            handleClick={() => updateStep(onboardingStep - 1)}
+            handleClick={() => {
+              updateStep(onboardingStep - 1);
+            }}
             variant="unstyled"
             className="text-sm"
           >

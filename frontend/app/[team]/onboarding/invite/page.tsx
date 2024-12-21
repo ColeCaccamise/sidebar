@@ -176,13 +176,13 @@ export default function OnboardingInvitePage() {
       await api
         .post(
           `/teams/${teamSlug}/invite`,
-          { emails: validEmails, slug: teamSlug },
+          { emails: validEmails, skip_onboarding: false },
           {
             withCredentials: true,
           },
         )
         .then((res) => {
-          console.log(res.data);
+          router.push(res.data.data.redirect_url);
         })
         .catch((err) => {
           toast({
