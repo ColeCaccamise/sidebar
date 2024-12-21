@@ -13,6 +13,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Allow team join pages to be accessed without authentication
+  if (pathname.match(/^\/[^/]+\/join\/[a-f0-9]{32}$/)) {
+    return NextResponse.next();
+  }
+
   if (!apiUrl) {
     console.error('NEXT_PUBLIC_API_URL is not defined');
     return NextResponse.next();
@@ -35,6 +40,7 @@ export async function middleware(request: NextRequest) {
     const isPasswordPath =
       pathname.startsWith('/auth/forgot-password') ||
       pathname.startsWith('/auth/change-password');
+    const isJoinPath = pathname.match(/^\/[^/]+\/join\/[a-f0-9]{32}$/);
 
     // attempt to refresh the auth token
     if (response.status === 401) {
@@ -70,7 +76,11 @@ export async function middleware(request: NextRequest) {
       }
 
       // Refresh failed - redirect to login
-      if (response.data?.code === 'session_expired' && !authPath) {
+      if (
+        response.data?.code === 'session_expired' &&
+        !authPath &&
+        !isJoinPath
+      ) {
         const loginUrl = new URL('/auth/login', request.url);
         loginUrl.searchParams.append('error', 'session_expired');
         request.nextUrl.searchParams.forEach((value, key) => {
@@ -79,7 +89,7 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(loginUrl);
       }
 
-      if (!authPath) {
+      if (!authPath && !isJoinPath) {
         const loginUrl = new URL('/auth/login', request.url);
         request.nextUrl.searchParams.forEach((value, key) => {
           loginUrl.searchParams.append(key, value);
@@ -276,8 +286,9 @@ export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname;
     const authPath = pathname.startsWith('/auth');
     const emailConfirmed = pathname.startsWith('/auth/confirm-email');
+    const isJoinPath = pathname.match(/^\/[^/]+\/join\/[a-f0-9]{32}$/);
 
-    if (!authPath || emailConfirmed) {
+    if (!authPath && !emailConfirmed && !isJoinPath) {
       const loginUrl = new URL('/auth/login', request.url);
       request.nextUrl.searchParams.forEach((value, key) => {
         loginUrl.searchParams.append(key, value);
