@@ -9,6 +9,10 @@ import { ApiError } from '@/types';
 import Divider from '@/components/ui/divider';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { DashboardIcon } from '@radix-ui/react-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
+import { getErrorMessage } from '@/messages';
 
 export default function SignupPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -19,7 +23,6 @@ export default function SignupPage() {
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
-
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/auth/signup`,
@@ -28,18 +31,22 @@ export default function SignupPage() {
           headers: {
             'Content-Type': 'application/json',
           },
-          withCredentials: false,
+          withCredentials: true,
         },
       );
 
       if (response.status === 200) {
+        toast({
+          message: 'Account created successfully',
+          mode: 'success',
+        });
         router.push(response.data.redirect_url);
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
         const apiError = error.response.data as ApiError;
         toast({
-          message: apiError.error,
+          message: getErrorMessage(apiError.code),
           mode: 'error',
         });
       } else {
@@ -56,9 +63,28 @@ export default function SignupPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
-        <h1>Get started with your dashboard</h1>
+        <span className="py-4">
+          <DashboardIcon className="h-8 w-8" />
+        </span>
+        <h1>Create a new Dashboard account</h1>
         <p>Free for 14 days &mdash; no credit card required.</p>
       </div>
+
+      <div className="flex flex-col gap-2">
+        <Button
+          variant="unstyled"
+          className="btn flex w-full border border-stroke-weak bg-fill"
+          disabled={true}
+        >
+          <span className="mr-2">
+            <FontAwesomeIcon icon={faGoogle} />
+          </span>
+          Sign up with Google
+        </Button>
+      </div>
+
+      <span className="text-center">OR</span>
+
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
         <Input
           value={email}
@@ -83,7 +109,7 @@ export default function SignupPage() {
           type="submit"
           disabled={isLoading || !email || !password}
         >
-          {isLoading ? 'Loading...' : 'Start for free'}
+          {isLoading ? 'Loading...' : 'Sign up with email'}
         </Button>
 
         <div className="text-center">

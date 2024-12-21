@@ -40,6 +40,10 @@ type ChangePasswordRequest struct {
 	Token           string `json:"token"`
 }
 
+type AcceptTermsRequest struct {
+	TermsAccepted bool `json:"terms_accepted"`
+}
+
 type User struct {
 	ID                       uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	FirstName                string     `gorm:"" json:"first_name"`
@@ -63,18 +67,28 @@ type User struct {
 	FreeTrialAt              *time.Time `gorm:"default:null" json:"free_trial_at"`
 	FreeTrialDuration        int64      `gorm:"default:0" json:"free_trial_duration"`
 	SubscriptionTier         string     `gorm:"default:null" json:"subscription_tier"`
+	TermsAcceptedAt          *time.Time `gorm:"default:null" json:"terms_accepted_at"`
+	OnboardingCompletedAt    *time.Time `gorm:"default:null" json:"onboarding_completed_at"`
+	TeamCreatedOrJoinedAt    *time.Time `gorm:"default:null" json:"team_created_or_joined_at"`
+	TeammatesInvitedAt       *time.Time `gorm:"default:null" json:"teammates_invited_at"` // accepted or declined at
+	DefaultTeamSlug          string     `gorm:"default:null" json:"default_team_slug"`
 }
 
 type UserIdentityResponse struct {
-	ID             uuid.UUID  `json:"id"`
-	FirstName      string     `json:"first_name"`
-	LastName       string     `json:"last_name"`
-	Email          string     `json:"email"`
-	EmailConfirmed bool       `json:"email_confirmed"`
-	UpdatedEmail   string     `json:"updated_email"`
-	IsAdmin        bool       `json:"is_admin"`
-	AvatarUrl      string     `json:"avatar_url"`
-	DeletedAt      *time.Time `json:"deleted_at,omitempty"`
+	ID                  uuid.UUID  `json:"id"`
+	FirstName           string     `json:"first_name"`
+	LastName            string     `json:"last_name"`
+	Email               string     `json:"email"`
+	EmailConfirmed      bool       `json:"email_confirmed"`
+	UpdatedEmail        string     `json:"updated_email,omitempty"`
+	IsAdmin             bool       `json:"is_admin"`
+	AvatarUrl           string     `json:"avatar_url"`
+	DeletedAt           *time.Time `json:"deleted_at,omitempty"`
+	TermsAccepted       bool       `json:"terms_accepted"`
+	OnboardingCompleted bool       `json:"onboarding_completed"`
+	TeamCreatedOrJoined bool       `json:"team_created_or_joined"`
+	TeammatesInvited    bool       `json:"teammates_invited"`
+	DefaultTeamSlug     string     `json:"default_team_slug"`
 }
 
 func NewUser(req *CreateUserRequest) *User {
@@ -86,15 +100,20 @@ func NewUser(req *CreateUserRequest) *User {
 
 func NewUserIdentityResponse(u *User) *UserIdentityResponse {
 	return &UserIdentityResponse{
-		ID:             u.ID,
-		FirstName:      u.FirstName,
-		LastName:       u.LastName,
-		Email:          u.Email,
-		UpdatedEmail:   u.UpdatedEmail,
-		IsAdmin:        u.IsAdmin,
-		AvatarUrl:      u.AvatarUrl,
-		EmailConfirmed: u.EmailConfirmedAt != nil && *u.EmailConfirmedAt != time.Time{},
-		DeletedAt:      u.DeletedAt,
+		ID:                  u.ID,
+		FirstName:           u.FirstName,
+		LastName:            u.LastName,
+		Email:               u.Email,
+		UpdatedEmail:        u.UpdatedEmail,
+		IsAdmin:             u.IsAdmin,
+		AvatarUrl:           u.AvatarUrl,
+		EmailConfirmed:      u.EmailConfirmedAt != nil && *u.EmailConfirmedAt != time.Time{},
+		DeletedAt:           u.DeletedAt,
+		TermsAccepted:       u.TermsAcceptedAt != nil && *u.TermsAcceptedAt != time.Time{},
+		OnboardingCompleted: u.OnboardingCompletedAt != nil && *u.OnboardingCompletedAt != time.Time{},
+		TeamCreatedOrJoined: u.TeamCreatedOrJoinedAt != nil && *u.TeamCreatedOrJoinedAt != time.Time{},
+		TeammatesInvited:    u.TeammatesInvitedAt != nil && *u.TeammatesInvitedAt != time.Time{},
+		DefaultTeamSlug:     u.DefaultTeamSlug,
 	}
 }
 

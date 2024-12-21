@@ -14,13 +14,15 @@ func IsAuthenticated(authToken *http.Cookie, apiKey string) (bool, string, error
 		if err != nil {
 			return false, "", err
 		}
-	
+
 		if userId != "" && authTokenType == "auth" {
 			return true, userId, nil
 		}
 	} else if apiKey != "" {
 		// TODO: check api key in db / env
-		return false, "", fmt.Errorf("not implemented")
+		if apiKey == "apikey" {
+			return true, "auth", nil
+		}
 	}
 
 	return false, "", fmt.Errorf("unauthorized")

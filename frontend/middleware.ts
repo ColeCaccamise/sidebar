@@ -51,39 +51,40 @@ export async function middleware(request: NextRequest) {
           .catch((err) => err.response);
 
         if (refreshResponse.status === 200) {
-          // Set cookies from the refresh response
+          // Successfully refreshed token - set cookies and continue
           const response = NextResponse.next();
 
-          if (authPath && !isPasswordPath && pathname !== '/auth/confirm') {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
-          }
-
-          if (pathname === '/') {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
-          }
-
-          const cookies = refreshResponse.headers['set-cookie'];
-          if (cookies) {
-            if (Array.isArray(cookies)) {
-              cookies.forEach((cookie) => {
+          const setCookieHeader = refreshResponse.headers['set-cookie'];
+          if (setCookieHeader) {
+            if (Array.isArray(setCookieHeader)) {
+              setCookieHeader.forEach((cookie) => {
                 response.headers.append('Set-Cookie', cookie);
               });
-            } else if (typeof cookies === 'string') {
-              response.headers.append('Set-Cookie', cookies);
+            } else {
+              response.headers.append('Set-Cookie', setCookieHeader);
             }
           }
 
           return response;
         }
       }
+
+      // Refresh failed - redirect to login
       if (response.data?.code === 'session_expired' && !authPath) {
         const loginUrl = new URL('/auth/login', request.url);
         loginUrl.searchParams.append('error', 'session_expired');
+        request.nextUrl.searchParams.forEach((value, key) => {
+          if (key !== 'error') loginUrl.searchParams.append(key, value);
+        });
         return NextResponse.redirect(loginUrl);
       }
 
       if (!authPath) {
-        return NextResponse.redirect(new URL('/auth/login', request.url));
+        const loginUrl = new URL('/auth/login', request.url);
+        request.nextUrl.searchParams.forEach((value, key) => {
+          loginUrl.searchParams.append(key, value);
+        });
+        return NextResponse.redirect(loginUrl);
       }
 
       return NextResponse.next();
@@ -94,6 +95,10 @@ export async function middleware(request: NextRequest) {
 
     const emailConfirmed = userData && userData.email_confirmed;
     const updateEmailRequested = userData && userData.updated_email;
+    const termsAccepted = userData && userData.terms_accepted;
+    const teamCreatedOrJoined = userData && userData.team_created_or_joined;
+    const teammatesInvited = userData && userData.teammates_invited;
+    const onboardingCompleted = userData && userData.onboarding_completed;
 
     const nextResponse = NextResponse.next();
 
@@ -110,12 +115,89 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    // Check terms acceptance and onboarding status
+    if (userData && !pathname.startsWith('/auth')) {
+      if (!termsAccepted && !pathname.startsWith('/onboarding/terms')) {
+        const redirectUrl = new URL('/onboarding/terms', request.url);
+        request.nextUrl.searchParams.forEach((value, key) => {
+          redirectUrl.searchParams.append(key, value);
+        });
+        const redirect = NextResponse.redirect(redirectUrl);
+        cookies?.forEach((cookie) =>
+          redirect.headers.append('Set-Cookie', cookie),
+        );
+        return redirect;
+      }
+      if (
+        termsAccepted &&
+        !teamCreatedOrJoined &&
+        !pathname.startsWith('/onboarding/team')
+      ) {
+        const redirectUrl = new URL('/onboarding/team', request.url);
+        request.nextUrl.searchParams.forEach((value, key) => {
+          redirectUrl.searchParams.append(key, value);
+        });
+        const redirect = NextResponse.redirect(redirectUrl);
+        cookies?.forEach((cookie) =>
+          redirect.headers.append('Set-Cookie', cookie),
+        );
+        return redirect;
+      }
+      if (
+        termsAccepted &&
+        teamCreatedOrJoined &&
+        !teammatesInvited &&
+        !pathname.match(/^\/[^/]+\/onboarding\/invite/)
+      ) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}/onboarding/invite`,
+          request.url,
+        );
+        request.nextUrl.searchParams.forEach((value, key) => {
+          redirectUrl.searchParams.append(key, value);
+        });
+        const redirect = NextResponse.redirect(redirectUrl);
+        cookies?.forEach((cookie) =>
+          redirect.headers.append('Set-Cookie', cookie),
+        );
+        return redirect;
+      }
+      if (
+        termsAccepted &&
+        teamCreatedOrJoined &&
+        teammatesInvited &&
+        !onboardingCompleted &&
+        !pathname.includes(`/onboarding/welcome`)
+      ) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}/onboarding/welcome`,
+          request.url,
+        );
+        request.nextUrl.searchParams.forEach((value, key) => {
+          redirectUrl.searchParams.append(key, value);
+        });
+        const redirect = NextResponse.redirect(redirectUrl);
+        cookies?.forEach((cookie) =>
+          redirect.headers.append('Set-Cookie', cookie),
+        );
+        return redirect;
+      }
+    }
+
     if (
       userData &&
       emailConfirmed &&
       pathname.startsWith('/auth/confirm-email')
     ) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
+      const redirectUrl = new URL('/dashboard', request.url);
+      request.nextUrl.searchParams.forEach((value, key) => {
+        redirectUrl.searchParams.append(key, value);
+      });
+      const redirect = NextResponse.redirect(redirectUrl);
+      cookies?.forEach((cookie) =>
+        redirect.headers.append('Set-Cookie', cookie),
+      );
+      return redirect;
     }
 
     if (
@@ -130,7 +212,15 @@ export async function middleware(request: NextRequest) {
       userData &&
       !pathname.startsWith('/auth/confirm-email')
     ) {
-      return NextResponse.redirect(new URL('/auth/confirm-email', request.url));
+      const redirectUrl = new URL('/auth/confirm-email', request.url);
+      request.nextUrl.searchParams.forEach((value, key) => {
+        redirectUrl.searchParams.append(key, value);
+      });
+      const redirect = NextResponse.redirect(redirectUrl);
+      cookies?.forEach((cookie) =>
+        redirect.headers.append('Set-Cookie', cookie),
+      );
+      return redirect;
     }
 
     if (
@@ -142,7 +232,15 @@ export async function middleware(request: NextRequest) {
     }
 
     if (!emailConfirmed && userData && !pathname.startsWith('/auth/confirm')) {
-      return NextResponse.redirect(new URL('/auth/confirm-email', request.url));
+      const redirectUrl = new URL('/auth/confirm-email', request.url);
+      request.nextUrl.searchParams.forEach((value, key) => {
+        redirectUrl.searchParams.append(key, value);
+      });
+      const redirect = NextResponse.redirect(redirectUrl);
+      cookies?.forEach((cookie) =>
+        redirect.headers.append('Set-Cookie', cookie),
+      );
+      return redirect;
     }
 
     if (userData) {
@@ -150,7 +248,26 @@ export async function middleware(request: NextRequest) {
         (authPath && !isPasswordPath && pathname !== '/dashboard') ||
         pathname === '/'
       ) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
+        if (!emailConfirmed) {
+          const redirectUrl = new URL('/auth/confirm-email', request.url);
+          request.nextUrl.searchParams.forEach((value, key) => {
+            redirectUrl.searchParams.append(key, value);
+          });
+          const redirect = NextResponse.redirect(redirectUrl);
+          cookies?.forEach((cookie) =>
+            redirect.headers.append('Set-Cookie', cookie),
+          );
+          return redirect;
+        }
+        const redirectUrl = new URL('/dashboard', request.url);
+        request.nextUrl.searchParams.forEach((value, key) => {
+          redirectUrl.searchParams.append(key, value);
+        });
+        const redirect = NextResponse.redirect(redirectUrl);
+        cookies?.forEach((cookie) =>
+          redirect.headers.append('Set-Cookie', cookie),
+        );
+        return redirect;
       }
     }
 
@@ -161,7 +278,11 @@ export async function middleware(request: NextRequest) {
     const emailConfirmed = pathname.startsWith('/auth/confirm-email');
 
     if (!authPath || emailConfirmed) {
-      return NextResponse.redirect(new URL('/auth/login', request.url));
+      const loginUrl = new URL('/auth/login', request.url);
+      request.nextUrl.searchParams.forEach((value, key) => {
+        loginUrl.searchParams.append(key, value);
+      });
+      return NextResponse.redirect(loginUrl);
     }
 
     return NextResponse.next();

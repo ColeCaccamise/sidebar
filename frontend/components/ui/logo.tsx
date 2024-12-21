@@ -1,12 +1,9 @@
-import Link from 'next/link';
+import { DashboardIcon } from '@radix-ui/react-icons';
 
 export default function Logo() {
-	return (
-		<Link
-			href='/'
-			className='font-bold no-underline'
-		>
-			Dashboard
-		</Link>
-	);
+  return (
+    <span className="py-4">
+      <DashboardIcon className="h-8 w-8" />
+    </span>
+  );
 }

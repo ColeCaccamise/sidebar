@@ -20,6 +20,17 @@ type Storage interface {
 	GetUserByID(uuid.UUID) (*models.User, error)
 	GetUserByEmail(string) (*models.User, error)
 	DeleteUserByID(uuid.UUID) error
+	CreateTeam(*models.Team) error
+	UpdateTeam(*models.Team) error
+	GetTeamByName(string) (*models.Team, error)
+	GetTeamBySlug(string) (*models.Team, error)
+	CreateTeamMember(*models.TeamMember) error
+	UpdateTeamMember(*models.TeamMember) error
+	GetTeamInviteBySlugAndToken(string, string) (*models.TeamInvite, error)
+	UpdateTeamInvite(*models.TeamInvite) error
+	GetTeamInviteByID(uuid.UUID) (*models.TeamInvite, error)
+	CreateTeamInvite(*models.TeamInvite) error
+	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
 }
 
 type PostgresStore struct {
@@ -44,11 +55,38 @@ func NewPostgresStore() (*PostgresStore, error) {
 }
 
 func (s *PostgresStore) Init() error {
-	return s.CreateUsersTable()
+	err := s.CreateUsersTable()
+	if err != nil {
+		return err
+	}
+
+	err = s.CreateTeamsTable()
+	if err != nil {
+		return err
+	}
+
+	err = s.CreateTeamMembersTable()
+	if err != nil {
+		return err
+	}
+
+	return s.CreateTeamInvitesTable()
 }
 
 func (s *PostgresStore) CreateUsersTable() error {
 	return s.db.AutoMigrate(&models.User{})
+}
+
+func (s *PostgresStore) CreateTeamsTable() error {
+	return s.db.AutoMigrate(&models.Team{})
+}
+
+func (s *PostgresStore) CreateTeamMembersTable() error {
+	return s.db.AutoMigrate(&models.TeamMember{})
+}
+
+func (s *PostgresStore) CreateTeamInvitesTable() error {
+	return s.db.AutoMigrate(&models.TeamInvite{})
 }
 
 func (s *PostgresStore) CreateUser(user *models.User) error {
@@ -96,6 +134,103 @@ func (s *PostgresStore) GetAllUsers() ([]*models.User, error) {
 func (s *PostgresStore) DeleteUserByID(id uuid.UUID) error {
 	result := s.db.Delete(&models.User{}, id)
 	return result.Error
+}
+
+func (s *PostgresStore) CreateTeam(team *models.Team) error {
+	result := s.db.Create(team)
+	return result.Error
+}
+
+func (s *PostgresStore) UpdateTeam(team *models.Team) error {
+	return s.db.Model(team).Select("*").Updates(team).Error // explicitly tell gorm to update with zero values
+}
+
+func (s *PostgresStore) GetTeamByName(name string) (*models.Team, error) {
+	var team models.Team
+	result := s.db.Where("name = ?", name).First(&team)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with name %s", name)
+		}
+		return nil, result.Error
+	}
+	return &team, nil
+}
+
+func (s *PostgresStore) GetTeamBySlug(slug string) (*models.Team, error) {
+	var team models.Team
+	result := s.db.Where("slug = ?", slug).First(&team)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with slug %s", slug)
+		}
+		return nil, result.Error
+	}
+	return &team, nil
+}
+
+func (s *PostgresStore) CreateTeamInvite(teamInvite *models.TeamInvite) error {
+	result := s.db.Create(teamInvite)
+	return result.Error
+}
+
+func (s *PostgresStore) UpdateTeamInvite(teamInvite *models.TeamInvite) error {
+	return s.db.Model(teamInvite).Select("*").Updates(teamInvite).Error // explicitly tell gorm to update with zero values
+}
+
+func (s *PostgresStore) GetTeamInviteBySlugAndToken(teamSlug string, token string) (*models.TeamInvite, error) {
+	// First find the team by slug
+	var team models.Team
+	if err := s.db.Where("slug = ?", teamSlug).First(&team).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with slug %s", teamSlug)
+		}
+		return nil, err
+	}
+
+	// Then find the invite using the team's ID
+	var invite models.TeamInvite
+	if err := s.db.Where("team_id = ? AND token = ?", team.ID, token).First(&invite).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("invite not found with slug %s for team %s", token, teamSlug)
+		}
+		return nil, err
+	}
+
+	return &invite, nil
+}
+
+func (s *PostgresStore) GetTeamInviteByID(id uuid.UUID) (*models.TeamInvite, error) {
+	var teamInvite models.TeamInvite
+	result := s.db.First(&teamInvite, id)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team invite not found with id %s", id)
+		}
+		return nil, result.Error
+	}
+	return &teamInvite, nil
+}
+
+func (s *PostgresStore) CreateTeamMember(teamMember *models.TeamMember) error {
+	result := s.db.Create(teamMember)
+	return result.Error
+}
+
+func (s *PostgresStore) UpdateTeamMember(teamMember *models.TeamMember) error {
+	return s.db.Model(teamMember).Select("*").Updates(teamMember).Error // explicitly tell gorm to update with zero values
+}
+
+func (s *PostgresStore) GetTeamMemberByTeamIDAndUserID(teamID uuid.UUID, userID uuid.UUID) (*models.TeamMember, error) {
+	var teamMember models.TeamMember
+	result := s.db.Where("team_id = ? AND user_id = ?", teamID, userID).First(&teamMember)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team member not found with team id %s and user id %s", teamID, userID)
+		}
+		return nil, result.Error
+	}
+	return &teamMember, nil
 }
 
 //func (s *PostgresStore) GetAPITokensByUserID(id uuid.UUID) ([]*models.APIToken, error) {

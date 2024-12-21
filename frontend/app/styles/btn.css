@@ -2,17 +2,30 @@
   @apply inline-flex w-fit items-center justify-center rounded-md bg-none px-6 py-3 font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
 }
 
+.btn-small {
+  @apply inline-flex w-fit items-center justify-center rounded-md bg-none px-4 py-2 font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
+}
+
 .btn-brand {
   @apply bg-brand text-background hover:text-background;
 }
 
-button[type="submit"].btn-brand,
-button[type="button"].btn-brand {
+.btn-brand-secondary {
+  @apply bg-brand-secondary text-typography-strong hover:opacity-90;
+}
+
+button[type='submit'].btn-brand,
+button[type='button'].btn-brand {
   @apply bg-brand;
 }
 
-button[type="submit"].btn-destructive,
-button[type="button"].btn-destructive {
+button[type='submit'].btn-brand-secondary,
+button[type='button'].btn-brand-secondary {
+  @apply bg-brand-secondary text-typography-strong hover:text-typography-strong;
+}
+
+button[type='submit'].btn-destructive,
+button[type='button'].btn-destructive {
   @apply bg-error;
 }
 
