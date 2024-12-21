@@ -11,6 +11,7 @@ export default function Modal({
   hint,
   canClose = true,
   showCloseButton = true,
+  className,
 }: {
   open?: boolean;
   setOpen?: (open: boolean) => void;
@@ -20,6 +21,7 @@ export default function Modal({
   hint?: React.ReactNode;
   canClose?: boolean;
   showCloseButton?: boolean;
+  className?: string;
 }) {
   const handleClose = () => {
     onClose();
@@ -36,8 +38,10 @@ export default function Modal({
         className="fixed inset-0 bg-black/40"
         onClick={canClose ? handleClose : () => {}}
       />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className="max-w-lg space-y-4 rounded-md border border-stroke-weak bg-background p-8">
+      <div className="fixed inset-0 flex w-screen items-center justify-center">
+        <DialogPanel
+          className={`max-w-lg gap-4 rounded-md border border-stroke-weak bg-background p-8 ${className}`}
+        >
           {hint && hint}
           {title ? (
             <div className="flex justify-between">
