@@ -31,6 +31,7 @@ type Storage interface {
 	GetTeamInviteByID(uuid.UUID) (*models.TeamInvite, error)
 	CreateTeamInvite(*models.TeamInvite) error
 	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
+	GetTeamByID(uuid.UUID) (*models.Team, error)
 }
 
 type PostgresStore struct {
@@ -87,6 +88,10 @@ func (s *PostgresStore) CreateTeamMembersTable() error {
 
 func (s *PostgresStore) CreateTeamInvitesTable() error {
 	return s.db.AutoMigrate(&models.TeamInvite{})
+}
+
+func (s *PostgresStore) CreateTeamSubscriptionsTable() error {
+	return s.db.AutoMigrate(&models.TeamSubscription{})
 }
 
 func (s *PostgresStore) CreateUser(user *models.User) error {
@@ -169,6 +174,18 @@ func (s *PostgresStore) GetTeamBySlug(slug string) (*models.Team, error) {
 	return &team, nil
 }
 
+func (s *PostgresStore) GetTeamByID(id uuid.UUID) (*models.Team, error) {
+	var team models.Team
+	result := s.db.First(&team, id)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with id %s", id)
+		}
+		return nil, result.Error
+	}
+	return &team, nil
+}
+
 func (s *PostgresStore) CreateTeamInvite(teamInvite *models.TeamInvite) error {
 	result := s.db.Create(teamInvite)
 	return result.Error
@@ -233,8 +250,23 @@ func (s *PostgresStore) GetTeamMemberByTeamIDAndUserID(teamID uuid.UUID, userID 
 	return &teamMember, nil
 }
 
-//func (s *PostgresStore) GetAPITokensByUserID(id uuid.UUID) ([]*models.APIToken, error) {
-//	var tokens []*models.APIToken
-//	result := s.db.Where("user_id = ?", id).Find(&tokens)
-//	return tokens, result.Error
-//}
+func (s *PostgresStore) CreateTeamSubscription(teamSubscription *models.TeamSubscription) error {
+	result := s.db.Create(teamSubscription)
+	return result.Error
+}
+
+func (s *PostgresStore) UpdateTeamSubscription(teamSubscription *models.TeamSubscription) error {
+	return s.db.Model(teamSubscription).Select("*").Updates(teamSubscription).Error
+}
+
+func (s *PostgresStore) GetTeamSubscriptionByID(id uuid.UUID) (*models.TeamSubscription, error) {
+	var teamSubscription models.TeamSubscription
+	result := s.db.First(&teamSubscription, id)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team subscription not found with id %s", id)
+		}
+		return nil, result.Error
+	}
+	return &teamSubscription, nil
+}
