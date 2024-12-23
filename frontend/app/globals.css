@@ -35,6 +35,27 @@ body {
     sans-serif;
 }
 
+/* hide scrollbar track while preserving scrolling functionality */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--stroke-weak);
+  border-radius: 4px;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--stroke-weak) transparent;
+}
+
 @layer base {
   :root {
     --background: hsla(214, 0%, 100%, 100%);
@@ -60,6 +81,10 @@ body {
     --secondary-typography-strong-dark: hsla(214, 0%, 100%, 100%);
     --secondary-typography-weak: hsla(214, 0%, 0%, 78%);
     --secondary-typography-weak-dark: hsla(214, 0%, 100%, 78%);
+
+    --accent: hsla(214, 0%, 96%, 100%); /* very light warm gray */
+    --accent-stroke-strong: hsla(214, 0%, 75%, 100%);
+    --accent-stroke-weak: hsla(214, 0%, 85%, 100%);
 
     --brand: hsl(0, 0%, 0%);
     --brand-stroke-strong: hsla(0, 0%, 100%, 80%);
@@ -106,6 +131,10 @@ body {
     --stroke-strong: hsla(214, 0%, 100%, 60%);
     --stroke-medium: hsla(214, 0%, 100%, 16%);
     --stroke-weak: hsla(214, 0%, 100%, 8%);
+
+    --accent: hsla(214, 0%, 16%, 100%); /* slightly lighter than your sidebar */
+    --accent-stroke-strong: hsla(214, 0%, 25%, 100%);
+    --accent-stroke-weak: hsla(214, 0%, 16%, 100%);
 
     --brand-secondary: hsl(0, 0%, 24%);
     --brand-secondary-stroke-strong: hsla(0, 0%, 100%, 80%);
