@@ -30,7 +30,7 @@ button[type='button'].btn-destructive {
 }
 
 .btn-destructive {
-  @apply bg-error text-typography-strong;
+  @apply bg-error text-typography-strong hover:text-typography-strong;
 }
 
 .btn:disabled {
