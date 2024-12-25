@@ -1,24 +1,28 @@
 import { CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons';
 import Button from './button';
 import { useState } from 'react';
-import axios from 'axios';
-import { useRouter } from 'next/navigation';
-import toast from '@/lib/toast';
-import { getErrorMessage } from '@/messages';
 import Link from 'next/link';
+import Divider from './divider';
 
 export default function PricingBox({
   planName,
+  planDescription,
   planPrice,
+  currentBillingOption,
   billingOption = 'month',
   features,
   customPricing = false,
   subscribedTo = false,
   priceLookupKey,
   planType,
+  highlight = false,
+  handleSelectPlan,
+  handleUpdatePlan,
 }: {
   planName: string;
+  planDescription?: string;
   planPrice?: number;
+  currentBillingOption?: 'month' | 'year';
   billingOption?: 'month' | 'year';
   features?: Array<{
     featureName: string;
@@ -26,101 +30,56 @@ export default function PricingBox({
   }>;
   customPricing?: boolean;
   subscribedTo?: boolean;
-  priceLookupKey?: string;
-  planType?: 'current' | 'upgrade' | 'downgrade';
+  priceLookupKey: string;
+  planType?: 'current' | 'upgrade' | 'downgrade' | 'switch';
+  highlight?: boolean;
+  handleSelectPlan: (priceLookupKey: string) => void;
+  handleUpdatePlan: (priceLookupKey: string) => void;
 }) {
-  const billingOptions = {
-    month: 'mo',
-    year: 'yr',
-  };
-
-  const router = useRouter();
-
   const [selectedPlan, setSelectedPlan] = useState(false);
-
-  async function handleSelectPlan() {
-    setSelectedPlan(!selectedPlan);
-
-    await axios
-      .post(
-        `${process.env.NEXT_PUBLIC_API_URL}/billing/checkout`,
-        {
-          price_lookup_key: priceLookupKey,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          withCredentials: true,
-        },
-      )
-      .then((res) => {
-        router.push(res.data.data.redirect_url);
-      })
-      .catch((err) => {
-        toast({
-          message: getErrorMessage(err.response?.data?.code),
-          mode: 'error',
-        });
-      });
-  }
-
-  async function handleUpdatePlan() {
-    setSelectedPlan(!selectedPlan);
-
-    await axios
-      .post(
-        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/update`,
-        {
-          price_lookup_key: priceLookupKey,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          withCredentials: true,
-        },
-      )
-      .then((res) => {
-        router.push(res.data.data.redirect_url);
-      })
-      .catch((err) => {
-        toast({
-          message: getErrorMessage(err.response?.data?.code),
-          mode: 'error',
-        });
-      });
-  }
 
   const renderActionButton = () => {
     if (customPricing) {
       return (
         <Link
           href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}
-          className="btn btn-brand w-full no-underline"
+          className={`${highlight ? 'btn btn-brand' : 'btn btn-brand-secondary'} w-full no-underline`}
         >
-          Contact us
+          Request a quote
         </Link>
       );
     }
 
     if (planType === 'current') {
-      return (
-        <Button disabled className="w-full">
-          Your current plan
-        </Button>
-      );
+      if (currentBillingOption === billingOption) {
+        return (
+          <Button
+            disabled={subscribedTo}
+            className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
+          >
+            Your current plan
+          </Button>
+        );
+      } else {
+        return (
+          <Button
+            className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
+          >
+            Switch to {billingOption === 'year' ? 'annual' : 'monthly'}
+          </Button>
+        );
+      }
     }
 
     if (!planType) {
       // First time subscriber
       return (
         <Button
-          disabled={subscribedTo}
-          className="w-full"
-          handleClick={handleSelectPlan}
+          disabled={subscribedTo || selectedPlan}
+          className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
+          handleClick={() => handleSelectPlan(priceLookupKey)}
         >
-          {selectedPlan ? 'Selected' : `Subscribe to ${planName}`}
+          {selectedPlan ? 'Subscribing...' : `Subscribe to ${planName}`}
         </Button>
       );
     }
@@ -128,39 +87,80 @@ export default function PricingBox({
     // Existing subscriber changing plans
     return (
       <Button
-        className="w-full"
-        handleClick={handleUpdatePlan}
-        variant={planType === 'downgrade' ? 'destructive' : 'default'}
+        className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
+        handleClick={() => handleUpdatePlan(priceLookupKey)}
+        disabled={selectedPlan}
       >
-        {planType === 'upgrade'
-          ? `Upgrade to ${planName}`
-          : `Downgrade to ${planName}`}
+        {selectedPlan
+          ? planType === 'upgrade'
+            ? 'Upgrading...'
+            : 'Downgrading...'
+          : planType === 'upgrade'
+            ? `Upgrade to ${planName}`
+            : planType === 'switch'
+              ? `Switch to ${planName} ${billingOption === 'year' ? 'annually' : 'monthly'}`
+              : `Downgrade to ${planName}`}
       </Button>
     );
   };
 
   return (
-    <div className="flex w-full flex-col gap-2 rounded-md border border-stroke-weak p-4">
-      <span className="">{planName}</span>
-      <span className="text-3xl font-bold text-typography-strong">
-        {customPricing
-          ? 'Custom'
-          : `$${planPrice} / ${billingOptions[billingOption]}`}
-      </span>
-      <div className="flex flex-col gap-2 py-4">
-        {features?.map((feature) => (
-          <div className="flex items-center gap-2 py-1">
-            <span>
-              {feature.featureIncluded ? (
-                <CheckCircledIcon className="h-4 w-4 text-success" />
-              ) : (
-                <CrossCircledIcon className="h-4 w-4" />
-              )}
+    <div className="flex w-full flex-col justify-between gap-6 rounded-md border border-stroke-weak p-4">
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-6">
+          <span className="text-2xl font-medium text-typography-strong">
+            {planName}
+          </span>
+          {planDescription && (
+            <span className="text-sm text-typography-weak">
+              {planDescription}
             </span>
-            <span>{feature.featureName}</span>
+          )}
+        </div>
+
+        <div className="flex flex-col gap-2">
+          {' '}
+          <div>
+            <span className="text-4xl font-medium text-typography-strong">
+              {customPricing ? 'Custom' : `$${planPrice} `}
+            </span>
+            {!customPricing && (
+              <span className="text-sm text-typography-weak">/ mo</span>
+            )}
           </div>
-        ))}
+          <span className="text-sm text-typography-weak">
+            {customPricing ? (
+              <span>Purpose built for your organization</span>
+            ) : (
+              <span>
+                Billed {billingOption === 'year' ? 'annually' : 'monthly'}
+              </span>
+            )}
+          </span>
+        </div>
+
+        {features && features.length > 0 && (
+          <>
+            <Divider />
+
+            <div className="flex flex-col gap-2 py-4">
+              {features?.map((feature) => (
+                <div className="flex items-center gap-2 py-1">
+                  <span>
+                    {feature.featureIncluded ? (
+                      <CheckCircledIcon className="h-4 w-4 text-success" />
+                    ) : (
+                      <CrossCircledIcon className="h-4 w-4" />
+                    )}
+                  </span>
+                  <span>{feature.featureName}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
+
       {renderActionButton()}
     </div>
   );
