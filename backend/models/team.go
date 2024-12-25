@@ -7,14 +7,19 @@ import (
 )
 
 type Team struct {
-	ID                  uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	CreatedAt           time.Time  `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt           time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
+	ID                  uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	CreatedAt           *time.Time `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt           *time.Time `gorm:"autoUpdateTime" json:"updated_at"`
 	CreatedBy           uuid.UUID  `gorm:"type:uuid" json:"created_by"`
 	Name                string     `gorm:"not null" json:"name"`
 	Slug                string     `gorm:"not null" json:"slug"`
 	DeletedAt           *time.Time `gorm:"default:null" json:"deleted_at"`
-	CurrentTeamInviteID uuid.UUID  `gorm:"not null" json:"team_invite"`
+	CurrentTeamInviteID uuid.UUID  `gorm:"default:null" json:"team_invite"`
+	StripeOnboardedAt   *time.Time `gorm:"default:null" json:"stripe_onboarded_at"`
+	StripeCustomerID    string     `gorm:"default:null" json:"customer_id"`
+	FreeTrialAt         *time.Time `gorm:"default:null" json:"free_trial_at"`
+	RedeemedCouponAt    *time.Time `gorm:"default:null" json:"redeemed_coupon_at"`
+	SubscriptionID      uuid.UUID  `gorm:"type:uuid" json:"subscription_id"`
 }
 
 type TeamResponse struct {
@@ -155,6 +160,33 @@ func NewTeamInvite(req *CreateTeamInviteRequest) *TeamInvite {
 	}
 }
 
+type CreateTeamSubscriptionRequest struct {
+	TeamID   uuid.UUID
+	PlanType TeamSubscriptionPlan
+	Interval TeamSubscriptionInterval
+}
+
+func NewTeamSubscription(req *CreateTeamSubscriptionRequest) *TeamSubscription {
+	return &TeamSubscription{
+		TeamID:   req.TeamID,
+		PlanType: req.PlanType,
+		Interval: req.Interval,
+	}
+}
+
+type TeamSubscriptionStatus string
+
+const (
+	TeamSubscriptionStatusTrialing            TeamSubscriptionStatus = "trialing"
+	TeamSubscriptionStatusActive              TeamSubscriptionStatus = "active"
+	TeamSubscriptionStatusIncomplete          TeamSubscriptionStatus = "incomplete"
+	TeamSubscriptionStatusIncompleteExpiredAt TeamSubscriptionStatus = "incomplete_expired_at"
+	TeamSubscriptionStatusPastDue             TeamSubscriptionStatus = "past_due"
+	TeamSubscriptionStatusCanceled            TeamSubscriptionStatus = "canceled"
+	TeamSubscriptionStatusUnpaid              TeamSubscriptionStatus = "unpaid"
+	TeamSubscriptionStatusPaused              TeamSubscriptionStatus = "paused"
+)
+
 type TeamSubscription struct {
 	ID                   uuid.UUID                `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
 	CreatedAt            time.Time                `gorm:"autoCreateTime" json:"created_at"`
@@ -166,4 +198,58 @@ type TeamSubscription struct {
 	Interval             TeamSubscriptionInterval `gorm:"not null" json:"interval"`
 	StripeProductID      string                   `gorm:"not null" json:"stripe_product_id"`
 	StripeSubscriptionID string                   `gorm:"not null" json:"stripe_subscription_id"`
+	StripeScheduleID     string                   `gorm:"default:null" json:"stripe_schedule_id"`
+	FreeTrialEndsAt      *time.Time               `gorm:"default:null" json:"free_trial_ends_at"`
+	FreeTrialDuration    int                      `gorm:"default:null" json:"free_trial_duration"`
+	CanceledAt           *time.Time               `gorm:"default:null" json:"canceled_at"`
+	CancelAt             *time.Time               `gorm:"default:null" json:"cancel_at"`
+	Status               TeamSubscriptionStatus   `gorm:"default:null" json:"status"`
+	FailureMessage       string                   `gorm:"default:null" json:"failure_message"`
+	FailureCode          string                   `gorm:"default:null" json:"failure_code"`
+}
+
+type TeamSubscriptionResponse struct {
+	PlanType                   TeamSubscriptionPlan     `json:"plan_type"`
+	StripePriceID              string                   `json:"stripe_price_id"`
+	StripePriceLookupKey       string                   `json:"stripe_price_lookup_key"`
+	Interval                   TeamSubscriptionInterval `json:"interval"`
+	StripeProductID            string                   `json:"stripe_product_id"`
+	StripeSubscriptionID       string                   `json:"stripe_subscription_id"`
+	FreeTrialActive            bool                     `json:"free_trial_active"`
+	FreeTrialDuration          int                      `json:"free_trial_duration"`
+	FreeTrialDurationRemaining int                      `json:"free_trial_duration_remaining"`
+	FreeTrialEndsAt            *time.Time               `json:"free_trial_ends_at"`
+	SubscriptionCanceled       bool                     `json:"subscription_canceled"`
+	SubscriptionCancelAt       *time.Time               `json:"subscription_cancel_at"`
+}
+
+func NewTeamSubscriptionResponse(t *TeamSubscription) *TeamSubscriptionResponse {
+	now := time.Now()
+
+	var freeTrialActive bool
+	var freeTrialDurationRemaining int
+
+	// check if free trial is active and calculate remaining duration
+	if t.FreeTrialEndsAt != nil {
+		freeTrialActive = now.Before(*t.FreeTrialEndsAt)
+		if freeTrialActive {
+			// convert duration to int (seconds)
+			freeTrialDurationRemaining = int(t.FreeTrialEndsAt.Sub(now).Seconds())
+		}
+	}
+
+	return &TeamSubscriptionResponse{
+		PlanType:                   t.PlanType,
+		StripePriceID:              t.StripePriceID,
+		StripePriceLookupKey:       t.StripePriceLookupKey,
+		Interval:                   t.Interval,
+		StripeProductID:            t.StripeProductID,
+		StripeSubscriptionID:       t.StripeSubscriptionID,
+		FreeTrialActive:            freeTrialActive,
+		FreeTrialDuration:          t.FreeTrialDuration,
+		FreeTrialDurationRemaining: freeTrialDurationRemaining,
+		FreeTrialEndsAt:            t.FreeTrialEndsAt,
+		SubscriptionCanceled:       t.CancelAt != nil,
+		SubscriptionCancelAt:       t.CancelAt,
+	}
 }

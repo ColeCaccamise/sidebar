@@ -32,6 +32,10 @@ type Storage interface {
 	CreateTeamInvite(*models.TeamInvite) error
 	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
 	GetTeamByID(uuid.UUID) (*models.Team, error)
+	CreateTeamSubscription(*models.TeamSubscription) error
+	UpdateTeamSubscription(*models.TeamSubscription) error
+	GetTeamSubscriptionByID(uuid.UUID) (*models.TeamSubscription, error)
+	GetTeamSubscriptionByStripeID(string) (*models.TeamSubscription, error)
 }
 
 type PostgresStore struct {
@@ -71,7 +75,17 @@ func (s *PostgresStore) Init() error {
 		return err
 	}
 
-	return s.CreateTeamInvitesTable()
+	err = s.CreateTeamInvitesTable()
+	if err != nil {
+		return err
+	}
+
+	err = s.CreateTeamSubscriptionsTable()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *PostgresStore) CreateUsersTable() error {
@@ -265,6 +279,18 @@ func (s *PostgresStore) GetTeamSubscriptionByID(id uuid.UUID) (*models.TeamSubsc
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("team subscription not found with id %s", id)
+		}
+		return nil, result.Error
+	}
+	return &teamSubscription, nil
+}
+
+func (s *PostgresStore) GetTeamSubscriptionByStripeID(stripeID string) (*models.TeamSubscription, error) {
+	var teamSubscription models.TeamSubscription
+	result := s.db.Where("stripe_subscription_id = ?", stripeID).First(&teamSubscription)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team subscription not found with stripeID %s", stripeID)
 		}
 		return nil, result.Error
 	}
