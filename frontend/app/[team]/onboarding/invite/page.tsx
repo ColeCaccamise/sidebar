@@ -266,7 +266,7 @@ export default function OnboardingInvitePage() {
         if (!hasShownSubmitHint) {
           const isMac = navigator.platform.toLowerCase().includes('mac');
           toast({
-            message: `Hint: Press ${isMac ? '⌘' : 'Ctrl'} + Enter to submit, or Backspace to remove an email.`,
+            message: `Tip: Press ${isMac ? '⌘' : 'Ctrl'} + Enter to submit, or Backspace to remove an email.`,
             mode: 'info',
           });
           setHasShownSubmitHint(true);

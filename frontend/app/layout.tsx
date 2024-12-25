@@ -32,7 +32,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} dark:dark bg-background text-typography-weak antialiased`}
       >
         <Toaster duration={5000} position="bottom-right" />
-        <div className="flex min-h-screen w-full flex-col items-center justify-center p-6 font-sans antialiased">
+        <div className="flex min-h-screen w-full flex-col items-center justify-center font-sans antialiased">
           <PlausibleProvider
             domain={process.env.NEXT_PUBLIC_APP_URL || ''}
             trackOutboundLinks={true}
