@@ -41,6 +41,7 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/auth/forgot-password') ||
       pathname.startsWith('/auth/change-password');
     const isJoinPath = pathname.match(/^\/[^/]+\/join\/[a-f0-9]{32}$/);
+    const isTeamPath = pathname.match(/^\/[^/]+\//);
 
     // attempt to refresh the auth token
     if (response.status === 401) {
@@ -100,7 +101,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.next();
     }
 
-    // User exists and is authenticated
+    // user exists and is authenticated
     const userData = response.data;
 
     const emailConfirmed = userData && userData.email_confirmed;
@@ -109,6 +110,7 @@ export async function middleware(request: NextRequest) {
     const teamCreatedOrJoined = userData && userData.team_created_or_joined;
     const teammatesInvited = userData && userData.teammates_invited;
     const onboardingCompleted = userData && userData.onboarding_completed;
+    const defaultTeamSlug = userData && userData.default_team_slug;
 
     const nextResponse = NextResponse.next();
 
@@ -199,7 +201,7 @@ export async function middleware(request: NextRequest) {
       emailConfirmed &&
       pathname.startsWith('/auth/confirm-email')
     ) {
-      const redirectUrl = new URL('/dashboard', request.url);
+      const redirectUrl = new URL(`/${defaultTeamSlug}`, request.url);
       request.nextUrl.searchParams.forEach((value, key) => {
         redirectUrl.searchParams.append(key, value);
       });
@@ -255,7 +257,7 @@ export async function middleware(request: NextRequest) {
 
     if (userData) {
       if (
-        (authPath && !isPasswordPath && pathname !== '/dashboard') ||
+        (authPath && !isPasswordPath && pathname !== `/${defaultTeamSlug}`) ||
         pathname === '/'
       ) {
         if (!emailConfirmed) {
@@ -269,7 +271,7 @@ export async function middleware(request: NextRequest) {
           );
           return redirect;
         }
-        const redirectUrl = new URL('/dashboard', request.url);
+        const redirectUrl = new URL(`/${defaultTeamSlug}`, request.url);
         request.nextUrl.searchParams.forEach((value, key) => {
           redirectUrl.searchParams.append(key, value);
         });
@@ -279,6 +281,11 @@ export async function middleware(request: NextRequest) {
         );
         return redirect;
       }
+    }
+
+    // If on a team path, allow through even if team not found
+    if (isTeamPath) {
+      return nextResponse;
     }
 
     return nextResponse;
