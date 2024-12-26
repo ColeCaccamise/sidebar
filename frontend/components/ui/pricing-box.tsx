@@ -4,21 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import Divider from './divider';
 
-export default function PricingBox({
-  planName,
-  planDescription,
-  planPrice,
-  currentBillingOption,
-  billingOption = 'month',
-  features,
-  customPricing = false,
-  subscribedTo = false,
-  priceLookupKey,
-  planType,
-  highlight = false,
-  handleSelectPlan,
-  handleUpdatePlan,
-}: {
+interface PricingBoxProps {
   planName: string;
   planDescription?: string;
   planPrice?: number;
@@ -35,7 +21,29 @@ export default function PricingBox({
   highlight?: boolean;
   handleSelectPlan: (priceLookupKey: string) => void;
   handleUpdatePlan: (priceLookupKey: string) => void;
-}) {
+  subscribeToPrefix?: string;
+  subscribeToSuffix?: string;
+  trialInProgress?: boolean;
+}
+
+export default function PricingBox({
+  planName,
+  planDescription,
+  planPrice,
+  currentBillingOption,
+  billingOption = 'month',
+  features,
+  customPricing = false,
+  subscribedTo = false,
+  priceLookupKey,
+  planType,
+  highlight = false,
+  handleSelectPlan,
+  handleUpdatePlan,
+  subscribeToPrefix = 'Subscribe to',
+  subscribeToSuffix = '',
+  trialInProgress = false,
+}: PricingBoxProps) {
   const [selectedPlan, setSelectedPlan] = useState(false);
 
   const renderActionButton = () => {
@@ -57,7 +65,7 @@ export default function PricingBox({
             disabled={subscribedTo}
             className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
           >
-            Your current plan
+            {trialInProgress ? 'Trial in progress' : 'Your current plan'}
           </Button>
         );
       } else {
@@ -79,7 +87,9 @@ export default function PricingBox({
           className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
           handleClick={() => handleSelectPlan(priceLookupKey)}
         >
-          {selectedPlan ? 'Subscribing...' : `Subscribe to ${planName}`}
+          {selectedPlan
+            ? 'Subscribing...'
+            : `${subscribeToPrefix} ${planName} ${subscribeToSuffix}`}
         </Button>
       );
     }
