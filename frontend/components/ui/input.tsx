@@ -200,11 +200,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
               </TooltipProvider>
             )}
           </label>
-          {hint && (
-            <span className="hidden text-sm text-typography-weak md:block">
-              {hint}
-            </span>
-          )}
+          {hint && <span className="text-sm text-typography-weak">{hint}</span>}
         </div>
       )}
       <div
