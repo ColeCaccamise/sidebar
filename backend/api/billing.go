@@ -13,7 +13,6 @@ import (
 	"github.com/colecaccamise/go-backend/models"
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
-	"github.com/stripe/stripe-go/product"
 	"github.com/stripe/stripe-go/v80"
 	portalSession "github.com/stripe/stripe-go/v80/billingportal/session"
 	checkoutSession "github.com/stripe/stripe-go/v80/checkout/session"
@@ -21,6 +20,7 @@ import (
 	"github.com/stripe/stripe-go/v80/customer"
 	"github.com/stripe/stripe-go/v80/invoice"
 	"github.com/stripe/stripe-go/v80/price"
+	"github.com/stripe/stripe-go/v80/product"
 	"github.com/stripe/stripe-go/v80/subscription"
 
 	"github.com/stripe/stripe-go/v80/subscriptionschedule"
@@ -43,7 +43,7 @@ func (s *Server) handleGetPlans(w http.ResponseWriter, r *http.Request) error {
 		p := prices.Price()
 
 		// get the product details
-		prod, err := product.Get(p.Product.ID, nil)
+		prod, err := product.Get(p.Product.ID, &stripe.ProductParams{})
 		if err != nil {
 			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
 		}
@@ -1070,6 +1070,77 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 	}
 
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{}})
+}
+
+func (s *Server) handleUpdatePaymentMethod(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	slug := chi.URLParam(r, "slug")
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team not found.",
+			Code:  "team_not_found",
+		})
+	}
+
+	user, _, err := getUserIdentity(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{
+			Error: "unauthorized",
+			Code:  "unauthorized",
+		})
+	}
+
+	isTeamMember, err := userIsTeamMember(s, user.ID, team.ID)
+
+	if err != nil || !isTeamMember {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "you do not have access to this team",
+			Code:  "forbidden",
+		})
+	}
+
+	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team member not found.",
+			Code:  "team_member_not_found",
+		})
+	}
+
+	if teamMember.TeamRole != "owner" {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "you do not have permission take this action",
+			Code:  "forbidden",
+		})
+	}
+
+	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), slug)
+
+	paymentMethodParams := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(team.StripeCustomerID),
+		ReturnURL: stripe.String(returnUrl),
+		FlowData: &stripe.BillingPortalSessionFlowDataParams{
+			Type: stripe.String("payment_method_update"),
+			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
+				Type: stripe.String("redirect"),
+				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
+					ReturnURL: stripe.String(returnUrl),
+				},
+			},
+		},
+	}
+	result, err := portalSession.New(paymentMethodParams)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": result.URL,
+	}})
 }
 
 // func handleSubscriptonUpdate(subscription *stripe.Subscription) error {

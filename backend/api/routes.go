@@ -79,6 +79,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 				r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
 				r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
 				r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
+				r.Post("/payment-methods", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
 				r.Route("/subscription", func(r chi.Router) {
 					r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
 					r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
@@ -130,22 +131,23 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		r.Patch("/users/restore", makeHttpHandleFunc(s.handleRestoreUser))
 	})
 
+	// todo convert these to team version
 	// subscription routes
-	r.Group(func(r chi.Router) {
-		r.Use(middleware.VerifyAuth)
-		r.Use(s.VerifyUserNotDeleted)
-		r.Use(s.VerifySecurityVersion)
-		r.Route("/billing", func(r chi.Router) {
-			r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
-			r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
-			r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
-			r.Route("/subscriptions", func(r chi.Router) {
-				r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
-				r.Post("/cancel", makeHttpHandleFunc(s.handleCancelSubscription))
-				r.Post("/renew", makeHttpHandleFunc(s.handleRenewSubscription))
-			})
-		})
-	})
+	//r.Group(func(r chi.Router) {
+	//	r.Use(middleware.VerifyAuth)
+	//	r.Use(s.VerifyUserNotDeleted)
+	//	r.Use(s.VerifySecurityVersion)
+	//	r.Route("/billing", func(r chi.Router) {
+	//		r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
+	//		r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
+	//		r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
+	//		r.Route("/subscriptions", func(r chi.Router) {
+	//			r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
+	//			r.Post("/cancel", makeHttpHandleFunc(s.handleCancelSubscription))
+	//			r.Post("/renew", makeHttpHandleFunc(s.handleRenewSubscription))
+	//		})
+	//	})
+	//})
 
 	// webhooks
 	r.Route("/webhooks", func(r chi.Router) {
