@@ -29,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} dark:dark bg-background text-typography-weak antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} dark:dark bg-background px-6 text-typography-weak antialiased md:px-0`}
       >
         <Toaster duration={5000} position="bottom-right" />
         <div className="flex min-h-screen w-full flex-col items-center justify-center font-sans antialiased">
@@ -40,7 +40,9 @@ export default function RootLayout({
             trackLocalhost={false}
           >
             <CSPostHogProvider>
-              <>{children}</>
+              <div className="flex w-full flex-col items-center">
+                {children}
+              </div>
             </CSPostHogProvider>
           </PlausibleProvider>
         </div>

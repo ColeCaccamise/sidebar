@@ -24,6 +24,7 @@ type Team struct {
 	StripeSetupDeclineCode   string     `gorm:"default:null" json:"stripe_setup_decline_code"`
 	StripeSetupErrorMessage  string     `gorm:"default:null" json:"stripe_setup_error_message"`
 	SubscriptionTierChosenAt *time.Time `gorm:"default:null" json:"subscription_tier_chosen_at"`
+	OnboardingCompletedAt    *time.Time `gorm:"default:null" json:"onboarding_completed_at"`
 }
 
 type TeamResponse struct {
@@ -41,6 +42,26 @@ func NewTeamResponse(t *Team, inviteLink string) *TeamResponse {
 		Slug:                   t.Slug,
 		InviteLink:             inviteLink,
 		SubscriptionTierChosen: t.SubscriptionTierChosenAt != nil,
+	}
+}
+
+type TeamMemberResponse struct {
+	ID        uuid.UUID        `json:"id"`
+	UserID    uuid.UUID        `json:"user_id"`
+	TeamID    uuid.UUID        `json:"team_id"`
+	TeamRole  TeamRole         `json:"team_role"`
+	Status    TeamMemberStatus `json:"status"`
+	Onboarded bool             `json:"onboarded"`
+}
+
+func NewTeamMemberResponse(t *TeamMember) *TeamMemberResponse {
+	return &TeamMemberResponse{
+		ID:        t.ID,
+		UserID:    t.UserID,
+		TeamID:    t.TeamID,
+		TeamRole:  t.TeamRole,
+		Status:    t.Status,
+		Onboarded: t.OnboardedAt != nil,
 	}
 }
 

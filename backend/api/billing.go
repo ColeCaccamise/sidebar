@@ -1,0 +1,1244 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
+	"github.com/colecaccamise/go-backend/models"
+	"github.com/go-chi/chi"
+	"github.com/google/uuid"
+	"github.com/stripe/stripe-go/product"
+	"github.com/stripe/stripe-go/v80"
+	portalSession "github.com/stripe/stripe-go/v80/billingportal/session"
+	checkoutSession "github.com/stripe/stripe-go/v80/checkout/session"
+	"github.com/stripe/stripe-go/v80/coupon"
+	"github.com/stripe/stripe-go/v80/customer"
+	"github.com/stripe/stripe-go/v80/invoice"
+	"github.com/stripe/stripe-go/v80/price"
+	"github.com/stripe/stripe-go/v80/subscription"
+
+	"github.com/stripe/stripe-go/v80/subscriptionschedule"
+	"github.com/stripe/stripe-go/webhook"
+)
+
+// billing
+func (s *Server) handleGetPlans(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	// get prices from stripe
+	priceParams := &stripe.PriceListParams{
+		Active: stripe.Bool(true),
+	}
+	prices := price.List(priceParams)
+
+	var plans []models.SubscriptionPlan
+
+	for prices.Next() {
+		p := prices.Price()
+
+		// get the product details
+		prod, err := product.Get(p.Product.ID, nil)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		plan := models.SubscriptionPlan{
+			Name:           prod.Name,
+			ProductID:      p.Product.ID,
+			PriceID:        p.ID,
+			PriceLookupKey: p.LookupKey,
+			ProductActive:  prod.Active,
+			PriceActive:    p.Active,
+			Interval:       string(p.Recurring.Interval),
+			Price:          int(p.UnitAmount),
+		}
+
+		plans = append(plans, plan)
+	}
+
+	if prices.Err() != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Message: "Successfully retrieved plans",
+		Data:    plans,
+	})
+}
+
+func (s *Server) handleCreateCheckoutSession(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	user, _, err := getUserIdentity(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "invaild_token"})
+	}
+
+	// get team
+	teamSlug := chi.URLParam(r, "slug")
+
+	team, err := s.store.GetTeamBySlug(teamSlug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
+	if !teamMember {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+	}
+
+	// read in price_lookup_key
+	checkoutReq := new(models.CreateCheckoutSessionRequest)
+	if err := json.NewDecoder(r.Body).Decode(checkoutReq); err != nil {
+		if err.Error() == "EOF" {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
+		} else {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+		}
+	}
+
+	params := &stripe.PriceListParams{
+		LookupKeys: stripe.StringSlice([]string{
+			checkoutReq.PriceLookupKey,
+		}),
+	}
+	i := price.List(params)
+	var stripePrice *stripe.Price
+	for i.Next() {
+		p := i.Price()
+		stripePrice = p
+	}
+
+	if stripePrice == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+	}
+	successUrl := fmt.Sprintf("%s/%s/onboarding/welcome", os.Getenv("APP_URL"), teamSlug)
+	cancelUrl := fmt.Sprintf("%s/%s/onboarding/plans", os.Getenv("APP_URL"), teamSlug)
+
+	// check if stripe customer exists before creating session
+	if team.StripeCustomerID == "" {
+		customerParams := &stripe.CustomerParams{
+			Email: stripe.String(user.Email),
+			Metadata: map[string]string{
+				"team_id": team.ID.String(),
+			},
+		}
+		stripeCustomer, err := customer.New(customerParams)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+		team.StripeCustomerID = stripeCustomer.ID
+		err = s.store.UpdateTeam(team)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+	}
+
+	subscriptionData := &stripe.CheckoutSessionSubscriptionDataParams{
+		Metadata: map[string]string{
+			"team_id": team.ID.String(),
+		},
+		BillingCycleAnchor: stripe.Int64(time.Now().AddDate(0, 0, 31).Unix()),
+	}
+	if team.FreeTrialAt == nil {
+		trialDays := 14
+		//trialEndTimestamp := time.Now().AddDate(0, 0, trialDays).Unix()
+
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		subscriptionData = &stripe.CheckoutSessionSubscriptionDataParams{
+			//TrialEnd: stripe.Int64(trialEndTimestamp),
+			TrialSettings: &stripe.CheckoutSessionSubscriptionDataTrialSettingsParams{
+				EndBehavior: &stripe.CheckoutSessionSubscriptionDataTrialSettingsEndBehaviorParams{
+					MissingPaymentMethod: stripe.String("pause"),
+				},
+			},
+			TrialPeriodDays: stripe.Int64(int64(trialDays)),
+			Metadata: map[string]string{
+				"team_id": team.ID.String(),
+			},
+		}
+	}
+
+	checkoutParams := &stripe.CheckoutSessionParams{
+		Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+		LineItems: []*stripe.CheckoutSessionLineItemParams{
+			{
+				Price:    stripe.String(stripePrice.ID),
+				Quantity: stripe.Int64(1),
+			},
+		},
+		SuccessURL: stripe.String(successUrl),
+		CancelURL:  stripe.String(cancelUrl),
+		Customer:   stripe.String(team.StripeCustomerID),
+		Metadata: map[string]string{
+			"team_id": team.ID.String(),
+		},
+		SubscriptionData:        subscriptionData,
+		PaymentMethodCollection: stripe.String("if_required"),
+	}
+
+	stripeCheckoutSession, err := checkoutSession.New(checkoutParams)
+
+	if stripeCheckoutSession == nil || err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	redirectUrl := stripeCheckoutSession.URL
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": redirectUrl,
+	}})
+}
+
+func (s *Server) handleCreatePortalSession(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	user, _, err := getUserIdentity(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+
+	teamSlug := chi.URLParam(r, "slug")
+
+	team, err := s.store.GetTeamBySlug(teamSlug)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	teamMember, _ := userIsTeamMember(s, user.ID, team.ID)
+	if !teamMember {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+	}
+
+	customerID := team.StripeCustomerID
+
+	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), teamSlug)
+
+	portalParams := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(customerID),
+		ReturnURL: stripe.String(returnUrl),
+	}
+	ps, err := portalSession.New(portalParams)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	portalUrl := ps.URL
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": portalUrl,
+	}})
+}
+
+func (s *Server) handleGetCurrentSubscription(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	_, _, err := getUserIdentity(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+
+	teamSlug := chi.URLParam(r, "slug")
+
+	team, err := s.store.GetTeamBySlug(teamSlug)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	subscriptionID := team.SubscriptionID
+	teamSubscription, err := s.store.GetTeamSubscriptionByID(subscriptionID)
+
+	if teamSubscription == nil || err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	subscriptionResponse := models.NewTeamSubscriptionResponse(teamSubscription)
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
+		"subscription": subscriptionResponse,
+	}})
+}
+
+func (s *Server) handleCancelSubscription(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	user, _, err := getUserIdentity(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+
+	customerID := user.CustomerID
+
+	// get the current subscription
+	subscriptionParams := &stripe.SubscriptionListParams{
+		Customer: stripe.String(customerID),
+	}
+	subscriptionParams.Limit = stripe.Int64(1)
+	currentSubscriptions := subscription.List(subscriptionParams)
+
+	if currentSubscriptions == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	hasSubscription := false
+	var currentSubscription *stripe.Subscription
+	for currentSubscriptions.Next() {
+		currentSubscription = currentSubscriptions.Subscription()
+		hasSubscription = true
+		break
+	}
+
+	if !hasSubscription {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	if currentSubscription.CancelAtPeriodEnd {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "your subscription is already canceled.", Code: "subscription_already_canceled"})
+	}
+
+	returnUrl := fmt.Sprintf("%s/settings/billing", os.Getenv("APP_URL"))
+
+	// create a coupon
+	retentionParams := &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionParams{}
+
+	// offer coupon when one has not been used before
+	if user.RedeemedCouponAt == nil {
+		now := time.Now()
+		user.RedeemedCouponAt = &now // todo change this to only when receiving webhook to confirm user took the discount
+
+		err := s.store.UpdateUser(user)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		couponParams := &stripe.CouponParams{
+			Duration:         stripe.String(string(stripe.CouponDurationRepeating)),
+			DurationInMonths: stripe.Int64(3),
+			PercentOff:       stripe.Float64(25),
+		}
+		stripeCoupon, err := coupon.New(couponParams)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		retentionParams = &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionParams{
+			CouponOffer: &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionCouponOfferParams{
+				Coupon: stripe.String(stripeCoupon.ID),
+			},
+			Type: stripe.String("coupon_offer"),
+		}
+	}
+
+	portalParams := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(customerID),
+		ReturnURL: stripe.String(returnUrl),
+		FlowData: &stripe.BillingPortalSessionFlowDataParams{
+			Type: stripe.String("subscription_cancel"),
+			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
+				Type: stripe.String("redirect"),
+				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
+					ReturnURL: stripe.String(returnUrl),
+				},
+			},
+			SubscriptionCancel: &stripe.BillingPortalSessionFlowDataSubscriptionCancelParams{
+				Subscription: stripe.String(currentSubscription.ID),
+				Retention:    retentionParams,
+			},
+		},
+	}
+	ps, err := portalSession.New(portalParams)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	portalUrl := ps.URL
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": portalUrl,
+	}})
+}
+
+func (s *Server) handleUpdateSubscription(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	_, _, err := getUserIdentity(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+
+	teamSlug := chi.URLParam(r, "slug")
+
+	team, err := s.store.GetTeamBySlug(teamSlug)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	customerID := team.StripeCustomerID
+
+	// get the current subscription
+	subscriptionParams := &stripe.SubscriptionListParams{
+		Customer: stripe.String(customerID),
+	}
+	subscriptionParams.Limit = stripe.Int64(1)
+	currentSubscriptions := subscription.List(subscriptionParams)
+
+	if currentSubscriptions == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	hasSubscription := false
+	var currentSubscription *stripe.Subscription
+	for currentSubscriptions.Next() {
+		currentSubscription = currentSubscriptions.Subscription()
+		hasSubscription = true
+		break
+	}
+
+	if !hasSubscription {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), teamSlug)
+
+	// get updated price
+	// read in price_lookup_key
+	updateSubscriptionReq := new(models.UpdateSubscriptionRequest)
+	if err := json.NewDecoder(r.Body).Decode(updateSubscriptionReq); err != nil {
+		if err.Error() == "EOF" {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
+		} else {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+		}
+	}
+
+	params := &stripe.PriceListParams{
+		LookupKeys: stripe.StringSlice([]string{
+			updateSubscriptionReq.PriceLookupKey,
+		}),
+	}
+	i := price.List(params)
+	var stripePrice *stripe.Price
+	for i.Next() {
+		p := i.Price()
+		stripePrice = p
+	}
+
+	if stripePrice == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+	}
+
+	// todo check that user is not trying to change to their current subscription tier
+
+	portalParams := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(customerID),
+		ReturnURL: stripe.String(returnUrl),
+		FlowData: &stripe.BillingPortalSessionFlowDataParams{
+			Type: stripe.String("subscription_update_confirm"),
+			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
+				Type: stripe.String("redirect"),
+				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
+					ReturnURL: stripe.String(returnUrl),
+				},
+			},
+			SubscriptionUpdateConfirm: &stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmParams{
+				Subscription: stripe.String(currentSubscription.ID),
+				Items: []*stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmItemParams{
+					{
+						ID:       stripe.String(currentSubscription.Items.Data[0].ID),
+						Price:    stripe.String(stripePrice.ID),
+						Quantity: stripe.Int64(1),
+					},
+				},
+			},
+		},
+	}
+	ps, err := portalSession.New(portalParams)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	portalUrl := ps.URL
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": portalUrl,
+	}})
+}
+
+func (s *Server) handleRenewSubscription(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	user, _, err := getUserIdentity(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+
+	customerID := user.CustomerID
+
+	// get the current subscription
+	subscriptionParams := &stripe.SubscriptionListParams{
+		Customer: stripe.String(customerID),
+	}
+	subscriptionParams.Limit = stripe.Int64(1)
+	currentSubscriptions := subscription.List(subscriptionParams)
+
+	if currentSubscriptions == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	hasSubscription := false
+	var currentSubscription *stripe.Subscription
+	for currentSubscriptions.Next() {
+		currentSubscription = currentSubscriptions.Subscription()
+		hasSubscription = true
+		break
+	}
+
+	if !hasSubscription {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	if currentSubscription.CancelAtPeriodEnd {
+		renewParams := &stripe.SubscriptionParams{
+			CancelAtPeriodEnd: stripe.Bool(false),
+		}
+		renewedSubscription, err := subscription.Update(currentSubscription.ID, renewParams)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
+			"subscription": renewedSubscription,
+		}})
+	} else {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "subscription is currently active.", Code: "subscription_active"})
+	}
+}
+
+func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	const MaxBodyBytes = int64(65536)
+	bodyReader := http.MaxBytesReader(w, r.Body, MaxBodyBytes)
+	payload, err := ioutil.ReadAll(bodyReader)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error reading stripe webhook body: %v\n", err)
+		return WriteJSON(w, http.StatusServiceUnavailable, Error{Error: "service unavailable.", Code: "service_unavailable"})
+	}
+
+	endpointSecret := os.Getenv("STRIPE_WEBHOOK_SECRET")
+	signatureHeader := r.Header.Get("Stripe-Signature")
+	fmt.Println("Stripe webhook endpoint secret:", signatureHeader)
+	event, err := webhook.ConstructEvent(payload, signatureHeader, endpointSecret)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "⚠️  Webhook signature verification failed. %v\n", err)
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook signature.", Code: "invalid_signature"})
+	}
+
+	// Unmarshal the event data into an appropriate struct depending on its Type
+	switch event.Type {
+	case "invoice.paid":
+		// if subscription status is `active` - this will provide full access to the plan
+		var stripeInvoice stripe.Invoice
+		if stripeInvoice.ID != "" {
+			fmt.Printf("invoice is paid: %s\n", stripeInvoice.ID)
+		} else {
+			fmt.Printf("received invoice.paid without invoice")
+		}
+
+		invoiceStatus := stripeInvoice.Status // paid when succeeded
+		if stripeInvoice.Subscription != nil {
+			subscriptionStatus := stripeInvoice.Subscription.Status
+
+			if invoiceStatus == "paid" && (subscriptionStatus == "active" || subscriptionStatus == "trialing") {
+				// subscription all good - customer has access
+				fmt.Printf("invoice is paid: %s\n", stripeInvoice.ID)
+			} else {
+				fmt.Printf("invalid invoice (%s) and subscription (%s) state\n", invoiceStatus, subscriptionStatus)
+			}
+		}
+
+	case "customer.subscription.deleted":
+		// todo this means the subscription has ended and benefits should be revoked
+		var subscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &subscription)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+		}
+		log.Printf("Subscription deleted for %s.", subscription.ID)
+
+		priceLookupKey := subscription.Items.Data[0].Price.LookupKey
+
+		metaTeamID := subscription.Metadata["team_id"]
+		if metaTeamID == "" {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "team_id is empty.", Code: "team_id_empty"})
+		}
+
+		teamID := uuid.MustParse(metaTeamID)
+		team, err := s.store.GetTeamByID(teamID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		teamSubscription, err := s.store.GetTeamSubscriptionByID(team.SubscriptionID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		if subscription.CancelAtPeriodEnd && teamSubscription.CanceledAt == nil {
+			fmt.Printf("Canceling subscription for %s.\n", subscription.ID)
+			// todo notify myself of cancellation
+		}
+
+		// convert canceled at timestamp
+		if subscription.CanceledAt > 0 {
+			canceledAt := time.Unix(subscription.CanceledAt, 0)
+			teamSubscription.CanceledAt = &canceledAt
+		} else {
+			teamSubscription.CanceledAt = nil
+		}
+
+		// convert cancel at timestamp
+		if subscription.CancelAt > 0 {
+			cancelAt := time.Unix(subscription.CancelAt, 0)
+			teamSubscription.CancelAt = &cancelAt
+		} else {
+			teamSubscription.CancelAt = nil
+		}
+
+		teamSubscription.Status = models.TeamSubscriptionStatus(subscription.Status)
+		teamSubscription.StripePriceLookupKey = priceLookupKey
+		planType := "basic" // default value
+		if priceLookupKey != "" {
+			// split lookup key by underscore and get first part
+			parts := strings.Split(priceLookupKey, "_")
+			if len(parts) > 0 {
+				// validate plan type
+				switch parts[0] {
+				case "basic", "pro", "premium":
+					planType = parts[0]
+				}
+			}
+		}
+		teamSubscription.PlanType = models.TeamSubscriptionPlan(planType)
+
+		err = s.store.UpdateTeamSubscription(teamSubscription)
+		if err != nil {
+			fmt.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+	case "customer.subscription.paused":
+		// todo set subscription to a paused state and disable features
+		log.Printf("subscription has been paused")
+
+	case "customer.subscription.updated":
+		fmt.Printf("subscription updated\n")
+		var subscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &subscription)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+		}
+		log.Printf("Subscription updated for %s.", subscription.ID)
+
+		priceLookupKey := subscription.Items.Data[0].Price.LookupKey
+		fmt.Println("price lookup after update: ", priceLookupKey)
+
+		metaTeamID := subscription.Metadata["team_id"]
+		if metaTeamID == "" {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid team_id.", Code: "internal_server_error"})
+		}
+		teamID := uuid.MustParse(metaTeamID)
+		team, err := s.store.GetTeamByID(teamID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		teamSubscription, err := s.store.GetTeamSubscriptionByID(team.SubscriptionID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		if !subscription.CancelAtPeriodEnd {
+			// check price to see if its a downgrade
+			stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+			upcomingInvoiceParams := &stripe.InvoiceUpcomingParams{
+				Customer: stripe.String(subscription.Customer.ID),
+			}
+			upcomingInvoice, err := invoice.Upcoming(upcomingInvoiceParams)
+
+			if err != nil {
+				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+
+			lookupKey := upcomingInvoice.Lines.Data[0].Price.LookupKey
+			newPlan := PlanHierarchy[lookupKey]
+			currentPlan := PlanHierarchy[priceLookupKey]
+
+			if newPlan < currentPlan {
+				fmt.Println("this is a downgrade")
+			}
+		}
+
+		if subscription.CancelAtPeriodEnd && teamSubscription.CanceledAt == nil {
+			fmt.Printf("Canceling subscription for %s.\n", subscription.ID)
+			// todo notify myself of cancellation
+		}
+
+		// convert canceled at timestamp
+		if subscription.CanceledAt > 0 {
+			canceledAt := time.Unix(subscription.CanceledAt, 0)
+			teamSubscription.CanceledAt = &canceledAt
+		} else {
+			teamSubscription.CanceledAt = nil
+		}
+
+		// convert cancel at timestamp
+		if subscription.CancelAt > 0 {
+			cancelAt := time.Unix(subscription.CancelAt, 0)
+			teamSubscription.CancelAt = &cancelAt
+		} else {
+			teamSubscription.CancelAt = nil
+		}
+
+		teamSubscription.Status = models.TeamSubscriptionStatus(subscription.Status)
+		teamSubscription.StripePriceLookupKey = priceLookupKey
+		planType := "basic" // default value
+		if priceLookupKey != "" {
+			// split lookup key by underscore and get first part
+			parts := strings.Split(priceLookupKey, "_")
+			if len(parts) > 0 {
+				// validate plan type
+				switch parts[0] {
+				case "basic", "pro", "premium":
+					planType = parts[0]
+				}
+			}
+		}
+		teamSubscription.PlanType = models.TeamSubscriptionPlan(planType)
+
+		err = s.store.UpdateTeamSubscription(teamSubscription)
+		if err != nil {
+			fmt.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+	case "customer.subscription.created":
+		fmt.Printf("Subscription created.\n")
+		var subscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &subscription)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+		}
+
+		teamID := uuid.MustParse(subscription.Metadata["team_id"])
+		team, err := s.store.GetTeamByID(teamID)
+		if err != nil {
+			return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+		}
+
+		// todo check if setup errors are gone
+
+		now := time.Now()
+		team.SubscriptionTierChosenAt = &now
+		fmt.Printf("team subscription timestamp: %s", team.SubscriptionTierChosenAt)
+
+		subscriptionData := subscription.Items.Data[0]
+		plan := subscriptionData.Plan
+		planInterval := plan.Interval
+		stripePrice := subscriptionData.Price
+		product := plan.Product
+		lookupKey := stripePrice.LookupKey
+		planType := "basic" // default value
+		if lookupKey != "" {
+			// split lookup key by underscore and get first part
+			parts := strings.Split(lookupKey, "_")
+			if len(parts) > 0 {
+				// validate plan type
+				switch parts[0] {
+				case "basic", "pro", "premium":
+					planType = parts[0]
+				}
+			}
+		}
+
+		teamSubscription := models.NewTeamSubscription(&models.CreateTeamSubscriptionRequest{
+			TeamID:   teamID,
+			PlanType: models.TeamSubscriptionPlan(planType),
+			Interval: models.TeamSubscriptionInterval(planInterval),
+		})
+
+		teamSubscription.StripePriceID = stripePrice.ID
+		teamSubscription.StripePriceLookupKey = lookupKey
+		teamSubscription.StripeProductID = product.ID
+		teamSubscription.StripeSubscriptionID = subscription.ID
+		teamSubscription.Status = models.TeamSubscriptionStatus(subscription.Status)
+
+		if subscription.Status == "trialing" {
+			team.FreeTrialAt = &now
+			trialDuration := (subscription.TrialEnd - subscription.TrialStart) / 86400
+			teamSubscription.FreeTrialDuration = int(trialDuration)
+			if subscription.TrialEnd > 0 {
+				trialEnd := time.Unix(subscription.TrialEnd, 0)
+				teamSubscription.FreeTrialEndsAt = &trialEnd
+			} else {
+				teamSubscription.FreeTrialEndsAt = nil
+			}
+		}
+
+		err = s.store.CreateTeamSubscription(teamSubscription)
+		if err != nil {
+			fmt.Printf("Error creating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		team.SubscriptionID = teamSubscription.ID
+
+		err = s.store.UpdateTeam(team)
+		if err != nil {
+			fmt.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+		log.Printf("Subscription created for %s.", subscription.ID)
+		// Then define and call a func to handle the successful attachment of a PaymentMethod.
+		// handleSubscriptionCreated(subscription)
+
+		// get plan version and update DB
+
+	//case "subscription_schedule.created":
+	//	fmt.Printf("received stripe schedule creation \n")
+
+	case "customer.subscription.trial_will_end":
+		var subscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &subscription)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+		}
+		log.Printf("Subscription trial will end for %s.", subscription.ID)
+
+		// enable cta notifications in dashboard
+		// check if payment details have been added
+
+	//case "entitlements.active_entitlement_summary.updated":
+	//	var subscription stripe.Subscription
+	//	err := json.Unmarshal(event.Data.Raw, &subscription)
+	//	if err != nil {
+	//		fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+	//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+	//	}
+	//	log.Printf("Active entitlement summary updated for %s.", subscription.ID)
+	//	// Then define and call a func to handle active entitlement summary updated.
+	//	// handleEntitlementUpdated(subscription)
+
+	case "charge.failed":
+		var charge stripe.Charge
+		err := json.Unmarshal(event.Data.Raw, &charge)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+		}
+		log.Printf("Charge failed for invoice %s: %s", charge.Invoice, charge.FailureMessage)
+
+		// get subscription id from the invoice
+		stripeInvoice, err := invoice.Get(charge.Invoice.ID, nil)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		if stripeInvoice.Subscription == nil {
+			return nil // not a subscription invoice
+		}
+
+		teamSubscription, err := s.store.GetTeamSubscriptionByStripeID(stripeInvoice.Subscription.ID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		// mark subscription as failed and store relevant metadata
+		teamSubscription.Status = models.TeamSubscriptionStatusIncomplete
+		teamSubscription.FailureMessage = charge.FailureMessage
+		teamSubscription.FailureCode = charge.FailureCode
+
+		err = s.store.UpdateTeamSubscription(teamSubscription)
+		if err != nil {
+			fmt.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+	case "payment_intent.payment_failed":
+		log.Printf("received payment intent failed \n")
+
+	case "invoice.payment_failed":
+		log.Printf("received payment failed \n")
+		// lines data price -- subscription is an ID to lookup and ref
+		// match up customer ids and disable acc - try payment again or contact support
+		// list stripes failure reason
+		var stripeInvoice stripe.Invoice
+		err := json.Unmarshal(event.Data.Raw, &stripeInvoice)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		subscriptionID := stripeInvoice.Subscription.ID
+
+		teamSubscription, err := s.store.GetTeamSubscriptionByStripeID(subscriptionID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		if teamSubscription.InvoicePaymentFailedAt == nil {
+			now := time.Now()
+			teamSubscription.InvoicePaymentFailedAt = &now
+			teamSubscription.Status = models.TeamSubscriptionStatus(stripeInvoice.Subscription.Status)
+
+			err = s.store.UpdateTeamSubscription(teamSubscription)
+			if err != nil {
+				fmt.Printf("Error updating team subscription: %v\n", err)
+				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+		}
+
+		if stripeInvoice.PaymentIntent.Status == "requires_payment_method" {
+			log.Printf("stripe subscription requires a payment method.\n")
+		} else if stripeInvoice.PaymentIntent.Status == "requires_action" {
+			log.Printf("stripe subscription requires action.\n")
+		}
+
+	case "setup_intent.setup_failed":
+		// intial subscription begin, failure to pay
+		var setupIntent stripe.SetupIntent
+		err := json.Unmarshal(event.Data.Raw, &setupIntent)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+		}
+
+		// check if customer has existing subscription - if so it means theyre adding a new payment method (that is failing)
+
+		errorCode := setupIntent.LastSetupError.Code
+		declineCode := setupIntent.LastSetupError.DeclineCode
+		errorMessage := setupIntent.LastSetupError.Msg
+		//setupIntent.LastSetupError.Err
+		customerID := setupIntent.Customer.ID
+
+		team, err := s.store.GetTeamByStripeCustomerID(customerID)
+		if err != nil {
+			return WriteJSON(w, http.StatusNotFound, Error{Error: "could not find team for stripe customer ID.", Code: "team_not_found"})
+		}
+
+		team.StripeSetupErrorCode = string(errorCode)
+		team.StripeSetupDeclineCode = string(declineCode)
+		team.StripeSetupErrorMessage = errorMessage
+
+		err = s.store.UpdateTeam(team)
+		if err != nil {
+			fmt.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+	case "setup_intent.succeeded":
+		var setupIntent stripe.SetupIntent
+		err := json.Unmarshal(event.Data.Raw, &setupIntent)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
+		}
+
+		customerID := setupIntent.Customer.ID
+
+		team, err := s.store.GetTeamByStripeCustomerID(customerID)
+		if err != nil {
+			return WriteJSON(w, http.StatusNotFound, Error{Error: "could not find team for stripe customer ID.", Code: "team_not_found"})
+		}
+
+		team.StripeSetupErrorCode = ""
+		team.StripeSetupDeclineCode = ""
+		team.StripeSetupErrorMessage = ""
+
+		err = s.store.UpdateTeam(team)
+		if err != nil {
+			fmt.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+	case "payment_method.attached":
+		var paymentMethod stripe.PaymentMethod
+		err := json.Unmarshal(event.Data.Raw, &paymentMethod)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payload.", Code: "invalid_payload"})
+		}
+
+		// customer added a new payment method
+
+	case "payment_method.detached":
+		var paymentMethod stripe.PaymentMethod
+		err := json.Unmarshal(event.Data.Raw, &paymentMethod)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payload.", Code: "invalid_payload"})
+		}
+
+		// customer removed a payment method
+
+	case "payment_intent.succeeded":
+		// check of current invoice is failed and update
+		var paymentIntent stripe.PaymentIntent
+		err := json.Unmarshal(event.Data.Raw, &paymentIntent)
+		if err != nil {
+			log.Printf("Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payload.", Code: "invalid_payload"})
+		}
+
+		stripeCustomerID := paymentIntent.Customer.ID
+		team, err := s.store.GetTeamByStripeCustomerID(stripeCustomerID)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		subscriptionID := team.SubscriptionID
+		teamSubscription, err := s.store.GetTeamSubscriptionByID(subscriptionID)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		teamSubscription.FailureCode = ""
+		teamSubscription.FailureMessage = ""
+		teamSubscription.InvoicePaymentFailedAt = nil
+
+		err = s.store.UpdateTeamSubscription(teamSubscription)
+		if err != nil {
+			fmt.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+	case "invoice.payment_succeeded":
+		// check if invoice has failed and upate the status
+		var stripeInvoice stripe.Invoice
+		err := json.Unmarshal(event.Data.Raw, &stripeInvoice)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payload.", Code: "invalid_payload"})
+		}
+
+		subscriptionID := stripeInvoice.Subscription.ID
+		teamSubscription, err := s.store.GetTeamSubscriptionByStripeID(subscriptionID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		teamSubscription.InvoicePaymentFailedAt = nil
+		teamSubscription.FailureCode = ""
+		teamSubscription.FailureMessage = ""
+		teamSubscription.Status = models.TeamSubscriptionStatus(stripeInvoice.Subscription.Status)
+
+		err = s.store.UpdateTeamSubscription(teamSubscription)
+		if err != nil {
+			log.Printf("Error updating team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+	default:
+		log.Printf("Unhandled stripe webhook event type: %s\n", event.Type)
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{}})
+}
+
+// func handleSubscriptonUpdate(subscription *stripe.Subscription) error {
+// 	// handle going to cancel - update the cancel at date
+// 	// update the billing cycle end date
+// 	// get current plan
+
+// 	// handle upgrade
+// 	// set new plan
+
+// 	// handle downgrade
+// 	// set date of downgrade
+// 	// set plan being downgraded to
+
+// 	return nil
+// }
+
+type PlanMap map[string]int
+
+var PlanHierarchy = PlanMap{
+	"basic_monthly":    1,
+	"basic_annually":   1,
+	"pro_monthly":      2,
+	"pro_annually":     2,
+	"premium_monthly":  3,
+	"premium_annually": 3,
+}
+
+func (s *Server) handleGetPaymentMethods(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+	teamSlug := chi.URLParam(r, "slug")
+	team, err := s.store.GetTeamBySlug(teamSlug)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
+	}
+
+	user, _, err := getUserIdentity(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	}
+
+	// validate that user is a team member
+	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
+	if !teamMember || err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+	}
+
+	customerID := team.StripeCustomerID
+
+	if customerID == "" {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	params := &stripe.CustomerListPaymentMethodsParams{
+		Customer: stripe.String(customerID),
+	}
+	params.Limit = stripe.Int64(3)
+	result := customer.ListPaymentMethods(params)
+
+	return WriteJSON(w, http.StatusOK, Response{Data: result.PaymentMethodList()})
+}
+
+func analyzeSubscriptionChange(event *stripe.Event) string {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	if event.Type != "customer.subscription.updated" {
+		return "no_change"
+	}
+
+	var sub stripe.Subscription
+	if err := json.Unmarshal(event.Data.Raw, &sub); err != nil {
+		return "no_change"
+	}
+
+	prevAttrs := event.Data.PreviousAttributes
+
+	if _, ok := prevAttrs["schedule"]; ok {
+		return "schedule_change"
+	}
+
+	if prevItems, ok := prevAttrs["items"].(map[string]interface{}); ok {
+		prevData := prevItems["data"].([]interface{})
+		if len(prevData) == 0 || len(sub.Items.Data) == 0 {
+			return "no_change"
+		}
+
+		prevItem := prevData[0].(map[string]interface{})
+		prevPrice := prevItem["price"].(map[string]interface{})
+		prevAmount := prevPrice["unit_amount"].(int64)
+		currentAmount := sub.Items.Data[0].Price.UnitAmount
+
+		switch {
+		case prevAmount > currentAmount:
+			return "downgrade"
+		case prevAmount < currentAmount:
+			return "upgrade"
+		}
+	}
+
+	if prevPlan, ok := prevAttrs["plan"].(map[string]interface{}); ok {
+		prevInterval := prevPlan["interval"].(string)
+		// get current interval directly from first item's price
+		if firstItem := sub.Items.Data[0]; firstItem.Price != nil && firstItem.Price.Recurring != nil {
+			currentInterval := string(firstItem.Price.Recurring.Interval)
+			if strings.Compare(prevInterval, currentInterval) != 0 {
+				return "interval_change"
+			}
+		}
+	}
+
+	return "no_change"
+}
+
+type SubscriptionChange struct {
+	CurrentPlanID string
+	NewPlanID     string
+	ChangeDate    time.Time
+}
+
+func getSubscriptionChangeInfo(scheduleID string) (*SubscriptionChange, error) {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	// get schedule with phases included
+	params := &stripe.SubscriptionScheduleParams{
+		Expand: []*string{
+			stripe.String("phases.items.price"),
+		},
+	}
+
+	stripeSchedule, err := subscriptionschedule.Get(scheduleID, params)
+	if err != nil {
+		return nil, fmt.Errorf("fetch schedule: %w", err)
+	}
+
+	// rest of the logic remains same
+	var currentPhase *stripe.SubscriptionSchedulePhase
+	now := time.Now()
+
+	for _, phase := range stripeSchedule.Phases {
+		start := time.Unix(phase.StartDate, 0)
+		end := time.Unix(phase.EndDate, 0)
+
+		if now.After(start) && now.Before(end) {
+			currentPhase = phase
+			break
+		}
+	}
+
+	var nextPhase *stripe.SubscriptionSchedulePhase
+	for _, phase := range stripeSchedule.Phases {
+		start := time.Unix(phase.StartDate, 0)
+		if start.After(now) {
+			nextPhase = phase
+			break
+		}
+	}
+
+	if currentPhase == nil || nextPhase == nil {
+		return nil, fmt.Errorf("could not find current or next phase")
+	}
+
+	currentPlanID := currentPhase.Items[0].Price.ID
+	newPlanID := nextPhase.Items[0].Price.ID
+	changeDate := time.Unix(nextPhase.StartDate, 0)
+
+	return &SubscriptionChange{
+		CurrentPlanID: currentPlanID,
+		NewPlanID:     newPlanID,
+		ChangeDate:    changeDate,
+	}, nil
+}

@@ -2,18 +2,49 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import axios from 'axios';
 import { cookies } from 'next/headers';
+import api from './lib/axios';
 
 export async function middleware(request: NextRequest) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const cookieStore = cookies();
   const pathname = request.nextUrl.pathname;
 
-  // Allow legal pages to be accessed without authentication
+  // auth routes -- redirect to dashboard when logged in
+  const publicAuthRoutes = ['/auth/login', '/auth/signup'];
+
+  // auth routes -- never redirect
+  const authRoutes = ['/auth/confirm'];
+
+  // confirm email routes -- redirect to dashboard when email is confirmed
+  const confirmEmailRoutes = ['/auth/confirm-email'];
+
+  // user onboarding routes -- redirect to dashboard when onboarding is complete
+  const userOnboardingRoutes = ['/onboarding/terms', '/onboarding/team'];
+
+  // team owner onboarding routes -- redirect to member routes when team onboarding is complete
+  const teamOwnerOnboardingRoutes = ['/onboarding/plans'];
+
+  // team member onboarding routes -- redirect to waiting when team member onboarding is complete
+  const teamMemberOnboardingRoutes = [
+    '/onboarding/invite',
+    '/onboarding/welcome',
+  ];
+
+  // team member waiting routes -- redirect to dashboard when team member waiting for team owner to complete onboarding
+  const teamMemberWaitingRoutes = ['/onboarding/action-required'];
+
+  // routes that only team owners can access
+  const protectedSettingsRoutes = [
+    '/settings/team/plans',
+    '/settings/team/billing',
+  ];
+
+  // allow legal pages without auth
   if (pathname.startsWith('/legal')) {
     return NextResponse.next();
   }
 
-  // Allow team join pages to be accessed without authentication
+  // allow team join pages without auth
   if (pathname.match(/^\/[^/]+\/join\/[a-f0-9]{32}$/)) {
     return NextResponse.next();
   }
@@ -24,8 +55,6 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // TODO: retain the initial request url to be redirected back to after login
-
     const response = await axios
       .get(`${apiUrl}/auth/identity`, {
         headers: {
@@ -42,8 +71,9 @@ export async function middleware(request: NextRequest) {
       pathname.startsWith('/auth/change-password');
     const isJoinPath = pathname.match(/^\/[^/]+\/join\/[a-f0-9]{32}$/);
     const isTeamPath = pathname.match(/^\/[^/]+\//);
+    const isConfirmPath = pathname.startsWith('/auth/confirm');
 
-    // attempt to refresh the auth token
+    // handle 401 and token refresh
     if (response.status === 401) {
       const refreshToken = request.cookies.get('refresh-token')?.value;
       if (refreshToken) {
@@ -58,9 +88,7 @@ export async function middleware(request: NextRequest) {
           .catch((err) => err.response);
 
         if (refreshResponse.status === 200) {
-          // Successfully refreshed token - set cookies and continue
           const response = NextResponse.next();
-
           const setCookieHeader = refreshResponse.headers['set-cookie'];
           if (setCookieHeader) {
             if (Array.isArray(setCookieHeader)) {
@@ -71,12 +99,11 @@ export async function middleware(request: NextRequest) {
               response.headers.append('Set-Cookie', setCookieHeader);
             }
           }
-
           return response;
         }
       }
 
-      // Refresh failed - redirect to login
+      // handle failed refresh
       if (
         response.data?.code === 'session_expired' &&
         !authPath &&
@@ -103,20 +130,10 @@ export async function middleware(request: NextRequest) {
 
     // user exists and is authenticated
     const userData = response.data;
-
-    const emailConfirmed = userData && userData.email_confirmed;
-    const updateEmailRequested = userData && userData.updated_email;
-    const termsAccepted = userData && userData.terms_accepted;
-    const teamCreatedOrJoined = userData && userData.team_created_or_joined;
-    const teammatesInvited = userData && userData.teammates_invited;
-    const onboardingCompleted = userData && userData.onboarding_completed;
-    const defaultTeamSlug = userData && userData.default_team_slug;
-
     const nextResponse = NextResponse.next();
 
-    // Add cookies from the original response to all responses
+    // handle cookies
     const cookies = response.headers['set-cookie'];
-
     if (cookies) {
       if (Array.isArray(cookies)) {
         cookies.forEach((cookie) => {
@@ -127,170 +144,150 @@ export async function middleware(request: NextRequest) {
       }
     }
 
-    // Check terms acceptance and onboarding status
-    if (userData && !pathname.startsWith('/auth')) {
-      if (!termsAccepted && !pathname.startsWith('/onboarding/terms')) {
-        const redirectUrl = new URL('/onboarding/terms', request.url);
-        request.nextUrl.searchParams.forEach((value, key) => {
-          redirectUrl.searchParams.append(key, value);
-        });
-        const redirect = NextResponse.redirect(redirectUrl);
-        cookies?.forEach((cookie) =>
-          redirect.headers.append('Set-Cookie', cookie),
-        );
-        return redirect;
-      }
-      if (
-        termsAccepted &&
-        !teamCreatedOrJoined &&
-        !pathname.startsWith('/onboarding/team')
-      ) {
-        const redirectUrl = new URL('/onboarding/team', request.url);
-        request.nextUrl.searchParams.forEach((value, key) => {
-          redirectUrl.searchParams.append(key, value);
-        });
-        const redirect = NextResponse.redirect(redirectUrl);
-        cookies?.forEach((cookie) =>
-          redirect.headers.append('Set-Cookie', cookie),
-        );
-        return redirect;
-      }
-      if (
-        termsAccepted &&
-        teamCreatedOrJoined &&
-        !teammatesInvited &&
-        !pathname.match(/^\/[^/]+\/onboarding\/invite/)
-      ) {
-        const redirectUrl = new URL(
-          `/${userData.default_team_slug}/onboarding/invite`,
-          request.url,
-        );
-        request.nextUrl.searchParams.forEach((value, key) => {
-          redirectUrl.searchParams.append(key, value);
-        });
-        const redirect = NextResponse.redirect(redirectUrl);
-        cookies?.forEach((cookie) =>
-          redirect.headers.append('Set-Cookie', cookie),
-        );
-        return redirect;
-      }
-      if (
-        termsAccepted &&
-        teamCreatedOrJoined &&
-        teammatesInvited &&
-        !onboardingCompleted &&
-        !pathname.includes(`/onboarding/welcome`)
-      ) {
-        const redirectUrl = new URL(
-          `/${userData.default_team_slug}/onboarding/welcome`,
-          request.url,
-        );
-        request.nextUrl.searchParams.forEach((value, key) => {
-          redirectUrl.searchParams.append(key, value);
-        });
-        const redirect = NextResponse.redirect(redirectUrl);
-        cookies?.forEach((cookie) =>
-          redirect.headers.append('Set-Cookie', cookie),
-        );
-        return redirect;
-      }
-    }
-
-    if (
-      userData &&
-      emailConfirmed &&
-      pathname.startsWith('/auth/confirm-email')
-    ) {
-      const redirectUrl = new URL(`/${defaultTeamSlug}`, request.url);
-      request.nextUrl.searchParams.forEach((value, key) => {
-        redirectUrl.searchParams.append(key, value);
-      });
+    // helper function for redirects
+    const redirectWithCookies = (redirectUrl: URL) => {
       const redirect = NextResponse.redirect(redirectUrl);
-      cookies?.forEach((cookie) =>
+      cookies?.forEach((cookie: string) =>
         redirect.headers.append('Set-Cookie', cookie),
       );
       return redirect;
+    };
+
+    // handle public auth routes
+    if (publicAuthRoutes.includes(pathname) && userData) {
+      const redirectUrl = new URL(
+        `/${userData.default_team_slug}`,
+        request.url,
+      );
+      return redirectWithCookies(redirectUrl);
     }
 
-    if (
-      (updateEmailRequested && pathname.startsWith('/auth/confirm')) ||
-      (!emailConfirmed && pathname.startsWith('/auth/confirm'))
-    ) {
+    // handle never redirect auth routes
+    if (authRoutes.includes(pathname)) {
       return nextResponse;
     }
 
-    if (
-      !emailConfirmed &&
-      userData &&
-      !pathname.startsWith('/auth/confirm-email')
-    ) {
-      const redirectUrl = new URL('/auth/confirm-email', request.url);
-      request.nextUrl.searchParams.forEach((value, key) => {
-        redirectUrl.searchParams.append(key, value);
-      });
-      const redirect = NextResponse.redirect(redirectUrl);
-      cookies?.forEach((cookie) =>
-        redirect.headers.append('Set-Cookie', cookie),
-      );
-      return redirect;
-    }
-
-    if (
-      !emailConfirmed &&
-      userData &&
-      pathname.startsWith('/auth/confirm-email')
-    ) {
+    // handle confirm email routes
+    if (confirmEmailRoutes.includes(pathname)) {
+      if (userData?.email_confirmed) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}`,
+          request.url,
+        );
+        return redirectWithCookies(redirectUrl);
+      }
       return nextResponse;
     }
 
-    if (!emailConfirmed && userData && !pathname.startsWith('/auth/confirm')) {
+    // require email confirmation
+    if (userData && !userData.email_confirmed && !isConfirmPath) {
       const redirectUrl = new URL('/auth/confirm-email', request.url);
-      request.nextUrl.searchParams.forEach((value, key) => {
-        redirectUrl.searchParams.append(key, value);
-      });
-      const redirect = NextResponse.redirect(redirectUrl);
-      cookies?.forEach((cookie) =>
-        redirect.headers.append('Set-Cookie', cookie),
-      );
-      return redirect;
+      return redirectWithCookies(redirectUrl);
     }
 
-    if (userData) {
-      if (
-        (authPath && !isPasswordPath && pathname !== `/${defaultTeamSlug}`) ||
-        pathname === '/'
-      ) {
-        if (!emailConfirmed) {
-          const redirectUrl = new URL('/auth/confirm-email', request.url);
-          request.nextUrl.searchParams.forEach((value, key) => {
-            redirectUrl.searchParams.append(key, value);
-          });
-          const redirect = NextResponse.redirect(redirectUrl);
-          cookies?.forEach((cookie) =>
-            redirect.headers.append('Set-Cookie', cookie),
-          );
-          return redirect;
-        }
-        const redirectUrl = new URL(`/${defaultTeamSlug}`, request.url);
-        request.nextUrl.searchParams.forEach((value, key) => {
-          redirectUrl.searchParams.append(key, value);
-        });
-        const redirect = NextResponse.redirect(redirectUrl);
-        cookies?.forEach((cookie) =>
-          redirect.headers.append('Set-Cookie', cookie),
+    if (!userData) {
+      return nextResponse;
+    }
+
+    // handle user onboarding routes
+    if (userOnboardingRoutes.includes(pathname)) {
+      if (userData.onboarding_completed) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}`,
+          request.url,
         );
-        return redirect;
+        return redirectWithCookies(redirectUrl);
       }
+      return nextResponse;
     }
 
-    // If on a team path, allow through even if team not found
+    // get team data for team-specific routes
+    let teamData;
+    let teamMemberData;
     if (isTeamPath) {
+      try {
+        const teamSlug = pathname.split('/')[1];
+        teamData = await api.get(`/teams/${teamSlug}`, {
+          headers: {
+            Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
+          },
+          withCredentials: true,
+        });
+        teamMemberData = await api.get(`/teams/${teamSlug}/member`, {
+          headers: {
+            Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
+          },
+          withCredentials: true,
+        });
+      } catch (error) {
+        // handle team not found or other errors
+        return nextResponse;
+      }
+    }
+
+    const isTeamOwner =
+      teamMemberData?.data?.data?.team_member?.team_role === 'owner';
+    const teamOnboardingComplete =
+      teamData?.data?.data?.team?.onboarding_completed;
+
+    // handle team owner onboarding routes
+    if (pathname.includes(teamOwnerOnboardingRoutes[0])) {
+      if (!isTeamOwner) {
+        const redirectUrl = new URL('/onboarding/welcome', request.url);
+        return redirectWithCookies(redirectUrl);
+      }
+      if (teamOnboardingComplete) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}`,
+          request.url,
+        );
+        return redirectWithCookies(redirectUrl);
+      }
+      return nextResponse;
+    }
+
+    // handle team member onboarding routes
+    if (teamMemberOnboardingRoutes.some((route) => pathname.includes(route))) {
+      if (isTeamOwner) {
+        const redirectUrl = new URL('/onboarding/plans', request.url);
+        return redirectWithCookies(redirectUrl);
+      }
+      if (teamOnboardingComplete) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}`,
+          request.url,
+        );
+        return redirectWithCookies(redirectUrl);
+      }
+      return nextResponse;
+    }
+
+    // handle team member waiting routes
+    if (teamMemberWaitingRoutes.some((route) => pathname.includes(route))) {
+      if (teamOnboardingComplete) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}`,
+          request.url,
+        );
+        return redirectWithCookies(redirectUrl);
+      }
+      return nextResponse;
+    }
+
+    // handle protected settings routes
+    if (protectedSettingsRoutes.some((route) => pathname.includes(route))) {
+      if (!isTeamOwner) {
+        const redirectUrl = new URL(
+          `/${userData.default_team_slug}`,
+          request.url,
+        );
+        return redirectWithCookies(redirectUrl);
+      }
       return nextResponse;
     }
 
     return nextResponse;
   } catch (err) {
-    const pathname = request.nextUrl.pathname;
     const authPath = pathname.startsWith('/auth');
     const emailConfirmed = pathname.startsWith('/auth/confirm-email');
     const isJoinPath = pathname.match(/^\/[^/]+\/join\/[a-f0-9]{32}$/);
@@ -308,14 +305,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

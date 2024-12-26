@@ -118,9 +118,16 @@ export default function PricingBox({
     <div className="flex w-full flex-col justify-between gap-6 rounded-md border border-stroke-weak p-4">
       <div className="flex flex-col gap-6">
         <div className="flex flex-col gap-6">
-          <span className="text-2xl font-medium text-typography-strong">
-            {planName}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-2xl font-medium text-typography-strong">
+              {planName}
+            </span>
+            {(planType == 'switch' || planType == 'current') && (
+              <span className="rounded-md bg-info-fill px-2 py-1 text-xs font-semibold text-info">
+                Your current plan
+              </span>
+            )}
+          </div>
           {planDescription && (
             <span className="text-sm text-typography-weak">
               {planDescription}

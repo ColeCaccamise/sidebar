@@ -32,6 +32,7 @@ type Storage interface {
 	CreateTeamInvite(*models.TeamInvite) error
 	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
 	GetTeamByID(uuid.UUID) (*models.Team, error)
+	GetTeamByStripeCustomerID(string) (*models.Team, error)
 	CreateTeamSubscription(*models.TeamSubscription) error
 	UpdateTeamSubscription(*models.TeamSubscription) error
 	GetTeamSubscriptionByID(uuid.UUID) (*models.TeamSubscription, error)
@@ -194,6 +195,18 @@ func (s *PostgresStore) GetTeamByID(id uuid.UUID) (*models.Team, error) {
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("team not found with id %s", id)
+		}
+		return nil, result.Error
+	}
+	return &team, nil
+}
+
+func (s *PostgresStore) GetTeamByStripeCustomerID(stripeCustomerID string) (*models.Team, error) {
+	var team models.Team
+	result := s.db.Where("stripe_customer_id = ?", stripeCustomerID).First(&team)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with stripe_customer_id %s", stripeCustomerID)
 		}
 		return nil, result.Error
 	}

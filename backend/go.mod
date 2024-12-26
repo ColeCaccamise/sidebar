@@ -18,8 +18,10 @@ require (
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/resend/resend-go/v2 v2.12.0
 	github.com/rs/cors v1.11.1
-	github.com/stripe/stripe-go/v81 v81.2.0
+	github.com/stripe/stripe-go v70.15.0+incompatible
+	github.com/stripe/stripe-go/v80 v80.2.1
 	golang.org/x/crypto v0.21.0
+	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 	golang.org/x/text v0.19.0
 	gorm.io/driver/postgres v1.5.9
 	gorm.io/gorm v1.25.12
@@ -53,5 +55,5 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/stretchr/testify v1.9.0 // indirect
 	golang.org/x/net v0.22.0 // indirect
-	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
 )

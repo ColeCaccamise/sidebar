@@ -446,6 +446,7 @@ export default function OnboardingInvitePage() {
         setOpen={setShowResetDialog}
         title="Reset invite link?"
         showCloseButton={false}
+        className="flex flex-col gap-4"
       >
         <p>
           This will expire the current invite link and generate a new one.
