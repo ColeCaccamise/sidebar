@@ -386,7 +386,7 @@ export default function OnboardingInvitePage() {
           </p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 md:flex-row">
           <Input
             value={inviteLink}
             readOnly
@@ -423,7 +423,7 @@ export default function OnboardingInvitePage() {
             type="button"
             variant="unstyled"
             handleClick={copyInviteLink}
-            className="btn-small btn-brand-secondary flex items-center gap-2"
+            className="btn-small btn-brand-secondary flex w-full items-center gap-2 md:w-fit"
           >
             <CopyIcon width={16} height={16} />
             {copySuccess ? 'Copied!' : 'Copy'}
