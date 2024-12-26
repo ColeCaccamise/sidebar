@@ -19,6 +19,7 @@ import { CreditCardIcon, DownloadIcon } from 'lucide-react';
 import Dropdown from '@/components/ui/dropdown';
 import Button from '@/components/ui/button';
 import Input from '@/components/ui/input';
+import api from '@/lib/axios';
 
 export default function BillingPage({ params }: { params: { team: string } }) {
   const [plans, setPlans] = useState([]);
@@ -98,12 +99,9 @@ export default function BillingPage({ params }: { params: { team: string } }) {
     const fetchPlans = async () => {
       setLoading(true);
       try {
-        const res = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/billing/plans`,
-          {
-            withCredentials: true,
-          },
-        );
+        const res = await api.get(`/teams/${params.team}/billing/plans`, {
+          withCredentials: true,
+        });
 
         const sortedPlans = (res.data.data || []).sort(
           (a: { price: number }, b: { price: number }) => a.price - b.price,
@@ -192,12 +190,9 @@ export default function BillingPage({ params }: { params: { team: string } }) {
 
   async function handleGetSubscription() {
     try {
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions`,
-        {
-          withCredentials: true,
-        },
-      );
+      const res = await api.get(`/teams/${params.team}/billing/subscription`, {
+        withCredentials: true,
+      });
 
       console.log(res.data.data);
 
@@ -234,6 +229,24 @@ export default function BillingPage({ params }: { params: { team: string } }) {
     return 'downgrade';
   };
 
+  function getPlanTypeText(planType: string) {
+    if (planType === 'basic') return 'Basic Plan';
+    if (planType === 'pro') return 'Pro Plan';
+    if (planType === 'premium') return 'Premium Plan';
+    return 'Unknown';
+  }
+
+  function getCurrentPlan(priceID: string) {
+    console.log('price ID', priceID);
+    return plans.find((plan) => plan.price_id === priceID);
+  }
+
+  function getCurrentPlanPrice(priceID: string) {
+    const plan = getCurrentPlan(priceID);
+    console.log(plan);
+    return plan ? plan?.price / 100 : 0;
+  }
+
   return (
     <>
       {loading ? (
@@ -256,15 +269,20 @@ export default function BillingPage({ params }: { params: { team: string } }) {
                       Current Plan
                     </span>
                     <div className="flex flex-col gap-2">
-                      <span className="text-typography-strong">Pro Plan</span>
-                      <span>$29/month, billed monthly</span>
+                      <span className="text-typography-strong">
+                        {getPlanTypeText(subscription.plan_type)}
+                      </span>
+                      <span>
+                        ${getCurrentPlanPrice(subscription.stripe_price_id)}
+                        /month, billed monthly
+                      </span>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <ClockIcon className="h-4 w-4 text-typography-weak" />
                     <span>
-                      Renews on <span className="">January 7, 2025</span>
+                      Renews on <span>January 7, 2025</span>
                     </span>
                   </div>
                 </div>

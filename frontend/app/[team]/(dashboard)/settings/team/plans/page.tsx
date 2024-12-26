@@ -272,6 +272,24 @@ export default function PlansPage({ params }: { params: { team: string } }) {
     }
   }
 
+  async function handleUpdatePaymentMethod() {
+    await api
+      .post(
+        `/teams/${params.team}/billing/payment-methods`,
+        {},
+        { withCredentials: true },
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response?.data?.code),
+          mode: 'error',
+        });
+      });
+  }
+
   if (loading) {
     return <Spinner />;
   }
@@ -305,6 +323,13 @@ export default function PlansPage({ params }: { params: { team: string } }) {
                 handleClick={handleManageSubscription}
               >
                 Manage subscription
+              </Button>
+              <Button
+                variant="unstyled"
+                className="text-typography-strong"
+                handleClick={handleUpdatePaymentMethod}
+              >
+                Update payment method
               </Button>
             </div>
           </>
