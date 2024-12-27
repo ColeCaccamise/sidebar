@@ -55,6 +55,17 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		r.Post("/auth/verify-password", makeHttpHandleFunc(s.handleVerifyPassword))
 	})
 
+	// prompt routes
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.VerifyAuth)
+		r.Use(s.VerifyUserNotDeleted)
+		r.Use(s.VerifySecurityVersion)
+		r.Route("/prompts", func(r chi.Router) {
+			r.Get("/", makeHttpHandleFunc(s.handleGetPrompts))
+			r.Patch("/{id}/dismiss", makeHttpHandleFunc(s.handleDismissPrompt))
+		})
+	})
+
 	// team routes
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.VerifyAuth)
