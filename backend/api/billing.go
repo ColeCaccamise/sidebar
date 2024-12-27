@@ -19,6 +19,7 @@ import (
 	"github.com/stripe/stripe-go/v80/coupon"
 	"github.com/stripe/stripe-go/v80/customer"
 	"github.com/stripe/stripe-go/v80/invoice"
+	"github.com/stripe/stripe-go/v80/paymentmethod"
 	"github.com/stripe/stripe-go/v80/price"
 	"github.com/stripe/stripe-go/v80/product"
 	"github.com/stripe/stripe-go/v80/subscription"
@@ -834,16 +835,63 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 	//	fmt.Printf("received stripe schedule creation \n")
 
 	case "customer.subscription.trial_will_end":
-		var subscription stripe.Subscription
-		err := json.Unmarshal(event.Data.Raw, &subscription)
+		var stripeSubscription stripe.Subscription
+		err := json.Unmarshal(event.Data.Raw, &stripeSubscription)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error parsing webhook JSON: %v\n", err)
+			log.Printf("Error parsing webhook JSON: %v\n", err)
 			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook payload.", Code: "invalid_payload"})
 		}
-		log.Printf("Subscription trial will end for %s.", subscription.ID)
+		log.Printf("Subscription trial will end for %s.", stripeSubscription.ID)
+
+		teamID := uuid.MustParse(stripeSubscription.Metadata["team_id"])
+		team, err := s.store.GetTeamByID(teamID)
+		if err != nil {
+			log.Printf("Error fetching team: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
 
 		// enable cta notifications in dashboard
 		// check if payment details have been added
+		paymentMethodParams := &stripe.PaymentMethodListParams{
+			Type:     stripe.String(string(stripe.PaymentMethodTypeCard)),
+			Customer: stripe.String(team.StripeCustomerID),
+		}
+		paymentMethodParams.Limit = stripe.Int64(3)
+		result := paymentmethod.List(paymentMethodParams)
+		paymentMethods := result.PaymentMethodList()
+		if len(paymentMethods.Data) == 0 {
+			fmt.Printf("No payment methods found for %s.", stripeSubscription.ID)
+
+			// send email notifying user to add a payment method
+			// show banner in settings of app (closebale in main UI)
+			teamOwners, err := s.store.GetTeamMembersByTeamIDAndRole(teamID, models.TeamRoleOwner)
+
+			if len(teamOwners) == 0 || err != nil {
+				log.Printf("Error fetching team owners: %v\n", err)
+				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+
+			now := time.Now()
+
+			for _, member := range teamOwners {
+				err = s.store.CreatePrompt(&models.Prompt{
+					UserID:      member.UserID,
+					TeamID:      team.ID,
+					Type:        models.PromptTypeUpsell,
+					Title:       "Add Payment Method",
+					Content:     "Your trial ends in 3 days. Add a payment method to continue your service.",
+					StartDate:   now,
+					Dismissible: false,
+					ActionLabel: "Add Payment Method",
+					ActionURL:   fmt.Sprintf("/%s/settings/team/plans", team.Slug),
+				})
+
+				if err != nil {
+					log.Printf("Error creating prompt: %v\n", err)
+					return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+				}
+			}
+		}
 
 	//case "entitlements.active_entitlement_summary.updated":
 	//	var subscription stripe.Subscription
