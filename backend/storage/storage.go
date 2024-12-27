@@ -31,12 +31,18 @@ type Storage interface {
 	GetTeamInviteByID(uuid.UUID) (*models.TeamInvite, error)
 	CreateTeamInvite(*models.TeamInvite) error
 	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
+	GetTeamMembersByTeamID(uuid.UUID) ([]*models.TeamMember, error)
+	GetTeamMembersByTeamIDAndRole(uuid.UUID, models.TeamRole) ([]*models.TeamMember, error)
 	GetTeamByID(uuid.UUID) (*models.Team, error)
 	GetTeamByStripeCustomerID(string) (*models.Team, error)
 	CreateTeamSubscription(*models.TeamSubscription) error
 	UpdateTeamSubscription(*models.TeamSubscription) error
 	GetTeamSubscriptionByID(uuid.UUID) (*models.TeamSubscription, error)
 	GetTeamSubscriptionByStripeID(string) (*models.TeamSubscription, error)
+	GetPromptsForUser(uuid.UUID) ([]*models.Prompt, error)
+	GetPromptByID(uuid.UUID) (*models.Prompt, error)
+	CreatePrompt(*models.Prompt) error
+	UpdatePrompt(*models.Prompt) error
 }
 
 type PostgresStore struct {
@@ -86,6 +92,11 @@ func (s *PostgresStore) Init() error {
 		return err
 	}
 
+	err = s.CreatePromptsTable()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -107,6 +118,10 @@ func (s *PostgresStore) CreateTeamInvitesTable() error {
 
 func (s *PostgresStore) CreateTeamSubscriptionsTable() error {
 	return s.db.AutoMigrate(&models.TeamSubscription{})
+}
+
+func (s *PostgresStore) CreatePromptsTable() error {
+	return s.db.AutoMigrate(&models.Prompt{})
 }
 
 func (s *PostgresStore) CreateUser(user *models.User) error {
@@ -277,6 +292,30 @@ func (s *PostgresStore) GetTeamMemberByTeamIDAndUserID(teamID uuid.UUID, userID 
 	return &teamMember, nil
 }
 
+func (s *PostgresStore) GetTeamMembersByTeamID(teamID uuid.UUID) ([]*models.TeamMember, error) {
+	var teamMembers []*models.TeamMember
+	result := s.db.Where("team_id = ?", teamID).Find(&teamMembers)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team members not found with team id %s", teamID)
+		}
+		return nil, result.Error
+	}
+	return teamMembers, nil
+}
+
+func (s *PostgresStore) GetTeamMembersByTeamIDAndRole(teamID uuid.UUID, teamRole models.TeamRole) ([]*models.TeamMember, error) {
+	var teamMembers []*models.TeamMember
+	result := s.db.Where("team_id = ? AND team_role = ?", teamID, teamRole).Find(&teamMembers)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team members not found with team id %s", teamID)
+		}
+		return nil, result.Error
+	}
+	return teamMembers, nil
+}
+
 func (s *PostgresStore) CreateTeamSubscription(teamSubscription *models.TeamSubscription) error {
 	result := s.db.Create(teamSubscription)
 	return result.Error
@@ -308,4 +347,39 @@ func (s *PostgresStore) GetTeamSubscriptionByStripeID(stripeID string) (*models.
 		return nil, result.Error
 	}
 	return &teamSubscription, nil
+}
+
+func (s *PostgresStore) GetPromptsForUser(userID uuid.UUID) ([]*models.Prompt, error) {
+	var prompts []*models.Prompt
+	result := s.db.Where("user_id = ?", userID).Find(&prompts)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("prompt not found with user id %s", userID)
+		} else {
+			return nil, result.Error
+		}
+	}
+	return prompts, nil
+}
+
+func (s *PostgresStore) CreatePrompt(prompt *models.Prompt) error {
+	result := s.db.Create(prompt)
+	return result.Error
+}
+
+func (s *PostgresStore) UpdatePrompt(prompt *models.Prompt) error {
+	return s.db.Model(prompt).Select("*").Updates(prompt).Error
+}
+
+func (s *PostgresStore) GetPromptByID(id uuid.UUID) (*models.Prompt, error) {
+	var prompt models.Prompt
+	result := s.db.First(&prompt, id)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("prompt not found with id %s", id)
+		} else {
+			return nil, result.Error
+		}
+	}
+	return &prompt, nil
 }
