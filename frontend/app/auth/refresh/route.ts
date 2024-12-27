@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { cookies } from "next/headers";
+import { NextRequest, NextResponse } from 'next/server';
+import axios from 'axios';
+import { cookies } from 'next/headers';
 
 export async function GET(request: NextRequest) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -9,34 +9,33 @@ export async function GET(request: NextRequest) {
   try {
     const response = await axios.get(`${apiUrl}/auth/refresh`, {
       headers: {
-        Cookie: `refresh-token=${cookies().get("refresh-token")}`,
+        Cookie: `refresh-token=${cookies().get('refresh-token')}`,
       },
       withCredentials: true,
     });
 
-    const setCookie = response.headers["set-cookie"];
-    console.log("Set-Cookie:", setCookie);
+    const setCookie = response.headers['set-cookie'];
     if (response.status !== 200) {
-      return NextResponse.redirect(
-        new URL("/auth/login?error=no-refresh", request.url),
-      );
+      return NextResponse.redirect(new URL('/auth/login', request.url));
     }
 
-    const redirectResponse = NextResponse.redirect(
-      new URL("/dashboard", request.url),
-    );
+    const redirectResponse = NextResponse.redirect(new URL('/', request.url));
 
     // Forward the Set-Cookie header from the API response
     if (setCookie) {
-      setCookie.forEach((cookie) => {
-        redirectResponse.headers.append("Set-Cookie", cookie);
+      const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+      cookieArray.forEach((cookie) => {
+        if (cookie) {
+          const [cookieValue] = cookie.split(';');
+          const [name, value] = cookieValue.trim().split('=');
+          cookies().set(name, value);
+        }
+        // redirectResponse.headers.append('Set-Cookie', cookie);
       });
     }
 
     return redirectResponse;
-  } catch (error) {
-    return NextResponse.redirect(
-      new URL("/auth/login?error=other-error-refresh", request.url),
-    );
+  } catch (err) {
+    return NextResponse.redirect(new URL('/auth/login', request.url));
   }
 }
