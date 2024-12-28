@@ -31,7 +31,7 @@ api.interceptors.response.use(
       refreshing = true;
 
       try {
-        const response = await api.post(
+        const response = await api.get(
           '/auth/refresh',
           {},
           {
