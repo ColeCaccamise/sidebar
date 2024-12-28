@@ -46,7 +46,7 @@ export default function SignupPage() {
       if (axios.isAxiosError(error) && error.response) {
         const apiError = error.response.data as ApiError;
         toast({
-          message: getErrorMessage(apiError.code),
+          message: apiError.error,
           mode: 'error',
         });
       } else {
