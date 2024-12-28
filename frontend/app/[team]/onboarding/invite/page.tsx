@@ -35,9 +35,7 @@ export default function OnboardingInvitePage() {
   const [inviteLoading, setInviteLoading] = useState(false);
   const [emails, setEmails] = useState<string[]>(['']);
   const [copySuccess, setCopySuccess] = useState(false);
-  const [inviteLink, setInviteLink] = useState(
-    `${window.location.origin}/${teamSlug}/join/fheuasndd984masd`,
-  );
+  const [inviteLink, setInviteLink] = useState('');
   const [isRotating, setIsRotating] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [team, setTeam] = useState<any>(null);

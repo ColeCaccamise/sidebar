@@ -269,7 +269,7 @@ export default function BillingPage() {
             <div className="flex w-full justify-between gap-4">
               {plans.map((plan: any) => (
                 <PricingBox
-                  key={plan.product_id}
+                  key={plan.product_lookup_key}
                   planName={plan.name}
                   customPricing={false}
                   features={
@@ -279,6 +279,8 @@ export default function BillingPage() {
                   billingOption={plan.interval}
                   priceLookupKey={plan.price_lookup_key}
                   planType={getPlanType(plan.price)}
+                  handleSelectPlan={() => {}}
+                  handleUpdatePlan={() => {}}
                 />
               ))}
             </div>
