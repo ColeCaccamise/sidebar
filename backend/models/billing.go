@@ -9,6 +9,7 @@ type SubscriptionPlan struct {
 	PriceActive    bool   `json:"price_active"`
 	Interval       string `json:"interval"`
 	Price          int    `json:"price"`
+	PlanType       string `json:"plan_type"`
 }
 
 type CreateCheckoutSessionRequest struct {
