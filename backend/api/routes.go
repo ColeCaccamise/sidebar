@@ -93,7 +93,9 @@ func (s *Server) SetupRoutes() *chi.Mux {
 				r.Post("/payment-methods", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
 				r.Route("/subscription", func(r chi.Router) {
 					r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
+					r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
 					r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
+					r.Patch("/interval", makeHttpHandleFunc(s.handleUpdateSubscriptionInterval))
 				})
 			})
 		})

@@ -39,6 +39,7 @@ type Storage interface {
 	UpdateTeamSubscription(*models.TeamSubscription) error
 	GetTeamSubscriptionByID(uuid.UUID) (*models.TeamSubscription, error)
 	GetTeamSubscriptionByStripeID(string) (*models.TeamSubscription, error)
+	GetTeamSubscriptionByTeamIDAndStripePriceID(uuid.UUID, string) (*models.TeamSubscription, error)
 	GetPromptsForUser(uuid.UUID) ([]*models.Prompt, error)
 	GetPromptByID(uuid.UUID) (*models.Prompt, error)
 	CreatePrompt(*models.Prompt) error
@@ -343,6 +344,18 @@ func (s *PostgresStore) GetTeamSubscriptionByStripeID(stripeID string) (*models.
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("team subscription not found with stripeID %s", stripeID)
+		}
+		return nil, result.Error
+	}
+	return &teamSubscription, nil
+}
+
+func (s *PostgresStore) GetTeamSubscriptionByTeamIDAndStripePriceID(teamID uuid.UUID, priceID string) (*models.TeamSubscription, error) {
+	var teamSubscription models.TeamSubscription
+	result := s.db.Where("team_id = ? AND stripe_price_id = ?", teamID, priceID).First(&teamSubscription)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team subscription not found with stripe price ID %s", priceID)
 		}
 		return nil, result.Error
 	}

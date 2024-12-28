@@ -234,6 +234,7 @@ type TeamSubscription struct {
 	FailureMessage         string                   `gorm:"default:null" json:"failure_message"`
 	FailureCode            string                   `gorm:"default:null" json:"failure_code"`
 	InvoicePaymentFailedAt *time.Time               `gorm:"default:null" json:"invoice_payment_failed_at"`
+	HasValidPaymentMethod  bool                     `gorm:"default:null" json:"has_valid_payment_method"`
 }
 
 type TeamSubscriptionResponse struct {
@@ -280,4 +281,8 @@ func NewTeamSubscriptionResponse(t *TeamSubscription) *TeamSubscriptionResponse 
 		SubscriptionCanceled:       t.CancelAt != nil,
 		SubscriptionCancelAt:       t.CancelAt,
 	}
+}
+
+type UpdateSubscriptionIntervalRequest struct {
+	Interval TeamSubscriptionInterval `json:"interval"`
 }
