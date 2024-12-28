@@ -3,8 +3,10 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/colecaccamise/go-backend/util"
 	"io/ioutil"
 	"log"
+	"math"
 	"net/http"
 	"os"
 	"strings"
@@ -32,6 +34,14 @@ import (
 func (s *Server) handleGetPlans(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "invalid slug,",
+			Code:  "invalid_slug",
+		})
+	}
+
 	// get prices from stripe
 	priceParams := &stripe.PriceListParams{
 		Active: stripe.Bool(true),
@@ -58,6 +68,7 @@ func (s *Server) handleGetPlans(w http.ResponseWriter, r *http.Request) error {
 			PriceActive:    p.Active,
 			Interval:       string(p.Recurring.Interval),
 			Price:          int(p.UnitAmount),
+			PlanType:       strings.Split(p.LookupKey, "_")[0],
 		}
 
 		plans = append(plans, plan)
@@ -485,6 +496,95 @@ func (s *Server) handleUpdateSubscription(w http.ResponseWriter, r *http.Request
 	}})
 }
 
+func getAlternateBillingCycle(priceLookupKey string) string {
+	if priceLookupKey == "basic_annually" {
+		return "basic_monthly"
+	} else if priceLookupKey == "basic_monthly" {
+		return "basic_annually"
+	} else if priceLookupKey == "pro_annually" {
+		return "pro_monthly"
+	} else if priceLookupKey == "pro_monthly" {
+		return "pro_annually"
+	} else if priceLookupKey == "premium_annually" {
+		return "premium_monthly"
+	} else if priceLookupKey == "premium_monthly" {
+		return "premium_annually"
+	}
+
+	return ""
+}
+
+func (s *Server) handleUpdateSubscriptionInterval(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	slug := chi.URLParam(r, "slug")
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	customerID := team.StripeCustomerID
+
+	intervalReq := new(models.UpdateSubscriptionIntervalRequest)
+	if err := json.NewDecoder(r.Body).Decode(intervalReq); err != nil {
+		if err.Error() == "EOF" {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
+		} else {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+		}
+	}
+
+	teamSubscription, err := s.store.GetTeamSubscriptionByID(team.SubscriptionID)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	if teamSubscription.Interval == intervalReq.Interval {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "interval must be different.",
+			Code:  "interval_unchanged",
+		})
+	}
+
+	updatedPrice := getAlternateBillingCycle(teamSubscription.StripePriceLookupKey)
+
+	priceParams := &stripe.PriceListParams{
+		LookupKeys: stripe.StringSlice([]string{updatedPrice}),
+	}
+	priceParams.Limit = stripe.Int64(1)
+	existingPrice := price.List(priceParams).PriceList().Data[0]
+
+	params := &stripe.BillingPortalSessionParams{
+		Customer:  stripe.String(customerID),
+		ReturnURL: stripe.String(fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), slug)),
+		FlowData: &stripe.BillingPortalSessionFlowDataParams{
+			Type: stripe.String("subscription_update_confirm"),
+			SubscriptionUpdateConfirm: &stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmParams{
+				Subscription: stripe.String(teamSubscription.StripeSubscriptionID),
+				Items: []*stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmItemParams{
+					{
+						Price: stripe.String(existingPrice.ID),
+					},
+				},
+			},
+			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
+				Type: stripe.String("redirect"),
+				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
+					ReturnURL: stripe.String(fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), slug)),
+				},
+			},
+		},
+	}
+	result, err := portalSession.New(params)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": result.URL,
+	}})
+}
+
 func (s *Server) handleRenewSubscription(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
@@ -556,6 +656,8 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 		fmt.Fprintf(os.Stderr, "⚠️  Webhook signature verification failed. %v\n", err)
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid webhook signature.", Code: "invalid_signature"})
 	}
+
+	log.Printf("received stripe webhook event: %s\n", event.Type)
 
 	// Unmarshal the event data into an appropriate struct depending on its Type
 	switch event.Type {
@@ -742,6 +844,15 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 		}
 		teamSubscription.PlanType = models.TeamSubscriptionPlan(planType)
 
+		subscriptionData := subscription.Items.Data[0]
+		plan := subscriptionData.Plan
+		planInterval := plan.Interval
+		if planInterval == "month" {
+			teamSubscription.Interval = models.TeamSubscriptionIntervalMonth
+		} else if planInterval == "year" {
+			teamSubscription.Interval = models.TeamSubscriptionIntervalYear
+		}
+
 		err = s.store.UpdateTeamSubscription(teamSubscription)
 		if err != nil {
 			fmt.Printf("Error updating team subscription: %v\n", err)
@@ -764,7 +875,6 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 		}
 
 		// todo check if setup errors are gone
-
 		now := time.Now()
 		team.SubscriptionTierChosenAt = &now
 		fmt.Printf("team subscription timestamp: %s", team.SubscriptionTierChosenAt)
@@ -798,7 +908,12 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 		teamSubscription.StripePriceLookupKey = lookupKey
 		teamSubscription.StripeProductID = product.ID
 		teamSubscription.StripeSubscriptionID = subscription.ID
-		teamSubscription.Status = models.TeamSubscriptionStatus(subscription.Status)
+		log.Printf("newly created subscription status: %s\n", subscription.Status)
+		if subscription.Status == "trialing" {
+			teamSubscription.Status = models.TeamSubscriptionStatusTrialing
+		} else {
+			fmt.Printf("unknown initial subscription status: %s\n", subscription.Status)
+		}
 
 		if subscription.Status == "trialing" {
 			team.FreeTrialAt = &now
@@ -850,6 +965,28 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
 		}
 
+		teamSubscription, err := s.store.GetTeamSubscriptionByStripeID(stripeSubscription.ID)
+		if err != nil {
+			log.Printf("Error fetching team subscription: %v\n", err)
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		if stripeSubscription.Status == "trialing" {
+			teamSubscription.Status = models.TeamSubscriptionStatusTrialing
+			err = s.store.UpdateTeamSubscription(teamSubscription)
+		} else {
+			teamSubscription.Status = models.TeamSubscriptionStatus(stripeSubscription.Status) // todo fix
+			err = s.store.UpdateTeamSubscription(teamSubscription)
+		}
+
+		trialEnd := stripeSubscription.TrialEnd
+		if math.Abs(float64(trialEnd)-float64(time.Now().Unix())) <= 3600 {
+			now := time.Now()
+			// end subscription with current timestamp
+			teamSubscription.CanceledAt = &now
+			teamSubscription.CancelAt = &now
+		}
+
 		// enable cta notifications in dashboard
 		// check if payment details have been added
 		paymentMethodParams := &stripe.PaymentMethodListParams{
@@ -891,6 +1028,8 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 					return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
 				}
 			}
+
+			teamSubscription.HasValidPaymentMethod = false
 		}
 
 	//case "entitlements.active_entitlement_summary.updated":
@@ -964,7 +1103,9 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 		if teamSubscription.InvoicePaymentFailedAt == nil {
 			now := time.Now()
 			teamSubscription.InvoicePaymentFailedAt = &now
-			teamSubscription.Status = models.TeamSubscriptionStatus(stripeInvoice.Subscription.Status)
+			if stripeInvoice.Subscription.Status != "" {
+				teamSubscription.Status = models.TeamSubscriptionStatus(stripeInvoice.Subscription.Status)
+			}
 
 			err = s.store.UpdateTeamSubscription(teamSubscription)
 			if err != nil {
@@ -1044,7 +1185,21 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payload.", Code: "invalid_payload"})
 		}
 
+		customerID := paymentMethod.Customer.ID
+		team, err := s.store.GetTeamByStripeCustomerID(customerID)
+		if err != nil {
+			log.Printf("Error getting team for stripe customer ID: %s\n", customerID)
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
 		// customer added a new payment method
+		teamSubscription, err := s.store.GetTeamSubscriptionByID(team.SubscriptionID)
+		if err != nil {
+			log.Printf("Error getting team subscription for subscription ID: %s\n", team.SubscriptionID)
+
+		}
+
+		teamSubscription.HasValidPaymentMethod = true
 
 	case "payment_method.detached":
 		var paymentMethod stripe.PaymentMethod
@@ -1055,6 +1210,7 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 		}
 
 		// customer removed a payment method
+		// check number of payment methods remaining - see if they're valud
 
 	case "payment_intent.succeeded":
 		// check of current invoice is failed and update
