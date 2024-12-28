@@ -21,9 +21,8 @@ import (
 
 var RESERVED_TEAM_SLUGS = []string{"support", "help", "helpcenter", "banking", "account", "settings", "admin", "system", "faq", "docs", "documentation", "root", "profile", "billing", "login", "signin", "signup", "auth", "signout", "register", "api", "dashboard", "notifications", "team", "teams", "legal", "onboarding", "terms", "privacy"}
 
-// TEAMS
 func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
@@ -253,7 +252,7 @@ func (s *Server) HandleGetTeamMember(w http.ResponseWriter, r *http.Request) err
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
 	}
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{
 			Error: "internal server error.",
@@ -295,7 +294,7 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid slug.", Code: "invalid_slug"})
 	}
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
 	}
@@ -580,7 +579,7 @@ func (s *Server) handleVerifyInviteLink(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// check that user isn't already a team member
-	user, _, _ := getUserIdentity(s, r)
+	user, _, _, _ := getUserIdentity(s, r)
 
 	if user != nil {
 		existingMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
@@ -786,7 +785,7 @@ func (s *Server) handleCompleteOnboarding(w http.ResponseWriter, r *http.Request
 		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
 	}
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error", Code: "internal_server_error"})
 	}

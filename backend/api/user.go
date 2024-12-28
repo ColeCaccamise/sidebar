@@ -56,7 +56,7 @@ func (s *Server) handleGetUserByID(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) handleUpdateUserEmail(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return err
 	}
@@ -99,7 +99,7 @@ func (s *Server) handleUpdateUserEmail(w http.ResponseWriter, r *http.Request) e
 		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "token is invalid or expired", Code: "invalid_update_token"})
 	}
 
-	userId, authTokenType, err := util.ParseJWT(resetEmailToken.Value)
+	userId, authTokenType, sessionId, err := util.ParseJWT(resetEmailToken.Value)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "token is invalid or expired", Code: "invalid_update_token"})
@@ -111,6 +111,11 @@ func (s *Server) handleUpdateUserEmail(w http.ResponseWriter, r *http.Request) e
 
 	if authTokenType != "reset_email" {
 		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "token is invalid or expired", Code: "invalid_update_token"})
+	}
+
+	session, err := s.store.GetSessionByID(uuid.MustParse(sessionId))
+	if err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "session not found", Code: "invalid_update_token"})
 	}
 
 	updateUserEmailReq := new(models.UpdateUserEmailRequest)
@@ -138,7 +143,7 @@ func (s *Server) handleUpdateUserEmail(w http.ResponseWriter, r *http.Request) e
 	}
 
 	// send email confirmation
-	emailConfirmationToken, err := generateToken(user, "email_update_confirmation")
+	emailConfirmationToken, err := generateToken(user, "email_update_confirmation", session)
 	if err != nil {
 		return err
 	}
@@ -174,7 +179,7 @@ func (s *Server) handleUpdateUserEmail(w http.ResponseWriter, r *http.Request) e
 
 func (s *Server) handleResendUpdateEmail(w http.ResponseWriter, r *http.Request) error {
 	// check that user has outstanding email update request
-	user, _, err := getUserIdentity(s, r)
+	user, _, session, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid or expired.", Error: "unauthorized.", Code: "unauthorized"})
@@ -188,7 +193,7 @@ func (s *Server) handleResendUpdateEmail(w http.ResponseWriter, r *http.Request)
 	}
 
 	// send email
-	emailConfirmationToken, err := generateToken(user, "email_update_confirmation")
+	emailConfirmationToken, err := generateToken(user, "email_update_confirmation", session)
 	if err != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Message: "there was a problem resending the confirmation email.", Error: "internal server error.", Code: "internal_server_error"})
 	}
@@ -217,7 +222,7 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error 
 		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "password is required.", Code: "missing_password"})
 	}
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return err
 	}
@@ -288,7 +293,7 @@ func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error 
 }
 
 func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid or expired.", Error: "unauthorized.", Code: "unauthorized"})
@@ -321,7 +326,7 @@ func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error
 }
 
 func (s *Server) handleRestoreUser(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired", Code: "invalid_token"})
 	}
@@ -375,7 +380,7 @@ func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) erro
 	}
 
 	// delete existing avatar from S3
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
 	}
@@ -414,7 +419,7 @@ func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) erro
 		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid or expired", Error: err.Error()})
 	}
 
-	userId, authTokenType, err := util.ParseJWT(authToken.Value)
+	userId, authTokenType, _, err := util.ParseJWT(authToken.Value)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid or expired", Error: err.Error()})
@@ -440,10 +445,10 @@ func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *Server) handleDeleteAvatar(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 	}
 
 	avatarUrl := user.AvatarUrl
@@ -495,7 +500,7 @@ func (s *Server) handleDeleteAvatar(w http.ResponseWriter, r *http.Request) erro
 }
 
 func (s *Server) handleChangeUserPassword(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired", Code: "bad_token"})
@@ -580,7 +585,7 @@ func (s *Server) handleChangeUserPassword(w http.ResponseWriter, r *http.Request
 	// update security version
 	now := time.Now()
 
-	user.SecurityVersionChangedAt = &now
+	user.SecurityVersion = &now
 
 	if err := s.store.UpdateUser(user); err != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})

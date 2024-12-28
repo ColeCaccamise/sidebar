@@ -87,7 +87,7 @@ func (s *Server) handleGetPlans(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleCreateCheckoutSession(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "invaild_token"})
@@ -215,7 +215,7 @@ func (s *Server) handleCreateCheckoutSession(w http.ResponseWriter, r *http.Requ
 func (s *Server) handleCreatePortalSession(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
 	}
@@ -256,7 +256,7 @@ func (s *Server) handleCreatePortalSession(w http.ResponseWriter, r *http.Reques
 func (s *Server) handleGetCurrentSubscription(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
-	_, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
@@ -268,6 +268,14 @@ func (s *Server) handleGetCurrentSubscription(w http.ResponseWriter, r *http.Req
 
 	if err != nil {
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	_, err = s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "you don't have permission to view this team.",
+			Code:  "forbidden",
+		})
 	}
 
 	subscriptionID := team.SubscriptionID
@@ -287,7 +295,7 @@ func (s *Server) handleGetCurrentSubscription(w http.ResponseWriter, r *http.Req
 func (s *Server) handleCancelSubscription(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
@@ -390,7 +398,7 @@ func (s *Server) handleCancelSubscription(w http.ResponseWriter, r *http.Request
 func (s *Server) handleUpdateSubscription(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
-	_, _, err := getUserIdentity(s, r)
+	_, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
@@ -588,7 +596,7 @@ func (s *Server) handleUpdateSubscriptionInterval(w http.ResponseWriter, r *http
 func (s *Server) handleRenewSubscription(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
@@ -1289,7 +1297,7 @@ func (s *Server) handleUpdatePaymentMethod(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{
 			Error: "unauthorized",
@@ -1382,7 +1390,7 @@ func (s *Server) handleGetPaymentMethods(w http.ResponseWriter, r *http.Request)
 		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
 	}
 
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 	}

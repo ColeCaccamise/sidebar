@@ -44,6 +44,11 @@ type Storage interface {
 	GetPromptByID(uuid.UUID) (*models.Prompt, error)
 	CreatePrompt(*models.Prompt) error
 	UpdatePrompt(*models.Prompt) error
+	CreateSession(*models.Session) error
+	GetSessionByID(uuid.UUID) (*models.Session, error)
+	UpdateSession(*models.Session) error
+	DeleteSessionByID(uuid.UUID) error
+	DeleteSessionsByUserID(uuid.UUID) error
 }
 
 type PostgresStore struct {
@@ -98,6 +103,11 @@ func (s *PostgresStore) Init() error {
 		return err
 	}
 
+	err = s.CreateSessionsTable()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -123,6 +133,10 @@ func (s *PostgresStore) CreateTeamSubscriptionsTable() error {
 
 func (s *PostgresStore) CreatePromptsTable() error {
 	return s.db.AutoMigrate(&models.Prompt{})
+}
+
+func (s *PostgresStore) CreateSessionsTable() error {
+	return s.db.AutoMigrate(&models.Session{})
 }
 
 func (s *PostgresStore) CreateUser(user *models.User) error {
@@ -170,6 +184,35 @@ func (s *PostgresStore) GetAllUsers() ([]*models.User, error) {
 func (s *PostgresStore) DeleteUserByID(id uuid.UUID) error {
 	result := s.db.Delete(&models.User{}, id)
 	return result.Error
+}
+
+func (s *PostgresStore) CreateSession(session *models.Session) error {
+	result := s.db.Create(session)
+	return result.Error
+}
+
+func (s *PostgresStore) GetSessionByID(id uuid.UUID) (*models.Session, error) {
+	var session models.Session
+	result := s.db.First(&session, id)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("session not found with id %s", id)
+		}
+		return nil, result.Error
+	}
+	return &session, nil
+}
+
+func (s *PostgresStore) UpdateSession(session *models.Session) error {
+	return s.db.Model(session).Select("*").Updates(session).Error // explicitly tell gorm to update with zero values
+}
+
+func (s *PostgresStore) DeleteSessionByID(id uuid.UUID) error {
+	return s.db.Delete(&models.Session{}, id).Error
+}
+
+func (s *PostgresStore) DeleteSessionsByUserID(id uuid.UUID) error {
+	return s.db.Where("user_id = ?", id).Delete(&models.Session{}).Error
 }
 
 func (s *PostgresStore) CreateTeam(team *models.Team) error {

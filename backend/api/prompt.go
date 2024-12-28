@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Server) handleGetPrompts(w http.ResponseWriter, r *http.Request) error {
-	user, _, err := getUserIdentity(s, r)
+	user, _, _, err := getUserIdentity(s, r)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{
 			Error: "unauthorized",
