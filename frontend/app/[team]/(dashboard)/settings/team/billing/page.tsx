@@ -32,8 +32,8 @@ export default function BillingPage({ params }: { params: { team: string } }) {
   const [changeBillingIntervalModalOpen, setChangeBillingIntervalModalOpen] =
     useState(false);
   const [selectedBillingInterval, setSelectedBillingInterval] = useState<
-    'monthly' | 'yearly'
-  >('monthly');
+    'month' | 'year'
+  >('month');
   const [addNewPaymentMethodModalOpen, setAddNewPaymentMethodModalOpen] =
     useState(false);
   const [subscription, setSubscription] = useState<any>(null);
@@ -197,6 +197,29 @@ export default function BillingPage({ params }: { params: { team: string } }) {
       console.log(res.data.data);
 
       setSubscription(res.data.data.subscription);
+      setSelectedBillingInterval(res.data.data.subscription?.interval);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleUpdateBillingInterval(
+    e: React.FormEvent<HTMLFormElement>,
+  ) {
+    e.preventDefault();
+
+    try {
+      console.log('selected billing interval', selectedBillingInterval);
+      const res = await api.patch(
+        `/teams/${params.team}/billing/subscription/interval`,
+        {
+          interval: selectedBillingInterval,
+        },
+        {
+          withCredentials: true,
+        },
+      );
+      console.log(res.data);
     } catch (err) {
       console.error(err);
     }
@@ -262,9 +285,9 @@ export default function BillingPage({ params }: { params: { team: string } }) {
             </div>
 
             <div className="flex w-full flex-col gap-6">
-              <div className="flex w-full flex-row items-center justify-between gap-4 rounded-md border border-stroke-weak px-6 py-6">
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-4">
+              <div className="flex w-full flex-col items-start justify-between gap-4 rounded-md border border-stroke-weak px-6 py-6 lg:flex-row lg:items-center">
+                <div className="flex w-full flex-col gap-4">
+                  <div className="flex w-full flex-grow flex-col gap-4">
                     <span className="text-lg font-bold text-typography-strong">
                       Current Plan
                     </span>
@@ -286,16 +309,16 @@ export default function BillingPage({ params }: { params: { team: string } }) {
                     </span>
                   </div>
                 </div>
-                <div className="flex flex-row items-center gap-2">
+                <div className="flex w-full flex-col items-center gap-4 lg:flex-row lg:justify-end">
                   <Button
-                    className="btn-small btn-brand-secondary text-sm"
+                    className="btn-small btn-brand-secondary w-full text-sm lg:w-fit"
                     handleClick={() => setChangeBillingIntervalModalOpen(true)}
                   >
                     Change Billing Interval
                   </Button>
                   <Link
                     href={`/${params.team}/settings/team/plans`}
-                    className="btn-small btn-brand h-fit text-sm no-underline"
+                    className="btn-small btn-brand h-fit w-full text-sm no-underline lg:w-fit"
                   >
                     Change Plan
                   </Link>
@@ -441,11 +464,14 @@ export default function BillingPage({ params }: { params: { team: string } }) {
             setOpen={setChangeBillingIntervalModalOpen}
             className="w-full"
           >
-            <form className="flex flex-col gap-4">
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={handleUpdateBillingInterval}
+            >
               <div
-                onClick={() => setSelectedBillingInterval('monthly')}
+                onClick={() => setSelectedBillingInterval('month')}
                 className={`mt-4 flex w-full cursor-pointer flex-col gap-2 rounded-md border p-4 ${
-                  selectedBillingInterval === 'monthly'
+                  selectedBillingInterval === 'month'
                     ? 'border-stroke-medium bg-fill-solid'
                     : 'border-stroke-weak hover:bg-fill'
                 }`}
@@ -456,7 +482,7 @@ export default function BillingPage({ params }: { params: { team: string } }) {
                       Monthly Billing
                     </span>
                   </div>
-                  {selectedBillingInterval === 'monthly' && (
+                  {selectedBillingInterval === 'month' && (
                     <CheckIcon className="h-4 w-4 text-brand" />
                   )}
                 </div>
@@ -464,9 +490,9 @@ export default function BillingPage({ params }: { params: { team: string } }) {
               </div>
 
               <div
-                onClick={() => setSelectedBillingInterval('yearly')}
+                onClick={() => setSelectedBillingInterval('year')}
                 className={`flex w-full cursor-pointer flex-col gap-2 rounded-md border p-4 ${
-                  selectedBillingInterval === 'yearly'
+                  selectedBillingInterval === 'year'
                     ? 'border-stroke-medium bg-fill-solid'
                     : 'border-stroke-weak hover:bg-fill'
                 }`}
@@ -480,11 +506,21 @@ export default function BillingPage({ params }: { params: { team: string } }) {
                       Save 20%
                     </span>
                   </div>
-                  {selectedBillingInterval === 'yearly' && (
+                  {selectedBillingInterval === 'year' && (
                     <CheckIcon className="h-4 w-4 text-typography-strong" />
                   )}
                 </div>
                 <span className="text-sm text-typography-weak">$279/year</span>
+              </div>
+
+              <div className="flex w-full flex-col gap-2">
+                <Button
+                  disabled={subscription?.interval === selectedBillingInterval}
+                  type="submit"
+                  className="w-full"
+                >
+                  Update
+                </Button>
               </div>
             </form>
           </Modal>

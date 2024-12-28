@@ -296,11 +296,11 @@ export default function PlansPage({ params }: { params: { team: string } }) {
 
   return (
     <div className="w-full pb-8">
-      <div className="flex w-full flex-col items-start gap-6">
+      <div className="flex w-full flex-col items-start gap-8">
         {subscription ? (
           <>
             <h1 className="text-xl font-bold">Review your plan</h1>
-            <div className="flex w-full items-center justify-between">
+            <div className="flex w-full flex-col items-start justify-between gap-8">
               <div className="flex flex-col gap-2">
                 <span className="text-lg font-bold text-typography-strong">
                   {subscription?.plan_type?.charAt(0).toUpperCase() +
@@ -317,20 +317,22 @@ export default function PlansPage({ params }: { params: { team: string } }) {
                   plan.
                 </p>
               </div>
-              <Button
-                variant="unstyled"
-                className="text-typography-strong"
-                handleClick={handleManageSubscription}
-              >
-                Manage subscription
-              </Button>
-              <Button
-                variant="unstyled"
-                className="text-typography-strong"
-                handleClick={handleUpdatePaymentMethod}
-              >
-                Update payment method
-              </Button>
+              <div className="flex w-full justify-between gap-2">
+                <Button
+                  variant="unstyled"
+                  className="text-typography-strong"
+                  handleClick={handleUpdatePaymentMethod}
+                >
+                  Update payment method
+                </Button>
+                <Button
+                  variant="unstyled"
+                  className="text-typography-strong"
+                  handleClick={handleManageSubscription}
+                >
+                  Manage subscription
+                </Button>
+              </div>
             </div>
           </>
         ) : (
@@ -374,7 +376,7 @@ export default function PlansPage({ params }: { params: { team: string } }) {
                   price: number;
                 }) => (
                   <PricingBox
-                    key={plan.price_lookup_key}
+                    key={plan.price_id}
                     planName={plan.name}
                     planDescription={
                       planDescriptions[
@@ -404,6 +406,7 @@ export default function PlansPage({ params }: { params: { team: string } }) {
                         : false
                     }
                     trialInProgress={subscription?.free_trial_active}
+                    // subscriptionStatus={subscription?.status}
                   />
                 ),
               )}
