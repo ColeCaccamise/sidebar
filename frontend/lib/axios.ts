@@ -31,13 +31,9 @@ api.interceptors.response.use(
       refreshing = true;
 
       try {
-        const response = await api.get(
-          '/auth/refresh',
-          {},
-          {
-            withCredentials: true,
-          },
-        );
+        const response = await api.get('/auth/refresh', {
+          withCredentials: true,
+        });
 
         // set the new token
         const newToken = response.data.token;
