@@ -1,6 +1,5 @@
 'use client';
 
-import PricingBox from '@/components/ui/pricing-box';
 import axios from 'axios';
 import toast from '@/lib/toast';
 import { useEffect, useState } from 'react';
@@ -24,6 +23,7 @@ import api from '@/lib/axios';
 export default function BillingPage({ params }: { params: { team: string } }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [updateLoading, setUpdateLoading] = useState(false);
   const searchParams = useSearchParams();
   const message = searchParams.get('message');
   const error = searchParams.get('error');
@@ -208,9 +208,9 @@ export default function BillingPage({ params }: { params: { team: string } }) {
   ) {
     e.preventDefault();
 
-    try {
-      console.log('selected billing interval', selectedBillingInterval);
-      const res = await api.patch(
+    setUpdateLoading(true);
+    await api
+      .patch(
         `/teams/${params.team}/billing/subscription/interval`,
         {
           interval: selectedBillingInterval,
@@ -218,11 +218,19 @@ export default function BillingPage({ params }: { params: { team: string } }) {
         {
           withCredentials: true,
         },
-      );
-      console.log(res.data);
-    } catch (err) {
-      console.error(err);
-    }
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response.data.code),
+          mode: 'error',
+        });
+      })
+      .finally(() => {
+        setUpdateLoading(false);
+      });
   }
 
   useEffect(() => {
@@ -515,11 +523,21 @@ export default function BillingPage({ params }: { params: { team: string } }) {
 
               <div className="flex w-full flex-col gap-2">
                 <Button
-                  disabled={subscription?.interval === selectedBillingInterval}
+                  disabled={
+                    subscription?.interval === selectedBillingInterval ||
+                    updateLoading
+                  }
                   type="submit"
                   className="w-full"
                 >
-                  Update
+                  {updateLoading ? (
+                    <div className="flex items-center gap-2">
+                      <Spinner variant="dark" />
+                      <span className="text-background">Updating...</span>
+                    </div>
+                  ) : (
+                    'Update'
+                  )}
                 </Button>
               </div>
             </form>
