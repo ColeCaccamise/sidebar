@@ -68,7 +68,7 @@ export default function LoginPage() {
           message: 'Logged in successfully',
           mode: 'success',
         });
-        router.push('/dashboard');
+        router.push(response.data?.data?.redirect_url || '/');
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
