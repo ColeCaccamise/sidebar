@@ -562,6 +562,13 @@ func (s *Server) handleUpdateSubscriptionInterval(w http.ResponseWriter, r *http
 	priceParams.Limit = stripe.Int64(1)
 	existingPrice := price.List(priceParams).PriceList().Data[0]
 
+	stripeSubscription, err := subscription.Get(teamSubscription.StripeSubscriptionID, &stripe.SubscriptionParams{})
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	subscriptionItem := stripeSubscription.Items.Data[0]
+
 	params := &stripe.BillingPortalSessionParams{
 		Customer:  stripe.String(customerID),
 		ReturnURL: stripe.String(fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), slug)),
@@ -571,6 +578,7 @@ func (s *Server) handleUpdateSubscriptionInterval(w http.ResponseWriter, r *http
 				Subscription: stripe.String(teamSubscription.StripeSubscriptionID),
 				Items: []*stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmItemParams{
 					{
+						ID:    stripe.String(subscriptionItem.ID),
 						Price: stripe.String(existingPrice.ID),
 					},
 				},
@@ -578,7 +586,7 @@ func (s *Server) handleUpdateSubscriptionInterval(w http.ResponseWriter, r *http
 			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
 				Type: stripe.String("redirect"),
 				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
-					ReturnURL: stripe.String(fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), slug)),
+					ReturnURL: stripe.String(fmt.Sprintf("%s/%s/settings/team/billing", os.Getenv("APP_URL"), slug)),
 				},
 			},
 		},
