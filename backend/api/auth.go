@@ -529,7 +529,14 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	return WriteJSON(w, http.StatusOK, nil)
+	redirectUrl := ""
+	if user.DefaultTeamSlug != "" {
+		redirectUrl = fmt.Sprintf("/%s", user.DefaultTeamSlug)
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+		"redirect_url": redirectUrl,
+	}})
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
