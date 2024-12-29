@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"os"
 
 	"github.com/colecaccamise/go-backend/api"
 	"github.com/colecaccamise/go-backend/storage"
