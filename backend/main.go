@@ -18,8 +18,7 @@ func main() {
 	flag.Parse()
 
 	err := godotenv.Load()
-	environment := os.Getenv("ENVIRONMENT")
-	if err != nil && environment != "production" {
+	if err != nil {
 		log.Fatalf("Error loading .env file")
 	}
 
