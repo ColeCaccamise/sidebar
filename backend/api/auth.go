@@ -23,7 +23,7 @@ func (s *Server) VerifyUserNotDeleted(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, _, _, err := getUserIdentity(s, r)
 		if err != nil {
-			_ = WriteJSON(w, http.StatusUnauthorized, Error{Message: "unauthorized", Error: err.Error()})
+			_ = WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 			return
 		}
 
@@ -182,21 +182,22 @@ func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) error {
 	refreshToken, err := r.Cookie("refresh-token")
 	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "user is not authenticated", Error: err.Error()})
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 	}
 
 	userId, authTokenType, sessionId, err := util.ParseJWT(refreshToken.Value)
 	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "user is not authenticated", Error: err.Error()})
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+
 	}
 
 	if authTokenType != "refresh" {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "user is not authenticated", Error: "unauthorized"})
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 	}
 
 	user, err := s.store.GetUserByID(uuid.MustParse(userId))
 	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "user is not authenticated", Error: err.Error()})
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 	}
 
 	session, err := s.store.GetSessionByID(uuid.MustParse(sessionId))
@@ -415,7 +416,7 @@ func (s *Server) handleResendEmail(w http.ResponseWriter, r *http.Request) error
 	authToken, err := r.Cookie("auth-token")
 
 	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "user is not authenticated", Error: err.Error()})
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 	}
 
 	userId, authTokenType, sessionId, err := util.ParseJWT(authToken.Value)
@@ -573,7 +574,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
 func (s *Server) handleConfirmEmailToken(w http.ResponseWriter, r *http.Request) error {
 	tokenReq := new(models.ConfirmEmailTokenRequest)
 	if err := json.NewDecoder(r.Body).Decode(tokenReq); err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request.", Code: "invalid_request"})
 	}
 
 	if tokenReq.Token == "" {
