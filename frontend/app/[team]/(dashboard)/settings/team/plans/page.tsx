@@ -14,6 +14,7 @@ import Spinner from '@/components/ui/spinner';
 import { getErrorMessage } from '@/messages';
 import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
+import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
 export default function PlansPage({ params }: { params: { team: string } }) {
   const searchParams = useSearchParams();
   const [currentPlan, setCurrentPlan] = useState({
@@ -98,8 +99,8 @@ export default function PlansPage({ params }: { params: { team: string } }) {
   const [plans, setPlans] = useState([]);
   const [subscription, setSubscription] = useState(null);
   const [selectedPlan, setSelectedPlan] = useState(false);
+  const [paymentMethods, setPaymentMethods] = useState([]);
   const router = useRouter();
-
   useEffect(() => {
     setLoading(true);
 
@@ -290,33 +291,52 @@ export default function PlansPage({ params }: { params: { team: string } }) {
       });
   }
 
+  useEffect(() => {
+    async function fetchPaymentMethods() {
+      const res = await api.get(
+        `/teams/${params.team}/billing/payment-methods`,
+        {
+          withCredentials: true,
+        },
+      );
+
+      console.log(res.data.data.data);
+      setPaymentMethods(res.data.data.data);
+    }
+
+    fetchPaymentMethods();
+  }, []);
+
   if (loading) {
     return <Spinner />;
   }
 
   return (
     <div className="w-full pb-8">
+      {paymentMethods.length === 0 && (
+        <div className="mb-8 flex items-center justify-between gap-2 rounded-md border border-warning-stroke-weak bg-warning-fill px-4 py-2">
+          <span className="flex items-center gap-2">
+            <ExclamationTriangleIcon className="h-5 w-5 text-warning" />
+
+            <span className="text-sm text-warning">
+              Your trial has ended. Add a payment method to restore access.
+            </span>
+          </span>
+
+          <Button
+            variant="unstyled"
+            className="btn-small bg-warning-fill text-sm text-warning"
+            handleClick={handleUpdatePaymentMethod}
+          >
+            Update payment method
+          </Button>
+        </div>
+      )}
       <div className="flex w-full flex-col items-start gap-8">
         {subscription ? (
           <>
             <h1 className="text-xl font-bold">Review your plan</h1>
             <div className="flex w-full flex-col items-start justify-between gap-8">
-              <div className="flex flex-col gap-2">
-                <span className="text-lg font-bold text-typography-strong">
-                  {subscription?.plan_type?.charAt(0).toUpperCase() +
-                    subscription?.plan_type?.slice(1).toLowerCase()}{' '}
-                  plan
-                </span>
-                <p className="text-sm">
-                  You are currently on the{' '}
-                  {
-                    planNames[
-                      subscription?.stripe_price_lookup_key as keyof typeof planNames
-                    ]
-                  }{' '}
-                  plan.
-                </p>
-              </div>
               <div className="flex w-full justify-between gap-2">
                 <Button
                   variant="unstyled"

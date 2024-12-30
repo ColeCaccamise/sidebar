@@ -13,8 +13,16 @@ import {
   ClockIcon,
   DotsHorizontalIcon,
   CheckIcon,
+  ExclamationTriangleIcon,
 } from '@radix-ui/react-icons';
-import { CreditCardIcon, DownloadIcon } from 'lucide-react';
+import {
+  CreditCardIcon,
+  DollarSignIcon,
+  DownloadIcon,
+  LandmarkIcon,
+} from 'lucide-react';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faAmazonPay } from '@fortawesome/free-brands-svg-icons';
 import Dropdown from '@/components/ui/dropdown';
 import Button from '@/components/ui/button';
 import Input from '@/components/ui/input';
@@ -24,6 +32,7 @@ export default function BillingPage({ params }: { params: { team: string } }) {
   const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [updateLoading, setUpdateLoading] = useState(false);
+  const [customer, setCustomer] = useState<any>(null);
   const searchParams = useSearchParams();
   const message = searchParams.get('message');
   const error = searchParams.get('error');
@@ -71,18 +80,7 @@ export default function BillingPage({ params }: { params: { team: string } }) {
     ],
   };
 
-  const [paymentMethods, setPaymentMethods] = useState([
-    {
-      name: 'Visa ending in 1234',
-      expires: '01/25',
-      default: true,
-    },
-    {
-      name: 'Mastercard ending in 5678',
-      expires: '02/26',
-      default: false,
-    },
-  ]);
+  const [paymentMethods, setPaymentMethods] = useState([]);
 
   const [invoices, setInvoices] = useState([
     {
@@ -123,6 +121,22 @@ export default function BillingPage({ params }: { params: { team: string } }) {
 
   useEffect(() => {
     handleGetSubscription();
+  }, []);
+
+  useEffect(() => {
+    async function fetchPaymentMethods() {
+      const res = await api.get(
+        `/teams/${params.team}/billing/payment-methods`,
+        {
+          withCredentials: true,
+        },
+      );
+
+      console.log(res.data.data.data);
+      setPaymentMethods(res.data.data.data);
+    }
+
+    fetchPaymentMethods();
   }, []);
 
   async function handleOpenPortal() {
@@ -203,6 +217,34 @@ export default function BillingPage({ params }: { params: { team: string } }) {
     }
   }
 
+  async function handleAddNewPaymentMethod() {
+    await api
+      .post(
+        `/teams/${params.team}/billing/payment-methods`,
+        {},
+        {
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      });
+  }
+
+  async function getCustomer() {
+    const res = await api.get(`/teams/${params.team}/billing/customer`, {
+      withCredentials: true,
+    });
+
+    console.log(res.data.data.customer);
+
+    setCustomer(res.data.data.customer);
+  }
+
+  useEffect(() => {
+    getCustomer();
+  }, []);
+
   async function handleUpdateBillingInterval(
     e: React.FormEvent<HTMLFormElement>,
   ) {
@@ -278,12 +320,79 @@ export default function BillingPage({ params }: { params: { team: string } }) {
     return plan ? plan?.price / 100 : 0;
   }
 
+  async function handleSetDefaultPaymentMethod(paymentMethodID: string) {
+    await api
+      .patch(
+        `/teams/${params.team}/billing/payment-methods/default/${paymentMethodID}`,
+        {},
+        {
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        setCustomer(res.data.data);
+        toast({
+          message: 'Default payment method updated.',
+          mode: 'success',
+        });
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response.data.code),
+          mode: 'error',
+        });
+      });
+  }
+
+  async function handleRemovePaymentMethod(paymentMethodID: string) {
+    await api
+      .delete(
+        `/teams/${params.team}/billing/payment-methods/${paymentMethodID}`,
+        {
+          withCredentials: true,
+        },
+      )
+      .then((res) => {
+        setCustomer(res.data.data);
+        toast({
+          message: 'Default payment method updated.',
+          mode: 'success',
+        });
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response.data.code),
+          mode: 'error',
+        });
+      });
+  }
+
   return (
     <>
       {loading ? (
         <Spinner />
       ) : (
         <>
+          {paymentMethods.length === 0 && (
+            <div className="mb-4 flex items-center justify-between gap-2 rounded-md border border-warning-stroke-weak bg-warning-fill px-4 py-2">
+              <span className="flex items-center gap-2">
+                <ExclamationTriangleIcon className="h-5 w-5 text-warning" />
+
+                <span className="text-sm text-warning">
+                  Your subscription benefits will be paused without an active
+                  payment method.
+                </span>
+              </span>
+
+              <Button
+                variant="unstyled"
+                className="btn-small bg-warning-fill text-sm text-warning"
+                handleClick={handleAddNewPaymentMethod}
+              >
+                Add a payment method
+              </Button>
+            </div>
+          )}
           <div className="flex w-full flex-col items-start gap-6 pb-8">
             <div className="flex flex-col gap-2">
               <h1 className="text-xl font-bold">Billing </h1>
@@ -339,57 +448,288 @@ export default function BillingPage({ params }: { params: { team: string } }) {
                     <span className="text-lg font-bold text-typography-strong">
                       Payment Methods
                     </span>
-                    <Button className="btn-brand btn-small text-sm">
+                    <Button
+                      handleClick={handleAddNewPaymentMethod}
+                      className="btn-brand btn-small text-sm"
+                    >
                       Add New
                     </Button>
                   </div>
-                  {paymentMethods.map((method) => (
-                    <div
-                      key={method.name}
-                      className="flex w-full flex-row justify-between gap-2 py-2"
-                    >
-                      <div className="flex w-full flex-row items-center justify-between">
-                        <div className="flex flex-row items-center gap-4">
-                          <CreditCardIcon className="h-5 w-5 text-typography-weak" />
-                          <div className="flex flex-col">
-                            <div className="flex flex-row items-center gap-2">
-                              <span className="text-sm text-typography-strong">
-                                {method.name}
-                              </span>
-                              {method.default && (
-                                <span className="rounded-md bg-fill-solid px-2 py-1 text-xs text-typography-weak">
-                                  Default
+                  {paymentMethods.length === 0 && (
+                    <div className="flex w-full flex-col items-start justify-start gap-2 py-4">
+                      <span className="text-sm text-typography-weak">
+                        Keep your account active by adding a payment method.
+                      </span>
+                      <Button
+                        variant="unstyled"
+                        className="text-sm underline hover:opacity-90"
+                        handleClick={handleAddNewPaymentMethod}
+                      >
+                        Add a payment method
+                      </Button>
+                    </div>
+                  )}
+                  {paymentMethods.map((method: any) => {
+                    if (method.card !== null) {
+                      return (
+                        <div
+                          key={method.id}
+                          className="flex w-full flex-row justify-between gap-2 py-2"
+                        >
+                          <div className="flex w-full flex-row items-center justify-between">
+                            <div className="flex flex-row items-center gap-4">
+                              <CreditCardIcon className="h-5 w-5 text-typography-weak" />
+                              <div className="flex flex-col">
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="text-sm text-typography-strong">
+                                    {method.card !== null ? (
+                                      `${method.card.brand[0].toUpperCase()}${method.card.brand.slice(1).toLowerCase()} •••• ${method.card.last4}`
+                                    ) : (
+                                      <div>method</div>
+                                    )}
+                                  </span>
+                                  {customer?.invoice_settings
+                                    ?.default_payment_method?.id ===
+                                    method.id && (
+                                    <span className="rounded-md bg-info-fill px-2 py-1 text-xs text-typography-weak">
+                                      Default
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-sm text-typography-weak">
+                                  {method.card !== null
+                                    ? `Expires ${String(method.card.exp_month).padStart(2, '0')}/${method.card.exp_year}`
+                                    : ''}
                                 </span>
-                              )}
+                              </div>
                             </div>
-                            <span className="text-sm text-typography-weak">
-                              Expires {method.expires}
-                            </span>
+                            <div className="w-8">
+                              <Dropdown
+                                position={'right'}
+                                showIcon={false}
+                                menuItems={[
+                                  {
+                                    disabled:
+                                      customer?.invoice_settings
+                                        ?.default_payment_method?.id ===
+                                      method.id,
+                                    label: 'Set as default',
+                                    handleClick: () => {
+                                      handleSetDefaultPaymentMethod(method.id);
+                                    },
+                                  },
+                                  {
+                                    label: 'Remove',
+                                    handleClick: () => {
+                                      handleRemovePaymentMethod(method.id);
+                                    },
+                                    destructive: true,
+                                  },
+                                ]}
+                              >
+                                <DotsHorizontalIcon className="h-4 w-4 text-typography-weak" />
+                              </Dropdown>
+                            </div>
                           </div>
                         </div>
-                        <div className="w-8">
-                          <Dropdown
-                            position={'right'}
-                            showIcon={false}
-                            menuItems={[
-                              {
-                                disabled: method.default,
-                                label: 'Set as default',
-                                handleClick: () => {},
-                              },
-                              {
-                                label: 'Remove',
-                                handleClick: () => {},
-                                destructive: true,
-                              },
-                            ]}
-                          >
-                            <DotsHorizontalIcon className="h-4 w-4 text-typography-weak" />
-                          </Dropdown>
+                      );
+                    } else if (method.cashapp !== null) {
+                      return (
+                        <div
+                          key={method.id}
+                          className="flex w-full flex-row justify-between gap-2 py-2"
+                        >
+                          <div className="flex w-full flex-row items-center justify-between">
+                            <div className="flex flex-row items-center gap-4">
+                              <DollarSignIcon
+                                width={20}
+                                height={20}
+                                className="text-typography-weak"
+                              />
+                              <div className="flex flex-col">
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="text-sm text-typography-strong">
+                                    Cash App Pay
+                                  </span>
+                                  {customer?.invoice_settings
+                                    ?.default_payment_method?.id ===
+                                    method.id && (
+                                    <span className="rounded-md bg-info-fill px-2 py-1 text-xs text-typography-weak">
+                                      Default
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-sm text-typography-weak">
+                                  {method.cashapp.cashtag}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-8">
+                              <Dropdown
+                                position={'right'}
+                                showIcon={false}
+                                menuItems={[
+                                  {
+                                    disabled:
+                                      customer?.invoice_settings
+                                        ?.default_payment_method?.id ===
+                                      method.id,
+                                    label: 'Set as default',
+                                    handleClick: () => {
+                                      handleSetDefaultPaymentMethod(method.id);
+                                    },
+                                  },
+                                  {
+                                    label: 'Remove',
+                                    handleClick: () => {
+                                      handleRemovePaymentMethod(method.id);
+                                    },
+                                    disabled:
+                                      customer?.invoice_settings
+                                        ?.default_payment_method?.id ===
+                                      method.id,
+                                    destructive: true,
+                                  },
+                                ]}
+                              >
+                                <DotsHorizontalIcon className="h-4 w-4 text-typography-weak" />
+                              </Dropdown>
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                  ))}
+                      );
+                    } else if (method.amazon_pay !== null) {
+                      return (
+                        <div
+                          key={method.id}
+                          className="flex w-full flex-row justify-between gap-2 py-2"
+                        >
+                          <div className="flex w-full flex-row items-center justify-between">
+                            <div className="flex flex-row items-center gap-4">
+                              <FontAwesomeIcon
+                                icon={faAmazonPay}
+                                className="h-5 w-5 text-typography-weak"
+                              />
+                              <div className="flex flex-col">
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="text-sm text-typography-strong">
+                                    Amazon Pay
+                                  </span>
+                                  {customer?.invoice_settings
+                                    ?.default_payment_method?.id ===
+                                    method.id && (
+                                    <span className="rounded-md bg-info-fill px-2 py-1 text-xs text-typography-weak">
+                                      Default
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="w-8">
+                              <Dropdown
+                                position={'right'}
+                                showIcon={false}
+                                menuItems={[
+                                  {
+                                    disabled:
+                                      customer?.invoice_settings
+                                        ?.default_payment_method?.id ===
+                                      method.id,
+                                    label: 'Set as default',
+                                    handleClick: () => {
+                                      handleSetDefaultPaymentMethod(method.id);
+                                    },
+                                  },
+                                  {
+                                    label: 'Remove',
+                                    handleClick: () => {
+                                      handleRemovePaymentMethod(method.id);
+                                    },
+                                    disabled:
+                                      customer?.invoice_settings
+                                        ?.default_payment_method?.id ===
+                                      method.id,
+                                    destructive: true,
+                                  },
+                                ]}
+                              >
+                                <DotsHorizontalIcon className="h-4 w-4 text-typography-weak" />
+                              </Dropdown>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    } else if (method.us_bank_account !== null) {
+                      return (
+                        <div
+                          key={method.id}
+                          className="flex w-full flex-row justify-between gap-2 py-2"
+                        >
+                          <div className="flex w-full flex-row items-center justify-between">
+                            <div className="flex flex-row items-center gap-4">
+                              <LandmarkIcon
+                                width={20}
+                                height={20}
+                                className="text-typography-weak"
+                              />
+                              <div className="flex flex-col">
+                                <div className="flex flex-row items-center gap-2">
+                                  <span className="text-sm text-typography-strong">
+                                    {method?.us_bank_account?.bank_name}{' '}
+                                  </span>
+                                  {customer?.invoice_settings
+                                    ?.default_payment_method?.id ===
+                                    method.id && (
+                                    <span className="rounded-md bg-info-fill px-2 py-1 text-xs text-typography-weak">
+                                      Default
+                                    </span>
+                                  )}
+                                </div>
+                                <span className="text-sm text-typography-weak">
+                                  {method?.us_bank_account?.account_type[0].toUpperCase() +
+                                    method?.us_bank_account?.account_type
+                                      .slice(1)
+                                      .toLowerCase()}{' '}
+                                  •••• {method?.us_bank_account?.last4}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="w-8">
+                              <Dropdown
+                                position={'right'}
+                                showIcon={false}
+                                menuItems={[
+                                  {
+                                    disabled:
+                                      customer?.invoice_settings
+                                        ?.default_payment_method?.id ===
+                                      method.id,
+                                    label: 'Set as default',
+                                    handleClick: () => {
+                                      handleSetDefaultPaymentMethod(method.id);
+                                    },
+                                  },
+                                  {
+                                    label: 'Remove',
+                                    handleClick: () => {
+                                      handleRemovePaymentMethod(method.id);
+                                    },
+                                    disabled:
+                                      customer?.invoice_settings
+                                        ?.default_payment_method?.id ===
+                                      method.id,
+                                    destructive: true,
+                                  },
+                                ]}
+                              >
+                                <DotsHorizontalIcon className="h-4 w-4 text-typography-weak" />
+                              </Dropdown>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    }
+                  })}
                 </div>
               </div>
 
