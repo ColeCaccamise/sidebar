@@ -1337,7 +1337,7 @@ func (s *Server) handleUpdatePaymentMethod(w http.ResponseWriter, r *http.Reques
 		})
 	}
 
-	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), slug)
+	returnUrl := fmt.Sprintf("%s/%s/settings/team/billing", os.Getenv("APP_URL"), slug)
 
 	paymentMethodParams := &stripe.BillingPortalSessionParams{
 		Customer:  stripe.String(team.StripeCustomerID),
@@ -1389,6 +1389,39 @@ var PlanHierarchy = PlanMap{
 	"premium_annually": 3,
 }
 
+func (s *Server) handleGetStripeCustomer(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+	teamSlug := chi.URLParam(r, "slug")
+	team, err := s.store.GetTeamBySlug(teamSlug)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
+	}
+
+	user, _, _, err := getUserIdentity(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	}
+
+	// validate that user is a team member
+	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
+	if !teamMember || err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+	}
+
+	customerID := team.StripeCustomerID
+
+	customerParams := &stripe.CustomerParams{}
+	stripeCustomer, err := customer.Get(customerID, customerParams)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
+		"customer": stripeCustomer,
+	}})
+}
+
 func (s *Server) handleGetPaymentMethods(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 	teamSlug := chi.URLParam(r, "slug")
@@ -1418,10 +1451,78 @@ func (s *Server) handleGetPaymentMethods(w http.ResponseWriter, r *http.Request)
 	params := &stripe.CustomerListPaymentMethodsParams{
 		Customer: stripe.String(customerID),
 	}
-	params.Limit = stripe.Int64(3)
 	result := customer.ListPaymentMethods(params)
 
 	return WriteJSON(w, http.StatusOK, Response{Data: result.PaymentMethodList()})
+}
+
+func (s *Server) handleUpdateDefaultPaymentMethod(w http.ResponseWriter, r *http.Request) error {
+	teamSlug := chi.URLParam(r, "slug")
+	team, err := s.store.GetTeamBySlug(teamSlug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	paymentMethodID := chi.URLParam(r, "id")
+
+	if paymentMethodID == "" {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "default payment method not provided.", Code: "empty_body"})
+	}
+
+	params := &stripe.CustomerParams{
+		InvoiceSettings: &stripe.CustomerInvoiceSettingsParams{
+			DefaultPaymentMethod: stripe.String(paymentMethodID),
+		},
+	}
+	result, err := customer.Update(team.StripeCustomerID, params)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: result})
+}
+
+func (s *Server) handleDeletePaymentMethod(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	teamSlug := chi.URLParam(r, "slug")
+	team, err := s.store.GetTeamBySlug(teamSlug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
+	}
+
+	user, _, _, err := getUserIdentity(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	}
+
+	isTeamMember, err := userIsTeamMember(s, user.ID, team.ID)
+
+	if !isTeamMember || err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+	}
+
+	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+	}
+
+	if teamMember.TeamRole != models.TeamRoleOwner {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+	}
+
+	paymentMethodID := chi.URLParam(r, "id")
+
+	params := &stripe.PaymentMethodDetachParams{}
+	result, err := paymentmethod.Detach(paymentMethodID, params)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payment method.", Code: "invalid_request"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: result})
 }
 
 func analyzeSubscriptionChange(event *stripe.Event) string {

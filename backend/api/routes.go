@@ -86,11 +86,16 @@ func (s *Server) SetupRoutes() *chi.Mux {
 
 			// billing routes
 			r.Route("/{slug}/billing", func(r chi.Router) {
-				r.Get("/payment-methods", makeHttpHandleFunc(s.handleGetPaymentMethods))
+				r.Get("/customer", makeHttpHandleFunc(s.handleGetStripeCustomer))
+				r.Route("/payment-methods", func(r chi.Router) {
+					r.Get("/", makeHttpHandleFunc(s.handleGetPaymentMethods))
+					r.Post("/", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
+					r.Patch("/default/{id}", makeHttpHandleFunc(s.handleUpdateDefaultPaymentMethod))
+					r.Delete("/{id}", makeHttpHandleFunc(s.handleDeletePaymentMethod))
+				})
 				r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
 				r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
 				r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
-				r.Post("/payment-methods", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
 				r.Route("/subscription", func(r chi.Router) {
 					r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
 					r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
