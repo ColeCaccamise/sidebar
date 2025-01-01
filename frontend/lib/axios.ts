@@ -6,10 +6,6 @@ import axios, {
   AxiosResponse,
 } from 'axios';
 
-import { useRouter } from 'next/navigation';
-
-const router = useRouter;
-
 const api = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL}`,
   withCredentials: true, // enable sending/receiving cookies
@@ -28,7 +24,7 @@ const processQueue = (error: AxiosError | null) => {
     if (error) {
       reject(error);
     } else {
-      resolve();
+      resolve(null);
     }
   });
   refreshQueue = [];
@@ -64,7 +60,7 @@ api.interceptors.response.use(
         return api(originalRequest);
       } catch (err) {
         processQueue(err as AxiosError);
-        router.push('/auth/login');
+        window.location.href = '/auth/login';
         return Promise.reject(err);
       } finally {
         refreshing = false;

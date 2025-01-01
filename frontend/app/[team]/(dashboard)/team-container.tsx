@@ -33,7 +33,7 @@ import {
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
-import { Team } from '@/types';
+import { Team, Subscription, User, TeamMember } from '@/types';
 
 export default function TeamContainer({
   slug,
@@ -47,9 +47,9 @@ export default function TeamContainer({
   const [open, setOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const [subscription, setSubscription] = useState(null);
-  const [user, setUser] = useState(null);
-  const [teamMember, setTeamMember] = useState(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [teamMember, setTeamMember] = useState<TeamMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -305,9 +305,9 @@ export default function TeamContainer({
           sidebarItems={sidebarItems}
           secondarySidebarItems={secondarySidebarItems}
           upsell={
-            subscription?.free_trial_duration_remaining > 0
+            subscription?.free_trial_duration_remaining || 0 > 0
               ? {
-                  title: `${subscription.free_trial_duration_remaining} days left of your trial!`,
+                  title: `${subscription?.free_trial_duration_remaining || 0} days left of your trial!`,
                   description: 'Upgrade to continue using all features',
                   buttonText: 'Upgrade plan',
                   buttonLink: `/${slug}/settings/team/plans`,
@@ -342,10 +342,14 @@ export default function TeamContainer({
                 )}
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-typography-strong">
-                    {roleMap[teamMember?.team_role]}
+                    {teamMember?.team_role
+                      ? roleMap[teamMember?.team_role as keyof typeof roleMap]
+                      : ''}
                   </span>
                   <span className="text-xs">
-                    {planMap[subscription?.plan_type]}
+                    {subscription?.plan_type
+                      ? planMap[subscription?.plan_type as keyof typeof planMap]
+                      : ''}
                     {subscription?.free_trial_active === true && ' (trial)'}
                   </span>
                 </div>

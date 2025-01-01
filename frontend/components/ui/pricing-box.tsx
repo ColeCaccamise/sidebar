@@ -10,16 +10,16 @@ interface PricingBoxProps {
   currentBillingOption?: 'month' | 'year';
   billingOption?: 'month' | 'year';
   features?: Array<{
-    featureName: string;
-    featureIncluded: boolean;
+    featureName?: string;
+    featureIncluded?: boolean;
   }>;
   customPricing?: boolean;
   subscribedTo?: boolean;
-  priceLookupKey: string;
-  planType?: 'current' | 'upgrade' | 'downgrade' | 'switch';
+  priceLookupKey?: string;
+  planType?: 'current' | 'upgrade' | 'downgrade' | 'switch' | null;
   highlight?: boolean;
-  handleSelectPlan: (priceLookupKey: string) => void;
-  handleUpdatePlan: (priceLookupKey: string) => void;
+  handleSelectPlan?: (priceLookupKey: string) => void;
+  handleUpdatePlan?: (priceLookupKey: string) => void;
   subscribeToPrefix?: string;
   subscribeToSuffix?: string;
   trialInProgress?: boolean;
@@ -82,7 +82,9 @@ export default function PricingBox({
         <Button
           disabled={subscribedTo}
           className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
-          handleClick={() => handleSelectPlan(priceLookupKey)}
+          handleClick={() =>
+            priceLookupKey && handleSelectPlan?.(priceLookupKey)
+          }
         >
           {subscribedTo
             ? 'Subscribing...'
@@ -95,7 +97,7 @@ export default function PricingBox({
     return (
       <Button
         className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
-        handleClick={() => handleUpdatePlan(priceLookupKey)}
+        handleClick={() => priceLookupKey && handleUpdatePlan?.(priceLookupKey)}
         disabled={subscribedTo}
       >
         {subscribedTo

@@ -83,7 +83,7 @@ export async function middleware(request: NextRequest) {
             response.headers.append('Set-Cookie', cookie);
           });
         } else {
-          setCookieHeader.split(', ')?.forEach((cookie) => {
+          setCookieHeader.split(', ')?.forEach((cookie: string) => {
             response.headers.append('Set-Cookie', cookie);
           });
         }

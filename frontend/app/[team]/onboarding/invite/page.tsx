@@ -38,7 +38,7 @@ export default function OnboardingInvitePage() {
   const [isRotating, setIsRotating] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
   const [team, setTeam] = useState<Team | null>(null);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const [hasShownSubmitHint, setHasShownSubmitHint] = useState(false);
@@ -157,7 +157,8 @@ export default function OnboardingInvitePage() {
         setTeam(response.data.data);
         setIsLoading(false);
       } catch (err) {
-        setError(err);
+        console.error('Failed to fetch team:', err);
+        setError(true);
         setIsLoading(false);
       }
     };
@@ -197,7 +198,12 @@ export default function OnboardingInvitePage() {
   );
 
   const handleEmailChange = useCallback(
-    (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    (
+      index: number,
+      e: React.ChangeEvent<
+        HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+      >,
+    ) => {
       const value = e.target.value;
       const emailList = value.split(/[\s,;]+/).filter(Boolean);
 
@@ -329,11 +335,20 @@ export default function OnboardingInvitePage() {
           {emails.map((email, index) => (
             <div key={index} className="flex items-center justify-center gap-2">
               <Input
-                ref={(el) => (inputRefs.current[index] = el)}
+                ref={(el) => {
+                  if (el) {
+                    inputRefs.current[index] = el;
+                  }
+                }}
                 placeholder="teammate@company.com"
                 type="email"
                 value={email}
-                handleChange={(e) => handleEmailChange(index, e)}
+                handleChange={(e) =>
+                  handleEmailChange(
+                    index,
+                    e as React.ChangeEvent<HTMLInputElement>,
+                  )
+                }
                 handleKeyDown={(e) => handleKeyDown(index, e)}
                 autoFocus={focusIndex === index}
               />

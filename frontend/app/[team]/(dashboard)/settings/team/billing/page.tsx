@@ -30,7 +30,13 @@ import api from '@/lib/axios';
 import { TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Tooltip } from '@/components/ui/tooltip';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Customer, Subscription, TeamPaymentMethod } from '@/types';
+import {
+  Customer,
+  Invoice,
+  Plan,
+  Subscription,
+  TeamPaymentMethod,
+} from '@/types';
 import { ReactElement } from 'react';
 
 function PaymentMethod({
@@ -109,7 +115,7 @@ function PaymentMethod({
 }
 
 export default function BillingPage({ params }: { params: { team: string } }) {
-  const [plans, setPlans] = useState([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
   const [updateLoading, setUpdateLoading] = useState(false);
   const [customer, setCustomer] = useState<Customer | null>(null);
@@ -127,9 +133,9 @@ export default function BillingPage({ params }: { params: { team: string } }) {
     useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
 
-  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState<TeamPaymentMethod[]>([]);
 
-  const [invoices, setInvoices] = useState([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
   useEffect(() => {
     const fetchPlans = async () => {
@@ -407,10 +413,13 @@ export default function BillingPage({ params }: { params: { team: string } }) {
                     </span>
                     <div className="flex flex-col gap-2">
                       <span className="text-typography-strong">
-                        {getPlanTypeText(subscription.plan_type)}
+                        {getPlanTypeText(subscription?.plan_type || '')}
                       </span>
                       <span>
-                        ${getCurrentPlanPrice(subscription.stripe_price_id)}
+                        $
+                        {getCurrentPlanPrice(
+                          subscription?.stripe_price_id || '',
+                        )}
                         /month, billed monthly
                       </span>
                     </div>
@@ -592,13 +601,15 @@ export default function BillingPage({ params }: { params: { team: string } }) {
                                     </span>
                                   </div>
                                   <span className="text-sm text-typography-weak">
-                                    {new Date(
-                                      invoice.status_transitions.paid_at * 1000,
-                                    ).toLocaleDateString('en-US', {
-                                      month: 'short',
-                                      day: 'numeric',
-                                      year: 'numeric',
-                                    })}
+                                    {invoice?.status_transitions?.paid_at &&
+                                      new Date(
+                                        invoice?.status_transitions?.paid_at *
+                                          1000,
+                                      ).toLocaleDateString('en-US', {
+                                        month: 'short',
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                      })}
                                   </span>
                                 </div>
                               </div>

@@ -15,7 +15,8 @@ import { getErrorMessage } from '@/messages';
 import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
-import { Subscription } from '@/types';
+import { Plan, Subscription, TeamPaymentMethod } from '@/types';
+
 export default function PlansPage({ params }: { params: { team: string } }) {
   const searchParams = useSearchParams();
   const [showOther, setShowOther] = useState(false);
@@ -88,13 +89,16 @@ export default function PlansPage({ params }: { params: { team: string } }) {
         { featureName: 'SLA guarantees', featureIncluded: true },
       ];
     }
+
+    return [];
   }
 
-  const [plans, setPlans] = useState([]);
-  const [subscription, setSubscription] = useState(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [selectedPlan, setSelectedPlan] = useState(false);
-  const [paymentMethods, setPaymentMethods] = useState([]);
+  const [paymentMethods, setPaymentMethods] = useState<TeamPaymentMethod[]>([]);
   const router = useRouter();
+
   useEffect(() => {
     setLoading(true);
 
@@ -235,15 +239,6 @@ export default function PlansPage({ params }: { params: { team: string } }) {
     premium: 3,
   };
 
-  // const planNames = {
-  //   basic_monthly: 'Basic Monthly',
-  //   basic_annually: 'Basic Annually',
-  //   pro_monthly: 'Pro Monthly',
-  //   pro_annually: 'Pro Annually',
-  //   premium_monthly: 'Premium Monthly',
-  //   premium_annually: 'Premium Annually',
-  // };
-
   function getPlanType(subscription: Subscription, priceLookupKey: string) {
     if (!subscription || !priceLookupKey) {
       return null;
@@ -372,60 +367,51 @@ export default function PlansPage({ params }: { params: { team: string } }) {
         {plans.length > 0 && (
           <div className="flex h-full w-full flex-col gap-4 xl:flex-row">
             {plans
-              .filter(
-                (plan: { interval: 'month' | 'year' }) =>
-                  plan.interval === billingOption,
-              )
-              .sort(
-                (a: { price: number }, b: { price: number }) =>
-                  a.price - b.price,
-              )
-              .map(
-                (plan: {
-                  name: string;
-                  product_id: string;
-                  price_id: string;
-                  price_lookup_key: string;
-                  product_active: boolean;
-                  price_active: boolean;
-                  interval: 'month' | 'year';
-                  price: number;
-                }) => (
-                  <PricingBox
-                    key={plan.price_id}
-                    planName={plan.name}
-                    planDescription={
-                      planDescriptions[
-                        plan.price_lookup_key as keyof typeof planDescriptions
-                      ]
-                    }
-                    planPrice={
-                      billingOption === 'year'
-                        ? plan.price / 100 / 12
-                        : plan.price / 100
-                    }
-                    features={planFeatures(plan.price_lookup_key)}
-                    currentBillingOption={billingOption as 'month' | 'year'}
-                    billingOption={billingOption as 'month' | 'year'}
-                    priceLookupKey={plan.price_lookup_key}
-                    handleSelectPlan={handleSelectPlan}
-                    handleUpdatePlan={handleUpdatePlan}
-                    subscribedTo={
-                      subscription?.stripe_price_lookup_key ===
-                      plan.price_lookup_key
-                    }
-                    planType={getPlanType(subscription, plan.price_lookup_key)}
-                    highlight={
+              .filter((plan) => plan.interval === billingOption)
+              .sort((a, b) => a.price - b.price)
+              .map((plan) => (
+                <PricingBox
+                  key={plan.price_id}
+                  planName={plan.name}
+                  planDescription={
+                    planDescriptions[
+                      plan.price_lookup_key as keyof typeof planDescriptions
+                    ]
+                  }
+                  planPrice={
+                    billingOption === 'year'
+                      ? plan.price / 100 / 12
+                      : plan.price / 100
+                  }
+                  features={planFeatures(plan.price_lookup_key)}
+                  currentBillingOption={billingOption as 'month' | 'year'}
+                  billingOption={billingOption as 'month' | 'year'}
+                  priceLookupKey={plan.price_lookup_key}
+                  handleSelectPlan={handleSelectPlan}
+                  handleUpdatePlan={handleUpdatePlan}
+                  subscribedTo={
+                    subscription?.stripe_price_lookup_key ===
+                    plan.price_lookup_key
+                  }
+                  planType={
+                    subscription
+                      ? getPlanType(subscription, plan.price_lookup_key) ||
+                        undefined
+                      : undefined
+                  }
+                  highlight={
+                    (subscription &&
                       getPlanType(subscription, plan.price_lookup_key) ===
-                      'upgrade'
-                        ? true
-                        : false
-                    }
-                    trialInProgress={subscription?.free_trial_active}
-                    // subscriptionStatus={subscription?.status}
-                  />
-                ),
-              )}
+                        'upgrade') ||
+                    undefined
+                  }
+                  trialInProgress={
+                    subscription?.trial_end
+                      ? new Date(subscription.trial_end) > new Date()
+                      : false
+                  }
+                />
+              ))}
           </div>
         )}
         {plans.length > 0 && (

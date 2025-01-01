@@ -68,14 +68,7 @@ export default function AccountSettingsPage() {
       })
       .catch((error) => console.error(error));
 
-    setUser({
-      id: user?.id,
-      firstName: user?.first_name,
-      lastName: user?.last_name,
-      email: user?.email,
-      avatarUrl: user?.avatar_url,
-      isAdmin: user?.is_admin,
-    });
+    setUser(user);
 
     setUserValues({
       firstName: { initial: user?.first_name, current: user?.first_name },

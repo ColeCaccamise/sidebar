@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/axios';
 import Spinner from '@/components/ui/spinner';
@@ -18,6 +18,18 @@ export default function WelcomePage() {
   const [description, setDescription] = useState<string>('');
   const [buttonText, setButtonText] = useState<string>('');
   const [buttonLinkText, setButtonLinkText] = useState<string>('');
+
+  const onboardingCopy = useMemo(
+    () => [
+      {
+        heading: 'Welcome to the dashboard!',
+        description: 'Here is where you and your team get shit done.',
+        buttonText: 'Continue',
+        buttonLinkText: '',
+      },
+    ],
+    [],
+  );
 
   function completeOnboarding() {
     api
@@ -65,17 +77,8 @@ export default function WelcomePage() {
       }
     }
 
-    const onboardingCopy = [
-      {
-        heading: 'Welcome to the dashboard!',
-        description: 'Here is where you and your team get shit done.',
-        buttonText: 'Continue',
-        buttonLinkText: '',
-      },
-    ];
-
     getOnboardingCopy(onboardingStep);
-  }, [onboardingStep]);
+  }, [onboardingStep, onboardingCopy]);
 
   const updateStep = (step: number) => {
     setOnboardingStep(step);

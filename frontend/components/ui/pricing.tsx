@@ -14,7 +14,6 @@ import Spinner from '@/components/ui/spinner';
 import { getErrorMessage } from '@/messages';
 import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
-import { Subscription } from '@/types';
 
 interface PricingProps {
   teamSlug: string;
@@ -255,7 +254,11 @@ export default function Pricing({
   };
 
   function getPlanType(
-    subscription: Subscription | null,
+    subscription: {
+      plan_type: string;
+      interval: 'month' | 'year';
+      stripe_price_lookup_key: string;
+    } | null,
     priceLookupKey: string,
   ) {
     if (!subscription || !priceLookupKey) {
@@ -380,7 +383,11 @@ export default function Pricing({
                       subscription?.stripe_price_lookup_key ===
                       plan.price_lookup_key
                     }
-                    planType={getPlanType(subscription, plan.price_lookup_key)}
+                    planType={
+                      subscription
+                        ? getPlanType(subscription, plan.price_lookup_key)
+                        : undefined
+                    }
                     highlight={
                       getPlanType(subscription, plan.price_lookup_key) ===
                       'upgrade'
