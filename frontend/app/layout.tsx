@@ -1,20 +1,11 @@
 import type { Metadata } from 'next';
-import localFont from 'next/font/local';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Toaster } from 'sonner';
 import PlausibleProvider from 'next-plausible';
 import { CSPostHogProvider } from './providers';
 
-const geistSans = localFont({
-  src: './fonts/GeistVF.woff',
-  variable: '--font-geist-sans',
-  weight: '100 900',
-});
-const geistMono = localFont({
-  src: './fonts/GeistMonoVF.woff',
-  variable: '--font-geist-mono',
-  weight: '100 900',
-});
+const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
   title: 'Go Dashboard',
@@ -29,7 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} dark:dark bg-background text-typography-weak antialiased`}
+        className={`${inter.className} dark:dark bg-background text-typography-weak antialiased`}
       >
         <Toaster duration={5000} position="bottom-right" />
         <div className="flex min-h-screen w-full flex-col items-center justify-center font-sans antialiased">
