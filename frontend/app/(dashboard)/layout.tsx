@@ -72,7 +72,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           });
         } else {
           setUser(resp?.data?.user);
-          setAccountDeleted(Boolean(res.data?.deleted_at));
+          setAccountDeleted(Boolean(resp?.data?.deleted_at));
           toast({
             message: getResponseMessage('user_restored'),
             mode: 'success',
