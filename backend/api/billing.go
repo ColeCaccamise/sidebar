@@ -17,8 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/stripe/stripe-go/v80"
 	portalSession "github.com/stripe/stripe-go/v80/billingportal/session"
-	checkoutSession "github.com/stripe/stripe-go/v80/checkout/session"
-	"github.com/stripe/stripe-go/v80/coupon"
 	"github.com/stripe/stripe-go/v80/customer"
 	"github.com/stripe/stripe-go/v80/invoice"
 	"github.com/stripe/stripe-go/v80/paymentmethod"
@@ -84,425 +82,425 @@ func (s *Server) handleGetPlans(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
-func (s *Server) handleCreateCheckoutSession(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-
-	user, _, _, err := getUserIdentity(s, r)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "invaild_token"})
-	}
-
-	// get team
-	teamSlug := chi.URLParam(r, "slug")
-
-	team, err := s.store.GetTeamBySlug(teamSlug)
-	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
-	}
-
-	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
-	if !teamMember {
-		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
-	}
-
-	// read in price_lookup_key
-	checkoutReq := new(models.CreateCheckoutSessionRequest)
-	if err := json.NewDecoder(r.Body).Decode(checkoutReq); err != nil {
-		if err.Error() == "EOF" {
-			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
-		} else {
-			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
-		}
-	}
-
-	params := &stripe.PriceListParams{
-		LookupKeys: stripe.StringSlice([]string{
-			checkoutReq.PriceLookupKey,
-		}),
-	}
-	i := price.List(params)
-	var stripePrice *stripe.Price
-	for i.Next() {
-		p := i.Price()
-		stripePrice = p
-	}
-
-	if stripePrice == nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
-	}
-	successUrl := fmt.Sprintf("%s/%s/onboarding/welcome", os.Getenv("APP_URL"), teamSlug)
-	cancelUrl := fmt.Sprintf("%s/%s/onboarding/plans", os.Getenv("APP_URL"), teamSlug)
-
-	// check if stripe customer exists before creating session
-	if team.StripeCustomerID == "" {
-		customerParams := &stripe.CustomerParams{
-			Email: stripe.String(user.Email),
-			Metadata: map[string]string{
-				"team_id": team.ID.String(),
-			},
-		}
-		stripeCustomer, err := customer.New(customerParams)
-		if err != nil {
-			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-		}
-		team.StripeCustomerID = stripeCustomer.ID
-		err = s.store.UpdateTeam(team)
-		if err != nil {
-			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-		}
-	}
-
-	subscriptionData := &stripe.CheckoutSessionSubscriptionDataParams{
-		Metadata: map[string]string{
-			"team_id": team.ID.String(),
-		},
-		BillingCycleAnchor: stripe.Int64(time.Now().AddDate(0, 0, 31).Unix()),
-	}
-	if team.FreeTrialAt == nil {
-		trialDays := 14
-		//trialEndTimestamp := time.Now().AddDate(0, 0, trialDays).Unix()
-
-		if err != nil {
-			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-		}
-
-		subscriptionData = &stripe.CheckoutSessionSubscriptionDataParams{
-			//TrialEnd: stripe.Int64(trialEndTimestamp),
-			TrialSettings: &stripe.CheckoutSessionSubscriptionDataTrialSettingsParams{
-				EndBehavior: &stripe.CheckoutSessionSubscriptionDataTrialSettingsEndBehaviorParams{
-					MissingPaymentMethod: stripe.String("pause"),
-				},
-			},
-			TrialPeriodDays: stripe.Int64(int64(trialDays)),
-			Metadata: map[string]string{
-				"team_id": team.ID.String(),
-			},
-		}
-	}
-
-	checkoutParams := &stripe.CheckoutSessionParams{
-		Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
-		LineItems: []*stripe.CheckoutSessionLineItemParams{
-			{
-				Price:    stripe.String(stripePrice.ID),
-				Quantity: stripe.Int64(1),
-			},
-		},
-		SuccessURL: stripe.String(successUrl),
-		CancelURL:  stripe.String(cancelUrl),
-		Customer:   stripe.String(team.StripeCustomerID),
-		Metadata: map[string]string{
-			"team_id": team.ID.String(),
-		},
-		SubscriptionData:        subscriptionData,
-		PaymentMethodCollection: stripe.String("if_required"),
-	}
-
-	stripeCheckoutSession, err := checkoutSession.New(checkoutParams)
-
-	if stripeCheckoutSession == nil || err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-	}
-
-	redirectUrl := stripeCheckoutSession.URL
-
-	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
-		"redirect_url": redirectUrl,
-	}})
-}
-
-func (s *Server) handleCreatePortalSession(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-
-	user, _, _, err := getUserIdentity(s, r)
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
-	}
-
-	teamSlug := chi.URLParam(r, "slug")
-
-	team, err := s.store.GetTeamBySlug(teamSlug)
-	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
-	}
-
-	teamMember, _ := userIsTeamMember(s, user.ID, team.ID)
-	if !teamMember {
-		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
-	}
-
-	customerID := team.StripeCustomerID
-
-	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), teamSlug)
-
-	portalParams := &stripe.BillingPortalSessionParams{
-		Customer:  stripe.String(customerID),
-		ReturnURL: stripe.String(returnUrl),
-	}
-	ps, err := portalSession.New(portalParams)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-	}
-
-	portalUrl := ps.URL
-
-	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
-		"redirect_url": portalUrl,
-	}})
-}
-
-func (s *Server) handleGetCurrentSubscription(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-
-	user, _, _, err := getUserIdentity(s, r)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
-	}
-
-	teamSlug := chi.URLParam(r, "slug")
-
-	team, err := s.store.GetTeamBySlug(teamSlug)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
-	}
-
-	_, err = s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
-	if err != nil {
-		return WriteJSON(w, http.StatusForbidden, Error{
-			Error: "you don't have permission to view this team.",
-			Code:  "forbidden",
-		})
-	}
-
-	subscriptionID := team.SubscriptionID
-	teamSubscription, err := s.store.GetTeamSubscriptionByID(subscriptionID)
-
-	if teamSubscription == nil || err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	subscriptionResponse := models.NewTeamSubscriptionResponse(teamSubscription)
-
-	return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
-		"subscription": subscriptionResponse,
-	}})
-}
-
-func (s *Server) handleCancelSubscription(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-
-	user, _, _, err := getUserIdentity(s, r)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
-	}
-
-	customerID := user.CustomerID
-
-	// get the current subscription
-	subscriptionParams := &stripe.SubscriptionListParams{
-		Customer: stripe.String(customerID),
-	}
-	subscriptionParams.Limit = stripe.Int64(1)
-	currentSubscriptions := subscription.List(subscriptionParams)
-
-	if currentSubscriptions == nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	hasSubscription := false
-	var currentSubscription *stripe.Subscription
-	for currentSubscriptions.Next() {
-		currentSubscription = currentSubscriptions.Subscription()
-		hasSubscription = true
-		break
-	}
-
-	if !hasSubscription {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	if currentSubscription.CancelAtPeriodEnd {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "your subscription is already canceled.", Code: "subscription_already_canceled"})
-	}
-
-	returnUrl := fmt.Sprintf("%s/settings/billing", os.Getenv("APP_URL"))
-
-	// create a coupon
-	retentionParams := &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionParams{}
-
-	// offer coupon when one has not been used before
-	if user.RedeemedCouponAt == nil {
-		now := time.Now()
-		user.RedeemedCouponAt = &now // todo change this to only when receiving webhook to confirm user took the discount
-
-		err := s.store.UpdateUser(user)
-
-		if err != nil {
-			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-		}
-
-		couponParams := &stripe.CouponParams{
-			Duration:         stripe.String(string(stripe.CouponDurationRepeating)),
-			DurationInMonths: stripe.Int64(3),
-			PercentOff:       stripe.Float64(25),
-		}
-		stripeCoupon, err := coupon.New(couponParams)
-
-		if err != nil {
-			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-		}
-
-		retentionParams = &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionParams{
-			CouponOffer: &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionCouponOfferParams{
-				Coupon: stripe.String(stripeCoupon.ID),
-			},
-			Type: stripe.String("coupon_offer"),
-		}
-	}
-
-	portalParams := &stripe.BillingPortalSessionParams{
-		Customer:  stripe.String(customerID),
-		ReturnURL: stripe.String(returnUrl),
-		FlowData: &stripe.BillingPortalSessionFlowDataParams{
-			Type: stripe.String("subscription_cancel"),
-			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
-				Type: stripe.String("redirect"),
-				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
-					ReturnURL: stripe.String(returnUrl),
-				},
-			},
-			SubscriptionCancel: &stripe.BillingPortalSessionFlowDataSubscriptionCancelParams{
-				Subscription: stripe.String(currentSubscription.ID),
-				Retention:    retentionParams,
-			},
-		},
-	}
-	ps, err := portalSession.New(portalParams)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-	}
-
-	portalUrl := ps.URL
-
-	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
-		"redirect_url": portalUrl,
-	}})
-}
-
-func (s *Server) handleUpdateSubscription(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-
-	_, _, _, err := getUserIdentity(s, r)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
-	}
-
-	teamSlug := chi.URLParam(r, "slug")
-
-	team, err := s.store.GetTeamBySlug(teamSlug)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
-	}
-
-	customerID := team.StripeCustomerID
-
-	// get the current subscription
-	subscriptionParams := &stripe.SubscriptionListParams{
-		Customer: stripe.String(customerID),
-	}
-	subscriptionParams.Limit = stripe.Int64(1)
-	currentSubscriptions := subscription.List(subscriptionParams)
-
-	if currentSubscriptions == nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	hasSubscription := false
-	var currentSubscription *stripe.Subscription
-	for currentSubscriptions.Next() {
-		currentSubscription = currentSubscriptions.Subscription()
-		hasSubscription = true
-		break
-	}
-
-	if !hasSubscription {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), teamSlug)
-
-	// get updated price
-	// read in price_lookup_key
-	updateSubscriptionReq := new(models.UpdateSubscriptionRequest)
-	if err := json.NewDecoder(r.Body).Decode(updateSubscriptionReq); err != nil {
-		if err.Error() == "EOF" {
-			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
-		} else {
-			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
-		}
-	}
-
-	params := &stripe.PriceListParams{
-		LookupKeys: stripe.StringSlice([]string{
-			updateSubscriptionReq.PriceLookupKey,
-		}),
-	}
-	i := price.List(params)
-	var stripePrice *stripe.Price
-	for i.Next() {
-		p := i.Price()
-		stripePrice = p
-	}
-
-	if stripePrice == nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
-	}
-
-	// todo check that user is not trying to change to their current subscription tier
-
-	portalParams := &stripe.BillingPortalSessionParams{
-		Customer:  stripe.String(customerID),
-		ReturnURL: stripe.String(returnUrl),
-		FlowData: &stripe.BillingPortalSessionFlowDataParams{
-			Type: stripe.String("subscription_update_confirm"),
-			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
-				Type: stripe.String("redirect"),
-				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
-					ReturnURL: stripe.String(returnUrl),
-				},
-			},
-			SubscriptionUpdateConfirm: &stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmParams{
-				Subscription: stripe.String(currentSubscription.ID),
-				Items: []*stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmItemParams{
-					{
-						ID:       stripe.String(currentSubscription.Items.Data[0].ID),
-						Price:    stripe.String(stripePrice.ID),
-						Quantity: stripe.Int64(1),
-					},
-				},
-			},
-		},
-	}
-	ps, err := portalSession.New(portalParams)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-	}
-
-	portalUrl := ps.URL
-
-	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
-		"redirect_url": portalUrl,
-	}})
-}
+//func (s *Server) handleCreateCheckoutSession(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "invaild_token"})
+//	}
+//
+//	// get team
+//	teamSlug := chi.URLParam(r, "slug")
+//
+//	team, err := s.store.GetTeamBySlug(teamSlug)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+//	}
+//
+//	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
+//	if !teamMember {
+//		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+//	}
+//
+//	// read in price_lookup_key
+//	checkoutReq := new(models.CreateCheckoutSessionRequest)
+//	if err := json.NewDecoder(r.Body).Decode(checkoutReq); err != nil {
+//		if err.Error() == "EOF" {
+//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
+//		} else {
+//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+//		}
+//	}
+//
+//	params := &stripe.PriceListParams{
+//		LookupKeys: stripe.StringSlice([]string{
+//			checkoutReq.PriceLookupKey,
+//		}),
+//	}
+//	i := price.List(params)
+//	var stripePrice *stripe.Price
+//	for i.Next() {
+//		p := i.Price()
+//		stripePrice = p
+//	}
+//
+//	if stripePrice == nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+//	}
+//	successUrl := fmt.Sprintf("%s/%s/onboarding/welcome", os.Getenv("APP_URL"), teamSlug)
+//	cancelUrl := fmt.Sprintf("%s/%s/onboarding/plans", os.Getenv("APP_URL"), teamSlug)
+//
+//	// check if stripe customer exists before creating session
+//	if team.StripeCustomerID == "" {
+//		customerParams := &stripe.CustomerParams{
+//			Email: stripe.String(user.Email),
+//			Metadata: map[string]string{
+//				"team_id": team.ID.String(),
+//			},
+//		}
+//		stripeCustomer, err := customer.New(customerParams)
+//		if err != nil {
+//			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+//		}
+//		team.StripeCustomerID = stripeCustomer.ID
+//		err = s.store.UpdateTeam(team)
+//		if err != nil {
+//			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+//		}
+//	}
+//
+//	subscriptionData := &stripe.CheckoutSessionSubscriptionDataParams{
+//		Metadata: map[string]string{
+//			"team_id": team.ID.String(),
+//		},
+//		BillingCycleAnchor: stripe.Int64(time.Now().AddDate(0, 0, 31).Unix()),
+//	}
+//	if team.FreeTrialAt == nil {
+//		trialDays := 14
+//		//trialEndTimestamp := time.Now().AddDate(0, 0, trialDays).Unix()
+//
+//		if err != nil {
+//			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+//		}
+//
+//		subscriptionData = &stripe.CheckoutSessionSubscriptionDataParams{
+//			//TrialEnd: stripe.Int64(trialEndTimestamp),
+//			TrialSettings: &stripe.CheckoutSessionSubscriptionDataTrialSettingsParams{
+//				EndBehavior: &stripe.CheckoutSessionSubscriptionDataTrialSettingsEndBehaviorParams{
+//					MissingPaymentMethod: stripe.String("pause"),
+//				},
+//			},
+//			TrialPeriodDays: stripe.Int64(int64(trialDays)),
+//			Metadata: map[string]string{
+//				"team_id": team.ID.String(),
+//			},
+//		}
+//	}
+//
+//	checkoutParams := &stripe.CheckoutSessionParams{
+//		Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
+//		LineItems: []*stripe.CheckoutSessionLineItemParams{
+//			{
+//				Price:    stripe.String(stripePrice.ID),
+//				Quantity: stripe.Int64(1),
+//			},
+//		},
+//		SuccessURL: stripe.String(successUrl),
+//		CancelURL:  stripe.String(cancelUrl),
+//		Customer:   stripe.String(team.StripeCustomerID),
+//		Metadata: map[string]string{
+//			"team_id": team.ID.String(),
+//		},
+//		SubscriptionData:        subscriptionData,
+//		PaymentMethodCollection: stripe.String("if_required"),
+//	}
+//
+//	stripeCheckoutSession, err := checkoutSession.New(checkoutParams)
+//
+//	if stripeCheckoutSession == nil || err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+//	}
+//
+//	redirectUrl := stripeCheckoutSession.URL
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+//		"redirect_url": redirectUrl,
+//	}})
+//}
+
+//func (s *Server) handleCreatePortalSession(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+//	}
+//
+//	teamSlug := chi.URLParam(r, "slug")
+//
+//	team, err := s.store.GetTeamBySlug(teamSlug)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+//	}
+//
+//	teamMember, _ := userIsTeamMember(s, user.ID, team.ID)
+//	if !teamMember {
+//		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+//	}
+//
+//	customerID := team.StripeCustomerID
+//
+//	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), teamSlug)
+//
+//	portalParams := &stripe.BillingPortalSessionParams{
+//		Customer:  stripe.String(customerID),
+//		ReturnURL: stripe.String(returnUrl),
+//	}
+//	ps, err := portalSession.New(portalParams)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+//	}
+//
+//	portalUrl := ps.URL
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+//		"redirect_url": portalUrl,
+//	}})
+//}
+
+//func (s *Server) handleGetCurrentSubscription(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+//	}
+//
+//	teamSlug := chi.URLParam(r, "slug")
+//
+//	team, err := s.store.GetTeamBySlug(teamSlug)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+//	}
+//
+//	_, err = s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusForbidden, Error{
+//			Error: "you don't have permission to view this team.",
+//			Code:  "forbidden",
+//		})
+//	}
+//
+//	subscriptionID := team.SubscriptionID
+//	teamSubscription, err := s.store.GetTeamSubscriptionByID(subscriptionID)
+//
+//	if teamSubscription == nil || err != nil {
+//		return WriteJSON(w, http.StatusNotFound, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	subscriptionResponse := models.NewTeamSubscriptionResponse(teamSubscription)
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
+//		"subscription": subscriptionResponse,
+//	}})
+//}
+
+//func (s *Server) handleCancelSubscription(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+//	}
+//
+//	customerID := user.CustomerID
+//
+//	// get the current subscription
+//	subscriptionParams := &stripe.SubscriptionListParams{
+//		Customer: stripe.String(customerID),
+//	}
+//	subscriptionParams.Limit = stripe.Int64(1)
+//	currentSubscriptions := subscription.List(subscriptionParams)
+//
+//	if currentSubscriptions == nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	hasSubscription := false
+//	var currentSubscription *stripe.Subscription
+//	for currentSubscriptions.Next() {
+//		currentSubscription = currentSubscriptions.Subscription()
+//		hasSubscription = true
+//		break
+//	}
+//
+//	if !hasSubscription {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	if currentSubscription.CancelAtPeriodEnd {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "your subscription is already canceled.", Code: "subscription_already_canceled"})
+//	}
+//
+//	returnUrl := fmt.Sprintf("%s/settings/billing", os.Getenv("APP_URL"))
+//
+//	// create a coupon
+//	retentionParams := &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionParams{}
+//
+//	// offer coupon when one has not been used before
+//	if user.RedeemedCouponAt == nil {
+//		now := time.Now()
+//		user.RedeemedCouponAt = &now // todo change this to only when receiving webhook to confirm user took the discount
+//
+//		err := s.store.UpdateUser(user)
+//
+//		if err != nil {
+//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+//		}
+//
+//		couponParams := &stripe.CouponParams{
+//			Duration:         stripe.String(string(stripe.CouponDurationRepeating)),
+//			DurationInMonths: stripe.Int64(3),
+//			PercentOff:       stripe.Float64(25),
+//		}
+//		stripeCoupon, err := coupon.New(couponParams)
+//
+//		if err != nil {
+//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+//		}
+//
+//		retentionParams = &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionParams{
+//			CouponOffer: &stripe.BillingPortalSessionFlowDataSubscriptionCancelRetentionCouponOfferParams{
+//				Coupon: stripe.String(stripeCoupon.ID),
+//			},
+//			Type: stripe.String("coupon_offer"),
+//		}
+//	}
+//
+//	portalParams := &stripe.BillingPortalSessionParams{
+//		Customer:  stripe.String(customerID),
+//		ReturnURL: stripe.String(returnUrl),
+//		FlowData: &stripe.BillingPortalSessionFlowDataParams{
+//			Type: stripe.String("subscription_cancel"),
+//			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
+//				Type: stripe.String("redirect"),
+//				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
+//					ReturnURL: stripe.String(returnUrl),
+//				},
+//			},
+//			SubscriptionCancel: &stripe.BillingPortalSessionFlowDataSubscriptionCancelParams{
+//				Subscription: stripe.String(currentSubscription.ID),
+//				Retention:    retentionParams,
+//			},
+//		},
+//	}
+//	ps, err := portalSession.New(portalParams)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+//	}
+//
+//	portalUrl := ps.URL
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+//		"redirect_url": portalUrl,
+//	}})
+//}
+
+//func (s *Server) handleUpdateSubscription(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	_, _, _, err := getUserIdentity(s, r)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+//	}
+//
+//	teamSlug := chi.URLParam(r, "slug")
+//
+//	team, err := s.store.GetTeamBySlug(teamSlug)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+//	}
+//
+//	customerID := team.StripeCustomerID
+//
+//	// get the current subscription
+//	subscriptionParams := &stripe.SubscriptionListParams{
+//		Customer: stripe.String(customerID),
+//	}
+//	subscriptionParams.Limit = stripe.Int64(1)
+//	currentSubscriptions := subscription.List(subscriptionParams)
+//
+//	if currentSubscriptions == nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	hasSubscription := false
+//	var currentSubscription *stripe.Subscription
+//	for currentSubscriptions.Next() {
+//		currentSubscription = currentSubscriptions.Subscription()
+//		hasSubscription = true
+//		break
+//	}
+//
+//	if !hasSubscription {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	returnUrl := fmt.Sprintf("%s/%s/settings/team/plans", os.Getenv("APP_URL"), teamSlug)
+//
+//	// get updated price
+//	// read in price_lookup_key
+//	updateSubscriptionReq := new(models.UpdateSubscriptionRequest)
+//	if err := json.NewDecoder(r.Body).Decode(updateSubscriptionReq); err != nil {
+//		if err.Error() == "EOF" {
+//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "empty body.", Code: "empty_body"})
+//		} else {
+//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+//		}
+//	}
+//
+//	params := &stripe.PriceListParams{
+//		LookupKeys: stripe.StringSlice([]string{
+//			updateSubscriptionReq.PriceLookupKey,
+//		}),
+//	}
+//	i := price.List(params)
+//	var stripePrice *stripe.Price
+//	for i.Next() {
+//		p := i.Price()
+//		stripePrice = p
+//	}
+//
+//	if stripePrice == nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request", Code: "invalid_request"})
+//	}
+//
+//	// todo check that user is not trying to change to their current subscription tier
+//
+//	portalParams := &stripe.BillingPortalSessionParams{
+//		Customer:  stripe.String(customerID),
+//		ReturnURL: stripe.String(returnUrl),
+//		FlowData: &stripe.BillingPortalSessionFlowDataParams{
+//			Type: stripe.String("subscription_update_confirm"),
+//			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
+//				Type: stripe.String("redirect"),
+//				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
+//					ReturnURL: stripe.String(returnUrl),
+//				},
+//			},
+//			SubscriptionUpdateConfirm: &stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmParams{
+//				Subscription: stripe.String(currentSubscription.ID),
+//				Items: []*stripe.BillingPortalSessionFlowDataSubscriptionUpdateConfirmItemParams{
+//					{
+//						ID:       stripe.String(currentSubscription.Items.Data[0].ID),
+//						Price:    stripe.String(stripePrice.ID),
+//						Quantity: stripe.Int64(1),
+//					},
+//				},
+//			},
+//		},
+//	}
+//	ps, err := portalSession.New(portalParams)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+//	}
+//
+//	portalUrl := ps.URL
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+//		"redirect_url": portalUrl,
+//	}})
+//}
 
 func getAlternateBillingCycle(priceLookupKey string) string {
 	if priceLookupKey == "basic_annually" {
@@ -601,57 +599,57 @@ func (s *Server) handleUpdateSubscriptionInterval(w http.ResponseWriter, r *http
 	}})
 }
 
-func (s *Server) handleRenewSubscription(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-
-	user, _, _, err := getUserIdentity(s, r)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
-	}
-
-	customerID := user.CustomerID
-
-	// get the current subscription
-	subscriptionParams := &stripe.SubscriptionListParams{
-		Customer: stripe.String(customerID),
-	}
-	subscriptionParams.Limit = stripe.Int64(1)
-	currentSubscriptions := subscription.List(subscriptionParams)
-
-	if currentSubscriptions == nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	hasSubscription := false
-	var currentSubscription *stripe.Subscription
-	for currentSubscriptions.Next() {
-		currentSubscription = currentSubscriptions.Subscription()
-		hasSubscription = true
-		break
-	}
-
-	if !hasSubscription {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	if currentSubscription.CancelAtPeriodEnd {
-		renewParams := &stripe.SubscriptionParams{
-			CancelAtPeriodEnd: stripe.Bool(false),
-		}
-		renewedSubscription, err := subscription.Update(currentSubscription.ID, renewParams)
-
-		if err != nil {
-			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-		}
-
-		return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
-			"subscription": renewedSubscription,
-		}})
-	} else {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "subscription is currently active.", Code: "subscription_active"})
-	}
-}
+//func (s *Server) handleRenewSubscription(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+//	}
+//
+//	customerID := user.CustomerID
+//
+//	// get the current subscription
+//	subscriptionParams := &stripe.SubscriptionListParams{
+//		Customer: stripe.String(customerID),
+//	}
+//	subscriptionParams.Limit = stripe.Int64(1)
+//	currentSubscriptions := subscription.List(subscriptionParams)
+//
+//	if currentSubscriptions == nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	hasSubscription := false
+//	var currentSubscription *stripe.Subscription
+//	for currentSubscriptions.Next() {
+//		currentSubscription = currentSubscriptions.Subscription()
+//		hasSubscription = true
+//		break
+//	}
+//
+//	if !hasSubscription {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	if currentSubscription.CancelAtPeriodEnd {
+//		renewParams := &stripe.SubscriptionParams{
+//			CancelAtPeriodEnd: stripe.Bool(false),
+//		}
+//		renewedSubscription, err := subscription.Update(currentSubscription.ID, renewParams)
+//
+//		if err != nil {
+//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+//		}
+//
+//		return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
+//			"subscription": renewedSubscription,
+//		}})
+//	} else {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "subscription is currently active.", Code: "subscription_active"})
+//	}
+//}
 
 func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
@@ -1292,76 +1290,76 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{}})
 }
 
-func (s *Server) handleUpdatePaymentMethod(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-
-	slug := chi.URLParam(r, "slug")
-
-	team, err := s.store.GetTeamBySlug(slug)
-	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{
-			Error: "team not found.",
-			Code:  "team_not_found",
-		})
-	}
-
-	user, _, _, err := getUserIdentity(s, r)
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{
-			Error: "unauthorized",
-			Code:  "unauthorized",
-		})
-	}
-
-	isTeamMember, err := userIsTeamMember(s, user.ID, team.ID)
-
-	if err != nil || !isTeamMember {
-		return WriteJSON(w, http.StatusForbidden, Error{
-			Error: "you do not have access to this team",
-			Code:  "forbidden",
-		})
-	}
-
-	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
-	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{
-			Error: "team member not found.",
-			Code:  "team_member_not_found",
-		})
-	}
-
-	if teamMember.TeamRole != "owner" {
-		return WriteJSON(w, http.StatusForbidden, Error{
-			Error: "you do not have permission take this action",
-			Code:  "forbidden",
-		})
-	}
-
-	returnUrl := fmt.Sprintf("%s/%s/settings/team/billing", os.Getenv("APP_URL"), slug)
-
-	paymentMethodParams := &stripe.BillingPortalSessionParams{
-		Customer:  stripe.String(team.StripeCustomerID),
-		ReturnURL: stripe.String(returnUrl),
-		FlowData: &stripe.BillingPortalSessionFlowDataParams{
-			Type: stripe.String("payment_method_update"),
-			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
-				Type: stripe.String("redirect"),
-				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
-					ReturnURL: stripe.String(returnUrl),
-				},
-			},
-		},
-	}
-	result, err := portalSession.New(paymentMethodParams)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-	}
-
-	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
-		"redirect_url": result.URL,
-	}})
-}
+//func (s *Server) handleUpdatePaymentMethod(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	slug := chi.URLParam(r, "slug")
+//
+//	team, err := s.store.GetTeamBySlug(slug)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusNotFound, Error{
+//			Error: "team not found.",
+//			Code:  "team_not_found",
+//		})
+//	}
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{
+//			Error: "unauthorized",
+//			Code:  "unauthorized",
+//		})
+//	}
+//
+//	isTeamMember, err := userIsTeamMember(s, user.ID, team.ID)
+//
+//	if err != nil || !isTeamMember {
+//		return WriteJSON(w, http.StatusForbidden, Error{
+//			Error: "you do not have access to this team",
+//			Code:  "forbidden",
+//		})
+//	}
+//
+//	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusNotFound, Error{
+//			Error: "team member not found.",
+//			Code:  "team_member_not_found",
+//		})
+//	}
+//
+//	if teamMember.TeamRole != "owner" {
+//		return WriteJSON(w, http.StatusForbidden, Error{
+//			Error: "you do not have permission take this action",
+//			Code:  "forbidden",
+//		})
+//	}
+//
+//	returnUrl := fmt.Sprintf("%s/%s/settings/team/billing", os.Getenv("APP_URL"), slug)
+//
+//	paymentMethodParams := &stripe.BillingPortalSessionParams{
+//		Customer:  stripe.String(team.StripeCustomerID),
+//		ReturnURL: stripe.String(returnUrl),
+//		FlowData: &stripe.BillingPortalSessionFlowDataParams{
+//			Type: stripe.String("payment_method_update"),
+//			AfterCompletion: &stripe.BillingPortalSessionFlowDataAfterCompletionParams{
+//				Type: stripe.String("redirect"),
+//				Redirect: &stripe.BillingPortalSessionFlowDataAfterCompletionRedirectParams{
+//					ReturnURL: stripe.String(returnUrl),
+//				},
+//			},
+//		},
+//	}
+//	result, err := portalSession.New(paymentMethodParams)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+//	}
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
+//		"redirect_url": result.URL,
+//	}})
+//}
 
 // func handleSubscriptonUpdate(subscription *stripe.Subscription) error {
 // 	// handle going to cancel - update the cancel at date
@@ -1389,72 +1387,72 @@ var PlanHierarchy = PlanMap{
 	"premium_annually": 3,
 }
 
-func (s *Server) handleGetStripeCustomer(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-	teamSlug := chi.URLParam(r, "slug")
-	team, err := s.store.GetTeamBySlug(teamSlug)
+//func (s *Server) handleGetStripeCustomer(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//	teamSlug := chi.URLParam(r, "slug")
+//	team, err := s.store.GetTeamBySlug(teamSlug)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
+//	}
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+//	}
+//
+//	// validate that user is a team member
+//	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
+//	if !teamMember || err != nil {
+//		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+//	}
+//
+//	customerID := team.StripeCustomerID
+//
+//	customerParams := &stripe.CustomerParams{}
+//	stripeCustomer, err := customer.Get(customerID, customerParams)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+//	}
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
+//		"customer": stripeCustomer,
+//	}})
+//}
 
-	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
-	}
-
-	user, _, _, err := getUserIdentity(s, r)
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
-	}
-
-	// validate that user is a team member
-	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
-	if !teamMember || err != nil {
-		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
-	}
-
-	customerID := team.StripeCustomerID
-
-	customerParams := &stripe.CustomerParams{}
-	stripeCustomer, err := customer.Get(customerID, customerParams)
-	if err != nil {
-		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-	}
-
-	return WriteJSON(w, http.StatusOK, Response{Data: map[string]any{
-		"customer": stripeCustomer,
-	}})
-}
-
-func (s *Server) handleGetPaymentMethods(w http.ResponseWriter, r *http.Request) error {
-	stripe.Key = os.Getenv("STRIPE_API_KEY")
-	teamSlug := chi.URLParam(r, "slug")
-	team, err := s.store.GetTeamBySlug(teamSlug)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
-	}
-
-	user, _, _, err := getUserIdentity(s, r)
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
-	}
-
-	// validate that user is a team member
-	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
-	if !teamMember || err != nil {
-		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
-	}
-
-	customerID := team.StripeCustomerID
-
-	if customerID == "" {
-		return WriteJSON(w, http.StatusNotFound, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
-	}
-
-	params := &stripe.CustomerListPaymentMethodsParams{
-		Customer: stripe.String(customerID),
-	}
-	result := customer.ListPaymentMethods(params)
-
-	return WriteJSON(w, http.StatusOK, Response{Data: result.PaymentMethodList()})
-}
+//func (s *Server) handleGetPaymentMethods(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//	teamSlug := chi.URLParam(r, "slug")
+//	team, err := s.store.GetTeamBySlug(teamSlug)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
+//	}
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+//	}
+//
+//	// validate that user is a team member
+//	teamMember, err := userIsTeamMember(s, user.ID, team.ID)
+//	if !teamMember || err != nil {
+//		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+//	}
+//
+//	customerID := team.StripeCustomerID
+//
+//	if customerID == "" {
+//		return WriteJSON(w, http.StatusNotFound, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+//	}
+//
+//	params := &stripe.CustomerListPaymentMethodsParams{
+//		Customer: stripe.String(customerID),
+//	}
+//	result := customer.ListPaymentMethods(params)
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: result.PaymentMethodList()})
+//}
 
 func (s *Server) handleUpdateDefaultPaymentMethod(w http.ResponseWriter, r *http.Request) error {
 	teamSlug := chi.URLParam(r, "slug")
@@ -1484,7 +1482,48 @@ func (s *Server) handleUpdateDefaultPaymentMethod(w http.ResponseWriter, r *http
 	return WriteJSON(w, http.StatusOK, Response{Data: result})
 }
 
-func (s *Server) handleDeletePaymentMethod(w http.ResponseWriter, r *http.Request) error {
+//func (s *Server) handleDeletePaymentMethod(w http.ResponseWriter, r *http.Request) error {
+//	stripe.Key = os.Getenv("STRIPE_API_KEY")
+//
+//	teamSlug := chi.URLParam(r, "slug")
+//	team, err := s.store.GetTeamBySlug(teamSlug)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
+//	}
+//
+//	user, _, _, err := getUserIdentity(s, r)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+//	}
+//
+//	isTeamMember, err := userIsTeamMember(s, user.ID, team.ID)
+//
+//	if !isTeamMember || err != nil {
+//		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+//	}
+//
+//	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+//	if err != nil {
+//		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+//	}
+//
+//	if teamMember.TeamRole != models.TeamRoleOwner {
+//		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
+//	}
+//
+//	paymentMethodID := chi.URLParam(r, "id")
+//
+//	params := &stripe.PaymentMethodDetachParams{}
+//	result, err := paymentmethod.Detach(paymentMethodID, params)
+//
+//	if err != nil {
+//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payment method.", Code: "invalid_request"})
+//	}
+//
+//	return WriteJSON(w, http.StatusOK, Response{Data: result})
+//}
+
+func (s *Server) handleGetInvoices(w http.ResponseWriter, r *http.Request) error {
 	stripe.Key = os.Getenv("STRIPE_API_KEY")
 
 	teamSlug := chi.URLParam(r, "slug")
@@ -1493,36 +1532,15 @@ func (s *Server) handleDeletePaymentMethod(w http.ResponseWriter, r *http.Reques
 		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found", Code: "team_not_found"})
 	}
 
-	user, _, _, err := getUserIdentity(s, r)
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	params := &stripe.InvoiceListParams{
+		Customer: stripe.String(team.StripeCustomerID),
 	}
+	// todo handle pagination
+	//params.Limit = stripe.Int64(6)
+	result := invoice.List(params)
 
-	isTeamMember, err := userIsTeamMember(s, user.ID, team.ID)
-
-	if !isTeamMember || err != nil {
-		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
-	}
-
-	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
-	if err != nil {
-		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
-	}
-
-	if teamMember.TeamRole != models.TeamRoleOwner {
-		return WriteJSON(w, http.StatusForbidden, Error{Error: "forbidden", Code: "forbidden"})
-	}
-
-	paymentMethodID := chi.URLParam(r, "id")
-
-	params := &stripe.PaymentMethodDetachParams{}
-	result, err := paymentmethod.Detach(paymentMethodID, params)
-
-	if err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid payment method.", Code: "invalid_request"})
-	}
-
-	return WriteJSON(w, http.StatusOK, Response{Data: result})
+	invoices := result.InvoiceList()
+	return WriteJSON(w, http.StatusOK, Response{Data: invoices})
 }
 
 func analyzeSubscriptionChange(event *stripe.Event) string {

@@ -1,7 +1,12 @@
 package util
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 
@@ -10,13 +15,13 @@ import (
 
 func IsAuthenticated(authToken *http.Cookie, apiKey string) (bool, string, error) {
 	if authToken != nil {
-		userId, authTokenType, _, err := ParseJWT(authToken.Value)
+		decoded, err := ParseJWT(authToken.Value)
 		if err != nil {
 			return false, "", err
 		}
 
-		if userId != "" && authTokenType == "auth" {
-			return true, userId, nil
+		if decoded.WorkosUserID != "" {
+			return true, decoded.WorkosUserID, nil
 		}
 	} else if apiKey != "" {
 		// TODO: check api key in db / env
@@ -28,7 +33,7 @@ func IsAuthenticated(authToken *http.Cookie, apiKey string) (bool, string, error
 	return false, "", fmt.Errorf("unauthorized")
 }
 
-func ParseJWT(authToken string) (userId string, authTokenType string, sessionId string, err error) {
+func ParseJWTV1(authToken string) (userId string, authTokenType string, sessionId string, err error) {
 	token, err := jwt.Parse(authToken, func(token *jwt.Token) (any, error) {
 		return []byte(os.Getenv("JWT_SECRET")), nil
 	})
@@ -47,4 +52,120 @@ func ParseJWT(authToken string) (userId string, authTokenType string, sessionId 
 	}
 
 	return userId, authTokenType, sessionId, nil
+}
+
+type jwks struct {
+	Keys []struct {
+		Kid string   `json:"kid"`
+		Kty string   `json:"kty"`
+		Alg string   `json:"alg"`
+		Use string   `json:"use"`
+		N   string   `json:"n"`
+		E   string   `json:"e"`
+		X5c []string `json:"x5c"`
+	} `json:"keys"`
+}
+
+// fetchJWKS gets the jwks from a remote url
+func fetchJWKS(url string) (*jwks, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch jwks: %v", err)
+	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+			return
+		}
+	}(resp.Body)
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read jwks response: %v", err)
+	}
+
+	var keys jwks
+	if err := json.Unmarshal(body, &keys); err != nil {
+		return nil, fmt.Errorf("failed to parse jwks: %v", err)
+	}
+
+	return &keys, nil
+}
+
+// getPublicKeyFromJWKS extracts the rsa public key from x5c certificate chain
+func getPublicKeyFromJWKS(jwks *jwks) (*rsa.PublicKey, error) {
+	// get first key from the set
+	if len(jwks.Keys) == 0 {
+		return nil, fmt.Errorf("no keys found in jwks")
+	}
+
+	// decode x5c certificate
+	certData, err := base64.StdEncoding.DecodeString(jwks.Keys[0].X5c[0])
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode x5c cert: %v", err)
+	}
+
+	// parse x509 certificate
+	cert, err := x509.ParseCertificate(certData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse x509 cert: %v", err)
+	}
+
+	// get rsa public key from certificate
+	publicKey, ok := cert.PublicKey.(*rsa.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("invalid public key type")
+	}
+
+	return publicKey, nil
+}
+
+type DecodedAuthToken struct {
+	WorkosUserID   string   `json:"sub"`
+	SessionID      string   `json:"sid"`
+	OrganizationID string   `json:"org_id"`
+	Role           string   `json:"role"`
+	Permisisons    []string `json:"permisisons"`
+}
+
+func ParseJWT(authToken string) (decoded DecodedAuthToken, err error) {
+	jwksUrl := fmt.Sprintf("https://api.workos.com/sso/jwks/%s", os.Getenv("WORKOS_CLIENT_ID"))
+
+	jwks, err := fetchJWKS(jwksUrl)
+	if err != nil {
+		return DecodedAuthToken{}, fmt.Errorf("failed to fetch jwks: %v", err)
+	}
+
+	publicKey, err := getPublicKeyFromJWKS(jwks)
+
+	token, err := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
+		// validate signing method is RS256
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return publicKey, nil
+	})
+
+	if err != nil {
+		return DecodedAuthToken{}, fmt.Errorf("token invalid or expired")
+	}
+
+	claims := token.Claims.(jwt.MapClaims)
+	workosUserId := claims["sub"].(string)
+	sid := claims["sid"].(string)
+	orgId := claims["org_id"].(string)
+	role := claims["role"].(string)
+	permissions := claims["permissions"].([]string)
+
+	if workosUserId == "" {
+		return DecodedAuthToken{}, fmt.Errorf("user not found")
+	}
+
+	return DecodedAuthToken{
+		WorkosUserID:   workosUserId,
+		SessionID:      sid,
+		OrganizationID: orgId,
+		Role:           role,
+		Permisisons:    permissions,
+	}, nil
 }

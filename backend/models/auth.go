@@ -12,17 +12,20 @@ type AuthToken struct {
 }
 
 type SignupRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email string `json:"email"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email string `json:"email"`
 }
 
 type ConfirmEmailTokenRequest struct {
 	Token string `json:"token"`
+}
+
+type ConfirmMagicAuthRequest struct {
+	Code  string `json:"code"`
+	Email string `json:"email"`
 }
 
 type VerifyPasswordRequest struct {

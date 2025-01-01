@@ -46,6 +46,7 @@ type AcceptTermsRequest struct {
 
 type User struct {
 	ID                      uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	WorkosID                string     `json:"workos_id"`
 	FirstName               string     `gorm:"" json:"first_name"`
 	LastName                string     `gorm:"" json:"last_name"`
 	Email                   string     `gorm:"unique;not null" json:"email"`
