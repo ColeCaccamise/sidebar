@@ -29,6 +29,7 @@ func ValidatePassword(password string) (eightOrMore, number, upper, special bool
 	return
 }
 
+
 func ValidateEmail(email string) bool {
 	// Check basic length constraints
 	if len(email) < 3 || len(email) > 254 || !utf8.ValidString(email) {
@@ -63,7 +64,6 @@ func ValidateEmail(email string) bool {
 		return false
 	}
 
-	// Comprehensive regex pattern for email validation
 	emailPattern := regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 
 	return emailPattern.MatchString(email)
