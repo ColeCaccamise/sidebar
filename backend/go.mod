@@ -3,6 +3,7 @@ module github.com/colecaccamise/go-backend
 go 1.23.2
 
 require (
+	github.com/AfterShip/email-verifier v1.4.1
 	github.com/aws/aws-sdk-go v1.55.5
 	github.com/aws/aws-sdk-go-v2/config v1.28.6
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.17.43
@@ -13,16 +14,19 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/google/uuid v1.6.0
 	github.com/h2non/filetype v1.1.3
+	github.com/ip2location/ip2location-go/v9 v9.7.1
 	github.com/joho/godotenv v1.5.1
 	github.com/lib/pq v1.10.9
+	github.com/mileusna/useragent v1.3.5
 	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/resend/resend-go/v2 v2.12.0
 	github.com/rs/cors v1.11.1
 	github.com/stripe/stripe-go v70.15.0+incompatible
 	github.com/stripe/stripe-go/v80 v80.2.1
-	golang.org/x/crypto v0.21.0
+	github.com/workos/workos-go/v4 v4.26.0
+	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
-	golang.org/x/text v0.19.0
+	golang.org/x/text v0.21.0
 	gorm.io/driver/postgres v1.5.9
 	gorm.io/gorm v1.25.12
 )
@@ -46,19 +50,16 @@ require (
 	github.com/aws/smithy-go v1.22.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/ip2location/ip2location-go/v9 v9.7.1 // indirect
+	github.com/google/go-querystring v1.0.0 // indirect
+	github.com/hbollon/go-edlib v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgx/v5 v5.5.5 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/mileusna/useragent v1.3.5 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
-	github.com/stretchr/testify v1.9.0 // indirect
-	github.com/umutbasal/device-detector-go v0.0.2 // indirect
-	golang.org/x/net v0.22.0 // indirect
+	golang.org/x/net v0.33.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
 	lukechampine.com/uint128 v1.2.0 // indirect
-	rogchap.com/v8go v0.7.0 // indirect
 )
