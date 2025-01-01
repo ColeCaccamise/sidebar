@@ -8,6 +8,7 @@ import Spinner from '@/components/ui/spinner';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getErrorMessage, getResponseMessage } from '@/messages';
 import Button from '@/components/ui/button';
+import { Plan, Subscription } from '@/types';
 
 export default function BillingPage() {
   const [plans, setPlans] = useState([]);
@@ -17,7 +18,7 @@ export default function BillingPage() {
   const error = searchParams.get('error');
   const router = useRouter();
 
-  const [subscription, setSubscription] = useState<any>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
 
   const planFeatures = {
     Basic: [
@@ -68,6 +69,7 @@ export default function BillingPage() {
         );
         setPlans(sortedPlans);
       } catch (err) {
+        console.error(err);
         toast({
           message: 'Error fetching plans',
           mode: 'error',
@@ -86,7 +88,7 @@ export default function BillingPage() {
   }, []);
 
   async function handleOpenPortal() {
-    const res = await axios
+    await axios
       .post(
         `${process.env.NEXT_PUBLIC_API_URL}/billing/portal`,
         {},
@@ -97,7 +99,7 @@ export default function BillingPage() {
       .then((res) => {
         router.push(res.data.data.redirect_url);
       })
-      .catch((err) => {
+      .catch(() => {
         toast({
           message: 'Error opening portal',
           mode: 'error',
@@ -105,65 +107,65 @@ export default function BillingPage() {
       });
   }
 
-  async function handleCancelSubscription() {
-    const res = await axios
-      .post(
-        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/cancel`,
-        {},
-        {
-          withCredentials: true,
-        },
-      )
-      .then((res) => {
-        router.push(res.data.data.redirect_url);
-      })
-      .catch((err) => {
-        toast({
-          message: getErrorMessage(err.response.data.code),
-          mode: 'error',
-        });
-      });
-  }
+  // async function handleCancelSubscription() {
+  //   await axios
+  //     .post(
+  //       `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/cancel`,
+  //       {},
+  //       {
+  //         withCredentials: true,
+  //       },
+  //     )
+  //     .then((res) => {
+  //       router.push(res.data.data.redirect_url);
+  //     })
+  //     .catch(() => {
+  //       toast({
+  //         message: getErrorMessage(err.response.data.code),
+  //         mode: 'error',
+  //       });
+  //     });
+  // }
 
-  async function handleRenewSubscription() {
-    const res = await axios
-      .post(
-        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/renew`,
-        {},
-        {
-          withCredentials: true,
-        },
-      )
-      .then((res) => {
-        toast({
-          message: 'Subscription renewed successfully',
-          mode: 'success',
-        });
-      })
-      .catch((err) => {
-        toast({
-          message: getErrorMessage(err.response.data.code),
-          mode: 'error',
-        });
-      });
-  }
+  // async function handleRenewSubscription() {
+  //   await axios
+  //     .post(
+  //       `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions/renew`,
+  //       {},
+  //       {
+  //         withCredentials: true,
+  //       },
+  //     )
+  //     .then(() => {
+  //       toast({
+  //         message: 'Subscription renewed successfully',
+  //         mode: 'success',
+  //       });
+  //     })
+  //     .catch((err) => {
+  //       toast({
+  //         message: getErrorMessage(err.response.data.code),
+  //         mode: 'error',
+  //       });
+  //     });
+  // }
 
-  async function handleGetSubscription() {
-    try {
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions`,
-        {
-          withCredentials: true,
-        },
-      );
+  // async function handleGetSubscription() {
+  //   try {
+  //     const res = await axios.get(
+  //       `${process.env.NEXT_PUBLIC_API_URL}/billing/subscriptions`,
+  //       {
+  //         withCredentials: true,
+  //       },
+  //     );
 
-      console.log(res.data.data);
+  //     console.log(res.data.data);
 
-      setSubscription(res.data.data.subscription);
-    } catch (err) {
-      console.error(err);
-    }
-  }
+  //     setSubscription(res.data.data.subscription);
+  //   } catch (err) {
+  //     console.error(err);
+  //   }
+  // }
 
   useEffect(() => {
     if (message) {
@@ -181,7 +183,7 @@ export default function BillingPage() {
 
       router.push('/settings/billing');
     }
-  }, [message, error]);
+  }, [message, error, router]);
 
   const getPlanType = (planPrice: number) => {
     if (!subscription) return undefined;
@@ -231,6 +233,7 @@ export default function BillingPage() {
                       );
                       return `${daysLeft} ${daysLeft === 1 ? 'day' : 'days'}`;
                     } catch (error) {
+                      console.error(error);
                       return '0 days';
                     }
                   })()}
@@ -267,7 +270,7 @@ export default function BillingPage() {
               ''
             )}
             <div className="flex w-full justify-between gap-4">
-              {plans.map((plan: any) => (
+              {plans.map((plan: Plan) => (
                 <PricingBox
                   key={plan.product_lookup_key}
                   planName={plan.name}

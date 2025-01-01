@@ -4,44 +4,25 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/axios';
 import Spinner from '@/components/ui/spinner';
-import Image from 'next/image';
 import Button from '@/components/ui/button';
 import Logo from '@/components/ui/logo';
+import { Team } from '@/types';
 
 export default function WelcomePage() {
   const router = useRouter();
   const params = useParams();
   const [onboardingStep, setOnboardingStep] = useState<number>(0);
-  const [team, setTeam] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [heading, setHeading] = useState('');
-  const [description, setDescription] = useState('');
-  const [buttonText, setButtonText] = useState('');
-  const [buttonLinkText, setButtonLinkText] = useState('');
-
-  const onboardingCopy = [
-    {
-      heading: 'Welcome to the dashboard!',
-      description: 'Here is where you and your team get shit done.',
-      buttonText: 'Continue',
-      buttonLinkText: '',
-    },
-  ];
-
-  function getOnboardingCopy(step: number) {
-    const copy = onboardingCopy[step];
-    if (copy) {
-      setHeading(copy.heading);
-      setDescription(copy.description);
-      setButtonText(copy.buttonText);
-      setButtonLinkText(copy.buttonLinkText);
-    }
-  }
+  const [team, setTeam] = useState<Team | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [heading, setHeading] = useState<string>('');
+  const [description, setDescription] = useState<string>('');
+  const [buttonText, setButtonText] = useState<string>('');
+  const [buttonLinkText, setButtonLinkText] = useState<string>('');
 
   function completeOnboarding() {
     api
       .post(`/teams/${teamSlug}/onboarding`, {}, { withCredentials: true })
-      .then((res) => {
+      .then(() => {
         router.push(`/${teamSlug}`);
       })
       .catch((err) => {
@@ -63,7 +44,7 @@ export default function WelcomePage() {
           setTeam(res.data.data.team);
           setLoading(false);
         })
-        .catch((err) => {
+        .catch(() => {
           setTeam(null);
         })
         .finally(() => {
@@ -71,9 +52,28 @@ export default function WelcomePage() {
         });
     };
     getTeam();
-  }, [teamSlug]);
+  }, [teamSlug, setLoading]);
 
   useEffect(() => {
+    function getOnboardingCopy(step: number) {
+      const copy = onboardingCopy[step];
+      if (copy) {
+        setHeading(copy.heading);
+        setDescription(copy.description);
+        setButtonText(copy.buttonText);
+        setButtonLinkText(copy.buttonLinkText);
+      }
+    }
+
+    const onboardingCopy = [
+      {
+        heading: 'Welcome to the dashboard!',
+        description: 'Here is where you and your team get shit done.',
+        buttonText: 'Continue',
+        buttonLinkText: '',
+      },
+    ];
+
     getOnboardingCopy(onboardingStep);
   }, [onboardingStep]);
 

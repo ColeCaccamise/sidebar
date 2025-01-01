@@ -4,10 +4,15 @@ import axios from 'axios';
 import { cookies } from 'next/headers';
 
 const SIGNED_OUT_AUTH_ROUTES = ['/auth/login', '/auth/signup'];
-const AUTH_ROUTES = ['/auth/forgot-password', '/auth/change-password'];
+const AUTH_ROUTES = [
+  '/auth/forgot-password',
+  '/auth/change-password',
+  '/auth/confirm',
+];
 const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms'];
 
 export async function middleware(request: NextRequest) {
+  console.log('\n----\n');
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const cookieStore = cookies();
@@ -20,6 +25,9 @@ export async function middleware(request: NextRequest) {
 
   // get user data
   let isLoggedIn = false;
+
+  console.log('LOGGED IN: ', isLoggedIn);
+  console.log('PATHNAME: ', pathname);
 
   const user = await axios
     .get(`${apiUrl}/auth/identity`, {
@@ -55,6 +63,7 @@ export async function middleware(request: NextRequest) {
 
     if (refresh?.status != 200) {
       // handle failed refresh
+      console.log('FAILED REFRESH: ', pathname);
       if (
         !SIGNED_OUT_AUTH_ROUTES.includes(pathname) &&
         !AUTH_ROUTES.includes(pathname) &&
@@ -62,6 +71,7 @@ export async function middleware(request: NextRequest) {
       ) {
         return NextResponse.redirect(`${appUrl}/auth/login`);
       } else {
+        console.log('ALLOWED ROUTE: ', pathname);
         return NextResponse.next();
       }
     } else {
@@ -73,7 +83,9 @@ export async function middleware(request: NextRequest) {
             response.headers.append('Set-Cookie', cookie);
           });
         } else {
-          response.headers.append('Set-Cookie', setCookieHeader);
+          setCookieHeader.split(', ')?.forEach((cookie) => {
+            response.headers.append('Set-Cookie', cookie);
+          });
         }
       }
       return response;
@@ -94,18 +106,21 @@ export async function middleware(request: NextRequest) {
   let teamSlug = user?.default_team_slug;
   let dashboardUrl = `${appUrl}/${teamSlug}`;
 
-  // verify email confirmed
-  if (!emailConfirmed) {
-    if (pathname === `/auth/confirm` || pathname === '/auth/confirm-email') {
-      return NextResponse.next();
-    } else {
-      return NextResponse.redirect(`${appUrl}/auth/confirm-email`);
-    }
-  }
+  console.log('EMAIL CONFIRMED: ', emailConfirmed);
 
-  if (emailConfirmed && pathname === '/auth/confirm-email') {
-    return NextResponse.redirect(`${appUrl}`);
-  }
+  // todo decide if we want WorkOS password auth
+  // verify email confirmed
+  // if (!emailConfirmed) {
+  //   if (pathname === `/auth/confirm` || pathname === '/auth/confirm-email') {
+  //     return NextResponse.next();
+  //   } else {
+  //     return NextResponse.redirect(`${appUrl}/auth/confirm-email`);
+  //   }
+  // }
+
+  // if (emailConfirmed && pathname === '/auth/confirm-email') {
+  //   return NextResponse.redirect(`${appUrl}`);
+  // }
 
   // verify terms accepted
   if (!termsAccepted) {

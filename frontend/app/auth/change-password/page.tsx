@@ -1,20 +1,21 @@
-"use client";
+'use client';
 
-import Button from "@/components/ui/button";
-import Input from "@/components/ui/input";
-import toast from "@/lib/toast";
-import { getErrorMessage, getResponseMessage } from "@/messages";
-import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
-import { useState } from "react";
-import { changePassword } from "./actions";
+import Button from '@/components/ui/button';
+import Input from '@/components/ui/input';
+import toast from '@/lib/toast';
+import { getErrorMessage, getResponseMessage } from '@/messages';
+import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { changePassword } from './actions';
+import axios from 'axios';
 
 export default function ChangePasswordPage() {
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const searchParams = useSearchParams();
-  const token = searchParams.get("token");
+  const token = searchParams.get('token');
   const router = useRouter();
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -24,8 +25,8 @@ export default function ChangePasswordPage() {
       // validate token exists
       if (!token) {
         toast({
-          message: getErrorMessage("missing_token"),
-          mode: "error",
+          message: getErrorMessage('missing_token'),
+          mode: 'error',
         });
         return;
       }
@@ -33,8 +34,8 @@ export default function ChangePasswordPage() {
       // validate password exists
       if (!password || !confirmPassword) {
         toast({
-          message: "Please enter a new password.",
-          mode: "error",
+          message: 'Please enter a new password.',
+          mode: 'error',
         });
         return;
       }
@@ -42,45 +43,52 @@ export default function ChangePasswordPage() {
       // validate passwords match
       if (password !== confirmPassword) {
         toast({
-          message: "Passwords do not match.",
-          mode: "error",
+          message: 'Passwords do not match.',
+          mode: 'error',
         });
         return;
       }
 
       const res = await changePassword({ token, password, confirmPassword });
-      console.log("res55: ", res);
+      console.log('res55: ', res);
 
       if (res.success) {
         toast({
-          message: getResponseMessage("password_changed"),
-          mode: "success",
+          message: getResponseMessage('password_changed'),
+          mode: 'success',
         });
-        router.push("/dashboard");
+        router.push('/dashboard');
       } else if (res.error) {
-        if (res.code === "weak_password") {
+        if (res.code === 'weak_password') {
           toast({
             message: res.error,
-            mode: "error",
+            mode: 'error',
           });
         } else {
           toast({
             message: getErrorMessage(res.code),
-            mode: "error",
+            mode: 'error',
           });
         }
       }
-    } catch (error: any) {
-      console.log("74: ", error);
-      if (error.code === "weak_password") {
-        toast({
-          message: error.error,
-          mode: "error",
-        });
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response) {
+        const apiError = error.response.data;
+        if (apiError.code === 'weak_password') {
+          toast({
+            message: apiError.error,
+            mode: 'error',
+          });
+        } else {
+          toast({
+            message: getErrorMessage(apiError.code),
+            mode: 'error',
+          });
+        }
       } else {
         toast({
-          message: getErrorMessage(error.code),
-          mode: "error",
+          message: getErrorMessage('internal_server_error'),
+          mode: 'error',
         });
       }
     } finally {

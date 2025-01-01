@@ -1,53 +1,70 @@
-import axios from 'axios';
+'use client';
+
+import axios, {
+  AxiosError,
+  InternalAxiosRequestConfig,
+  AxiosResponse,
+} from 'axios';
+
+import { useRouter } from 'next/navigation';
+
+const router = useRouter;
 
 const api = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL}`,
+  withCredentials: true, // enable sending/receiving cookies
 });
 
+interface RefreshQueueItem {
+  resolve: (value: unknown) => void;
+  reject: (error: Error | AxiosError | unknown) => void;
+}
+
 let refreshing = false;
-let refreshQueue: Array<() => void> = [];
+let refreshQueue: RefreshQueueItem[] = [];
+
+const processQueue = (error: AxiosError | null) => {
+  refreshQueue.forEach(({ resolve, reject }) => {
+    if (error) {
+      reject(error);
+    } else {
+      resolve();
+    }
+  });
+  refreshQueue = [];
+};
 
 api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+  (response: AxiosResponse) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & {
+      _retry?: boolean;
+    };
 
-    // prevent infinite retry loops
     if (error.response?.status === 401 && originalRequest._retry) {
       return Promise.reject(error);
     }
 
-    console.log(error);
-
     if (error.response?.status === 401) {
       if (refreshing) {
-        // wait for the existing refresh to complete
-        return new Promise((resolve) => {
-          refreshQueue.push(() => resolve(api(originalRequest)));
-        });
+        return new Promise((resolve, reject) => {
+          refreshQueue.push({ resolve, reject });
+        }).then(() => api(originalRequest));
       }
 
       originalRequest._retry = true;
       refreshing = true;
 
       try {
-        const response = await api.get('/auth/refresh', {
+        // backend will set http-only cookie in response
+        await api.get('/auth/refresh', {
           withCredentials: true,
         });
-
-        // set the new token
-        const newToken = response.data.token;
-        localStorage.setItem('token', newToken);
-        api.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-
-        // process queue
-        refreshQueue.forEach((cb) => cb());
-        refreshQueue = [];
-
+        processQueue(null);
         return api(originalRequest);
       } catch (err) {
-        // refresh failed - redirect to login
-        window.location.href = '/auth/login';
+        processQueue(err as AxiosError);
+        router.push('/auth/login');
         return Promise.reject(err);
       } finally {
         refreshing = false;

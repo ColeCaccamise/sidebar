@@ -1,6 +1,5 @@
 import { CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons';
 import Button from './button';
-import { useState } from 'react';
 import Link from 'next/link';
 import Divider from './divider';
 
@@ -44,8 +43,6 @@ export default function PricingBox({
   subscribeToSuffix = '',
   trialInProgress = false,
 }: PricingBoxProps) {
-  const [selectedPlan, setSelectedPlan] = useState(false);
-
   const renderActionButton = () => {
     if (customPricing) {
       return (
@@ -83,11 +80,11 @@ export default function PricingBox({
       // First time subscriber
       return (
         <Button
-          disabled={subscribedTo || selectedPlan}
+          disabled={subscribedTo}
           className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
           handleClick={() => handleSelectPlan(priceLookupKey)}
         >
-          {selectedPlan
+          {subscribedTo
             ? 'Subscribing...'
             : `${subscribeToPrefix} ${planName} ${subscribeToSuffix}`}
         </Button>
@@ -99,9 +96,9 @@ export default function PricingBox({
       <Button
         className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
         handleClick={() => handleUpdatePlan(priceLookupKey)}
-        disabled={selectedPlan}
+        disabled={subscribedTo}
       >
-        {selectedPlan
+        {subscribedTo
           ? planType === 'upgrade'
             ? 'Upgrading...'
             : 'Downgrading...'
@@ -162,7 +159,10 @@ export default function PricingBox({
 
             <div className="flex flex-col gap-2 py-4">
               {features?.map((feature) => (
-                <div className="flex items-center gap-2 py-1">
+                <div
+                  key={feature.featureName}
+                  className="flex items-center gap-2 py-1"
+                >
                   <span>
                     {feature.featureIncluded ? (
                       <CheckCircledIcon className="h-4 w-4 text-success" />

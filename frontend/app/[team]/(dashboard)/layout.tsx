@@ -1,5 +1,7 @@
+'use server';
+
 import TeamContainer from '@/app/[team]/(dashboard)/team-container';
-import api from '@/lib/axios';
+import axios from 'axios';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
@@ -11,8 +13,10 @@ export default async function Layout({
   children: React.ReactNode;
   params: { team: string };
 }) {
-  const team = await api
-    .get(`/teams/${params.team}`, {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+
+  const team = await axios
+    .get(`${apiUrl}/teams/${params.team}`, {
       headers: {
         Cookie: `auth-token=${cookies().get('auth-token')?.value}`,
       },

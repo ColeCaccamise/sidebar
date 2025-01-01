@@ -7,9 +7,10 @@ import { useParams } from 'next/navigation';
 import Spinner from '@/components/ui/spinner';
 import Button from '@/components/ui/button';
 import Logo from '@/components/ui/logo';
+import { Invite } from '@/types';
 
 export default function JoinPage() {
-  const [invite, setInvite] = useState<any>(null);
+  const [invite, setInvite] = useState<Invite | null>(null);
   const [loading, setLoading] = useState(true);
   const [inviteValid, setInviteValid] = useState(false);
   const params = useParams();
@@ -46,7 +47,7 @@ export default function JoinPage() {
         });
     };
     fetchInvite();
-  }, [teamSlug]);
+  }, [teamSlug, slug]);
 
   if (loading) {
     return <Spinner />;

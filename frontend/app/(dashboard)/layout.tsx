@@ -42,11 +42,11 @@ export default function Layout({ children }: { children: React.ReactNode }) {
       .get(`${process.env.NEXT_PUBLIC_API_URL}/auth/identity`, {
         withCredentials: true,
       })
-      .then((res: any) => {
+      .then((res) => {
         setUser(res.data);
         setAccountDeleted(Boolean(res.data?.deleted_at));
       })
-      .catch((err: any) => {
+      .catch((err) => {
         if (err.response.data.code === 'session_expired') {
           toast({
             message: getErrorMessage('session_expired'),
@@ -56,13 +56,13 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           router.push('/auth/login');
         }
       });
-  }, []);
+  }, [router]);
 
   async function handleRestore() {
     setLoading(true);
 
     await handleRestoreUser()
-      .then((resp: any) => {
+      .then((resp) => {
         console.log(resp.error);
         if (resp?.error) {
           console.log(resp?.code);
@@ -79,7 +79,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           });
         }
       })
-      .catch((err: any) => {
+      .catch((err) => {
         if (err.code) {
           toast({
             message: getErrorMessage(err.code),

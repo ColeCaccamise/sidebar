@@ -9,7 +9,7 @@ export default function Dropdown({
   children,
   menuItems,
   showIcon = true,
-  position = 'right',
+  position = 'left',
   top = true,
   dropdownContent,
 }: {
@@ -24,6 +24,7 @@ export default function Dropdown({
     divider?: boolean;
     disabled?: boolean;
     destructive?: boolean;
+    tooltip?: string;
   }>;
   showIcon?: boolean;
   position?: 'left' | 'right';
@@ -45,12 +46,11 @@ export default function Dropdown({
         >
           {dropdownContent && <div className="p-2">{dropdownContent}</div>}
           {menuItems?.map((item, index) => (
-            <div key={index}>
+            <div key={item.id || index}>
               {item.divider ? (
                 <Divider className="-mx-1 my-1 h-[1px] w-[calc(100%+0.5rem)]" />
               ) : (
                 <DropdownMenuItem
-                  key={item.id}
                   icon={item.icon}
                   label={item.label}
                   kbd={item.kbd}
@@ -58,6 +58,7 @@ export default function Dropdown({
                   handleClick={item.handleClick}
                   disabled={item.disabled}
                   destructive={item.destructive}
+                  tooltip={item.tooltip}
                 />
               )}
             </div>

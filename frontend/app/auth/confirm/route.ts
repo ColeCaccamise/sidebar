@@ -49,19 +49,19 @@ export async function GET(request: NextRequest) {
     console.log(redirectResponse);
 
     return redirectResponse;
-  } catch (error: any) {
-    const errorData = error.response.data;
+  } catch (error) {
+    if (error instanceof AxiosError) {
+      const errorData = error.response?.data as { code: string } | undefined;
 
-    console.log(52, errorData);
-
-    if (errorData.code == 'invalid_update_token') {
-      return NextResponse.redirect(
-        new URL('/settings/account?error=invalid_update_token', request.url),
-      );
-    } else {
-      return NextResponse.redirect(
-        new URL('/auth/confirm-email?error=invalid_token', request.url),
-      );
+      if (errorData?.code === 'invalid_update_token') {
+        return NextResponse.redirect(
+          new URL('/settings/account?error=invalid_update_token', request.url),
+        );
+      }
     }
+
+    return NextResponse.redirect(
+      new URL('/auth/confirm-email?error=invalid_token', request.url),
+    );
   }
 }

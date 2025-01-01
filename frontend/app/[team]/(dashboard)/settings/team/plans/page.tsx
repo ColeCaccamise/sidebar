@@ -15,15 +15,9 @@ import { getErrorMessage } from '@/messages';
 import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
 import { ExclamationTriangleIcon } from '@radix-ui/react-icons';
+import { Subscription } from '@/types';
 export default function PlansPage({ params }: { params: { team: string } }) {
   const searchParams = useSearchParams();
-  const [currentPlan, setCurrentPlan] = useState({
-    trial: true,
-    trialDaysRemaining: 10,
-    trialDuration: 14,
-    currentPlan: 'Pro',
-    billingInterval: 'month',
-  });
   const [showOther, setShowOther] = useState(false);
   const [checkedReasons, setCheckedReasons] = useState({
     features: false,
@@ -122,7 +116,7 @@ export default function PlansPage({ params }: { params: { team: string } }) {
     }
 
     fetchPlans();
-  }, []);
+  }, [params.team]);
 
   useEffect(() => {
     async function fetchSubscription() {
@@ -143,7 +137,7 @@ export default function PlansPage({ params }: { params: { team: string } }) {
     }
 
     fetchSubscription();
-  }, []);
+  }, [params.team]);
 
   async function handleSelectPlan(priceLookupKey: string) {
     setSelectedPlan(!selectedPlan);
@@ -241,22 +235,23 @@ export default function PlansPage({ params }: { params: { team: string } }) {
     premium: 3,
   };
 
-  const planNames = {
-    basic_monthly: 'Basic Monthly',
-    basic_annually: 'Basic Annually',
-    pro_monthly: 'Pro Monthly',
-    pro_annually: 'Pro Annually',
-    premium_monthly: 'Premium Monthly',
-    premium_annually: 'Premium Annually',
-  };
+  // const planNames = {
+  //   basic_monthly: 'Basic Monthly',
+  //   basic_annually: 'Basic Annually',
+  //   pro_monthly: 'Pro Monthly',
+  //   pro_annually: 'Pro Annually',
+  //   premium_monthly: 'Premium Monthly',
+  //   premium_annually: 'Premium Annually',
+  // };
 
-  function getPlanType(subscription: any, priceLookupKey: string) {
+  function getPlanType(subscription: Subscription, priceLookupKey: string) {
     if (!subscription || !priceLookupKey) {
       return null;
     }
 
-    const planType = planMappings[priceLookupKey];
-    const interval = intervalMappings[priceLookupKey];
+    const planType = planMappings[priceLookupKey as keyof typeof planMappings];
+    const interval =
+      intervalMappings[priceLookupKey as keyof typeof intervalMappings];
 
     if (subscription.plan_type === planType) {
       if (subscription.interval === interval) {
@@ -265,7 +260,8 @@ export default function PlansPage({ params }: { params: { team: string } }) {
         return 'switch';
       }
     } else if (
-      planHierarchy[planType] > planHierarchy[subscription.plan_type]
+      planHierarchy[planType as keyof typeof planHierarchy] >
+      planHierarchy[subscription.plan_type as keyof typeof planHierarchy]
     ) {
       return 'upgrade';
     } else {
@@ -305,7 +301,7 @@ export default function PlansPage({ params }: { params: { team: string } }) {
     }
 
     fetchPaymentMethods();
-  }, []);
+  }, [params.team]);
 
   if (loading) {
     return <Spinner />;

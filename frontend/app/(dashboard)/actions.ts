@@ -1,11 +1,11 @@
-"use server";
+'use server';
 
-import axios from "axios";
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import axios from 'axios';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 
 export async function handleLogout() {
-  "use server";
+  'use server';
 
   try {
     const response = await axios.post(
@@ -13,27 +13,27 @@ export async function handleLogout() {
       {},
       {
         withCredentials: true,
-      }
+      },
     );
 
-    const setCookie = response.headers["set-cookie"];
-    console.log("Set-Cookie:", setCookie);
+    const setCookie = response.headers['set-cookie'];
+    console.log('Set-Cookie:', setCookie);
 
     if (setCookie) {
       setCookie.forEach((cookie) => {
-        const [name] = cookie.split("=");
+        const [name] = cookie.split('=');
         cookies().delete(name);
       });
     }
 
-    redirect("/auth/login");
+    redirect('/auth/login');
   } catch {
-    redirect("/auth/login");
+    redirect('/auth/login');
   }
 }
 
 export async function handleRestoreUser() {
-  "use server";
+  'use server';
 
   return axios
     .patch(
@@ -41,15 +41,15 @@ export async function handleRestoreUser() {
       {},
       {
         headers: {
-          Cookie: `auth-token=${cookies().get("auth-token")?.value}`,
+          Cookie: `auth-token=${cookies().get('auth-token')?.value}`,
         },
         withCredentials: true,
-      }
+      },
     )
-    .then((res: any) => {
+    .then((res) => {
       return res.data;
     })
-    .catch((err: any) => {
+    .catch((err) => {
       return err.response.data;
     });
 }

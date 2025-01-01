@@ -14,6 +14,7 @@ import Spinner from '@/components/ui/spinner';
 import { getErrorMessage } from '@/messages';
 import toast from '@/lib/toast';
 import { useRouter } from 'next/navigation';
+import { Subscription } from '@/types';
 
 interface PricingProps {
   teamSlug: string;
@@ -25,13 +26,6 @@ export default function Pricing({
   variant = 'settings',
 }: PricingProps) {
   const searchParams = useSearchParams();
-  const [currentPlan, setCurrentPlan] = useState({
-    trial: true,
-    trialDaysRemaining: 10,
-    trialDuration: 14,
-    currentPlan: 'Pro',
-    billingInterval: 'month',
-  });
   const [showOther, setShowOther] = useState(false);
   const [checkedReasons, setCheckedReasons] = useState({
     features: false,
@@ -45,7 +39,11 @@ export default function Pricing({
   const [billingOption, setBillingOption] = useState('month');
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState([]);
-  const [subscription, setSubscription] = useState(null);
+  const [subscription, setSubscription] = useState<{
+    plan_type: string;
+    interval: 'month' | 'year';
+    stripe_price_lookup_key: string;
+  } | null>(null);
   const [selectedPlan, setSelectedPlan] = useState(false);
   const router = useRouter();
 
@@ -232,7 +230,7 @@ export default function Pricing({
     premium_annually: 'premium',
   };
 
-  const intervalMappings = {
+  const intervalMappings: Record<string, 'month' | 'year'> = {
     basic_monthly: 'month',
     basic_annually: 'year',
     pro_monthly: 'month',
@@ -241,13 +239,13 @@ export default function Pricing({
     premium_annually: 'year',
   };
 
-  const planHierarchy = {
+  const planHierarchy: Record<string, number> = {
     basic: 1,
     pro: 2,
     premium: 3,
   };
 
-  const planNames = {
+  const planNames: Record<string, string> = {
     basic_monthly: 'Basic Monthly',
     basic_annually: 'Basic Annually',
     pro_monthly: 'Pro Monthly',
@@ -256,13 +254,17 @@ export default function Pricing({
     premium_annually: 'Premium Annually',
   };
 
-  function getPlanType(subscription: any, priceLookupKey: string) {
+  function getPlanType(
+    subscription: Subscription | null,
+    priceLookupKey: string,
+  ) {
     if (!subscription || !priceLookupKey) {
       return null;
     }
 
-    const planType = planMappings[priceLookupKey];
-    const interval = intervalMappings[priceLookupKey];
+    const planType = planMappings[priceLookupKey as keyof typeof planMappings];
+    const interval =
+      intervalMappings[priceLookupKey as keyof typeof intervalMappings];
 
     if (subscription.plan_type === planType) {
       if (subscription.interval === interval) {

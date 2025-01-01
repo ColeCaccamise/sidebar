@@ -31,7 +31,7 @@ export default function Modal({
   return (
     <Dialog
       open={open}
-      onClose={canClose ? (value: boolean) => handleClose() : () => {}}
+      onClose={canClose ? () => handleClose() : () => {}}
       className="relative z-50"
     >
       <DialogBackdrop

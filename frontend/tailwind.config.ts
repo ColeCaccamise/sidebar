@@ -61,6 +61,7 @@ const config: Config = {
         accent: 'var(--accent)',
         'accent-stroke-strong': 'var(--accent-stroke-strong)',
         'accent-stroke-weak': 'var(--accent-stroke-weak)',
+        'typography-muted': 'var(--typography-muted)',
       },
     },
   },
@@ -102,6 +103,7 @@ const config: Config = {
     'text-secondary-typography-weak-dark',
     'btn-destructive',
     'btn-brand-secondary',
+    'text-typography-muted',
   ],
 };
 export default config;

@@ -22,24 +22,23 @@ import Modal from '@/components/ui/modal';
 import Divider from '@/components/ui/divider';
 import toast from '@/lib/toast';
 import api from '@/lib/axios';
-import { ErrorCode } from '@/messages';
 import { getErrorMessage } from '@/messages';
 import { useRouter } from 'next/navigation';
+import { Team } from '@/types';
 
 const MAX_INVITES = 10;
 
 export default function OnboardingInvitePage() {
   const params = useParams();
   const teamSlug = params.team as string;
-  const [loading, setLoading] = useState(false);
   const [inviteLoading, setInviteLoading] = useState(false);
   const [emails, setEmails] = useState<string[]>(['']);
   const [copySuccess, setCopySuccess] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [isRotating, setIsRotating] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
-  const [team, setTeam] = useState<any>(null);
-  const [error, setError] = useState<any>(null);
+  const [team, setTeam] = useState<Team | null>(null);
+  const [error, setError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const [hasShownSubmitHint, setHasShownSubmitHint] = useState(false);
@@ -58,24 +57,27 @@ export default function OnboardingInvitePage() {
   }, [focusIndex]);
 
   useEffect(() => {
+    // get the current team invite link
+    function getInviteLink() {
+      axios
+        .get(
+          `${process.env.NEXT_PUBLIC_API_URL}/teams/${teamSlug}/invite-link`,
+          {
+            withCredentials: true,
+          },
+        )
+        .then((res) => {
+          setInviteLink(res.data.data.inviteLink);
+        })
+        .catch((err) => {
+          console.error('Failed to get invite link:', err);
+        });
+    }
+
     getInviteLink();
   }, [teamSlug]);
 
   const router = useRouter();
-
-  // get the current team invite link
-  function getInviteLink() {
-    axios
-      .get(`${process.env.NEXT_PUBLIC_API_URL}/teams/${teamSlug}/invite-link`, {
-        withCredentials: true,
-      })
-      .then((res) => {
-        setInviteLink(res.data.data.inviteLink);
-      })
-      .catch((err) => {
-        console.error('Failed to get invite link:', err);
-      });
-  }
 
   const addEmail = useCallback(() => {
     if (emails.length >= MAX_INVITES) return;
@@ -191,7 +193,7 @@ export default function OnboardingInvitePage() {
 
       setInviteLoading(false);
     },
-    [emails],
+    [emails, router, teamSlug],
   );
 
   const handleEmailChange = useCallback(
@@ -316,8 +318,9 @@ export default function OnboardingInvitePage() {
         <Logo />
         <h1>Invite teammates</h1>
         <p>
-          Add your teammates' email addresses to invite them to collaborate. You
-          can paste multiple addresses separated by commas or spaces.
+          Add your teammates&apos; email addresses to invite them to
+          collaborate. You can paste multiple addresses separated by commas or
+          spaces.
         </p>
       </div>
 
@@ -448,7 +451,7 @@ export default function OnboardingInvitePage() {
       >
         <p>
           This will expire the current invite link and generate a new one.
-          Anyone with the old link won't be able to join anymore.
+          Anyone with the old link won&apos;t be able to join anymore.
         </p>
 
         <div className="flex gap-4">

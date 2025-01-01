@@ -9,14 +9,18 @@ export default function AuthLayout({
 }) {
   return (
     <Suspense>
-      <div className="mx-auto flex h-full max-w-md flex-grow flex-col items-center justify-between gap-8 px-6 py-8">
+      <div className="mx-auto flex h-full w-full max-w-[420px] flex-grow flex-col items-start justify-between gap-12 px-6 py-8 md:px-0">
         <Logo />
-        <div className="w-full max-w-md">{children}</div>
-        <div>
-          <p className="text-center text-xs">
-            By proceeding you acknowledge that you have read, understood and
-            agree to our <Link href="/legal/terms">Terms of Service</Link> and{' '}
-            <Link href="/legal/privacy">Privacy Policy</Link>.
+        <>{children}</>
+        <div className="flex gap-1">
+          <p>Need help?</p>
+          <p>
+            <Link
+              className="no-underline"
+              href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}
+            >
+              Contact support
+            </Link>
           </p>
         </div>
       </div>

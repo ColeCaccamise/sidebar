@@ -33,6 +33,7 @@ import {
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Team } from '@/types';
 
 export default function TeamContainer({
   slug,
@@ -40,7 +41,7 @@ export default function TeamContainer({
   children,
 }: {
   slug: string;
-  team: any;
+  team: Team;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -50,70 +51,6 @@ export default function TeamContainer({
   const [user, setUser] = useState(null);
   const [teamMember, setTeamMember] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  async function handleGetSubscription() {
-    setIsLoading(true);
-    await api
-      .get(`/teams/${slug}/billing/subscription`, {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then((res) => {
-        setSubscription(res?.data?.data?.subscription);
-      })
-      .catch((err) => {
-        console.error(err?.response?.data);
-        setSubscription(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }
-
-  async function handleGetUser() {
-    setIsLoading(true);
-    await api
-      .get(`/auth/identity`, {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then((res) => {
-        setUser(res?.data);
-        console.log('user: ', res?.data);
-      })
-      .catch((err) => {
-        console.error(err?.response?.data);
-        setUser(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }
-
-  async function handleGetTeamMember() {
-    setIsLoading(true);
-    await api
-      .get(`/teams/${slug}/member`, {
-        withCredentials: true,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then((res) => {
-        setTeamMember(res?.data?.data?.team_member);
-      })
-      .catch((err) => {
-        console.error(err?.response?.data);
-        setTeamMember(null);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
-  }
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -127,8 +64,72 @@ export default function TeamContainer({
   }, []);
 
   useEffect(() => {
+    async function handleGetSubscription() {
+      setIsLoading(true);
+      await api
+        .get(`/teams/${slug}/billing/subscription`, {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        .then((res) => {
+          setSubscription(res?.data?.data?.subscription);
+        })
+        .catch((err) => {
+          console.error(err?.response?.data);
+          setSubscription(null);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
     handleGetSubscription();
+
+    async function handleGetUser() {
+      setIsLoading(true);
+      await api
+        .get(`/auth/identity`, {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        .then((res) => {
+          setUser(res?.data);
+          console.log('user: ', res?.data);
+        })
+        .catch((err) => {
+          console.error(err?.response?.data);
+          setUser(null);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
+
     handleGetUser();
+
+    async function handleGetTeamMember() {
+      setIsLoading(true);
+      await api
+        .get(`/teams/${slug}/member`, {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        })
+        .then((res) => {
+          setTeamMember(res?.data?.data?.team_member);
+        })
+        .catch((err) => {
+          console.error(err?.response?.data);
+          setTeamMember(null);
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    }
     handleGetTeamMember();
   }, [slug]);
 
@@ -165,7 +166,7 @@ export default function TeamContainer({
           .post('/auth/logout', {
             withCredentials: true,
           })
-          .then(async (response) => {
+          .then(async () => {
             await logout();
             router.push('/');
           });

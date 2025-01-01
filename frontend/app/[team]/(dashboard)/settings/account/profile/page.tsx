@@ -4,7 +4,7 @@ import Input from '@/components/ui/input';
 import SettingsBox from '@/components/ui/settings-box';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
-import { ApiError, ApiResponse, User } from '@/types';
+import { User } from '@/types';
 import Spinner from '@/components/ui/spinner';
 import {
   resendUpdateEmailConfirmation,
@@ -263,8 +263,7 @@ export default function AccountSettingsPage() {
                 className="underline"
                 variant="link"
                 handleClick={() =>
-                  resendUpdateEmailConfirmation({ user }).then((res: any) => {
-                    console.log(res);
+                  resendUpdateEmailConfirmation({ user }).then(() => {
                     toast({
                       message: 'Email sent',
                       description:
@@ -549,7 +548,7 @@ export default function AccountSettingsPage() {
                       });
                     }
                   })
-                  .catch((err) => {
+                  .catch(() => {
                     toast({
                       message: 'There was a problem deleting your avatar.',
                       mode: 'error',
@@ -659,7 +658,7 @@ export default function AccountSettingsPage() {
                   data: { password: deletePassword },
                   withCredentials: true,
                 })
-                .then((res) => {
+                .then(() => {
                   toast({
                     message: 'Account deleted.',
                     mode: 'success',

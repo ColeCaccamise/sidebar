@@ -81,7 +81,9 @@ export async function resendUpdateEmailConfirmation({
 }) {
   const response = await axios.post(
     `${apiUrl}/users/resend-email`,
-    {},
+    {
+      user_id: user?.id,
+    },
     {
       headers: { Cookie: `auth-token=${cookies().get('auth-token')?.value}` },
     },
@@ -138,7 +140,7 @@ export async function uploadAvatar({
     .then((res) => {
       return res.data;
     })
-    .catch((err) => {
+    .catch(() => {
       return null;
     });
 

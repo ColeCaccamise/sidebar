@@ -53,7 +53,7 @@ export default function OnboardingTermsPage() {
       <div className="flex flex-col gap-2">
         <h1>Terms of Service & Privacy Policy</h1>
         <p>
-          By clicking below and continuing you agree that you've read and
+          By clicking below and continuing you agree that you&apos;e read and
           accepted our <Link href="/legal/terms">Terms of Service</Link> &{' '}
           <Link href="/legal/privacy">Privacy Policy</Link>.
         </p>

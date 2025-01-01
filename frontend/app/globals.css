@@ -64,6 +64,7 @@ body {
     --typography-strong: hsla(214, 0%, 0%, 100%);
     --typography-strong-dark: hsla(214, 0%, 100%, 100%);
     --typography-weak: hsla(214, 0%, 0%, 78%);
+    --typography-muted: hsla(214, 0%, 0%, 50%);
     --typography-weak-dark: hsla(214, 0%, 100%, 78%);
     --hover: hsla(214, 0%, 0%, 6%);
     --fill: hsla(214, 0%, 0%, 2%);
@@ -124,6 +125,7 @@ body {
     --sidebar: hsla(214, 0%, 10%, 100%);
     --typography-strong: hsla(214, 0%, 100%, 100%);
     --typography-weak: hsla(214, 0%, 100%, 78%);
+    --typography-muted: hsla(214, 0%, 100%, 35%);
     --hover: hsla(214, 0%, 100%, 6%);
     --fill: hsla(214, 0%, 100%, 2%);
     --fill-solid: hsla(214, 0%, 10%, 100%);
