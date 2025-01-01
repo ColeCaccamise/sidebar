@@ -29,7 +29,6 @@ func ValidatePassword(password string) (eightOrMore, number, upper, special bool
 	return
 }
 
-
 func ValidateEmail(email string) bool {
 	// Check basic length constraints
 	if len(email) < 3 || len(email) > 254 || !utf8.ValidString(email) {
