@@ -137,7 +137,7 @@ func ParseJWT(authToken string) (decoded DecodedAuthToken, err error) {
 	}
 
 	publicKey, err := getPublicKeyFromJWKS(jwks)
-
+	// todo handle error
 	token, err := jwt.Parse(authToken, func(token *jwt.Token) (interface{}, error) {
 		// validate signing method is RS256
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
@@ -151,11 +151,52 @@ func ParseJWT(authToken string) (decoded DecodedAuthToken, err error) {
 	}
 
 	claims := token.Claims.(jwt.MapClaims)
-	workosUserId := claims["sub"].(string)
-	sid := claims["sid"].(string)
-	orgId := claims["org_id"].(string)
-	role := claims["role"].(string)
-	permissions := claims["permissions"].([]string)
+
+	// check and set workosUserId
+	var workosUserId string
+	if val, ok := claims["sub"]; ok {
+		if strVal, ok := val.(string); ok {
+			workosUserId = strVal
+		}
+	}
+
+	// check and set sid
+	var sid string
+	if val, ok := claims["sid"]; ok {
+		if strVal, ok := val.(string); ok {
+			sid = strVal
+		}
+	}
+
+	// check and set orgId
+	var orgId string
+	if val, ok := claims["org_id"]; ok {
+		if strVal, ok := val.(string); ok {
+			orgId = strVal
+		}
+	}
+
+	// check and set role
+	var role string
+	if val, ok := claims["role"]; ok {
+		if strVal, ok := val.(string); ok {
+			role = strVal
+		}
+	}
+
+	// check and set permissions
+	var permissions []string
+	if val, ok := claims["permissions"]; ok {
+		if permSlice, ok := val.([]interface{}); ok {
+			// convert interface slice to string slice
+			permissions = make([]string, 0, len(permSlice))
+			for _, p := range permSlice {
+				if strVal, ok := p.(string); ok {
+					permissions = append(permissions, strVal)
+				}
+			}
+		}
+	}
 
 	if workosUserId == "" {
 		return DecodedAuthToken{}, fmt.Errorf("user not found")

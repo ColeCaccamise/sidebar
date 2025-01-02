@@ -27,7 +27,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		r.Post("/login", makeHttpHandleFunc(s.handleLogin))
 		r.Post("/logout", makeHttpHandleFunc(s.handleLogout))
 		//r.Post("/confirm", makeHttpHandleFunc(s.handleConfirmEmailToken))
-		r.Post("/confirm", makeHttpHandleFunc(s.handleConfirmMagicAuth))
+		r.Get("/confirm", makeHttpHandleFunc(s.handleConfirmMagicAuth))
 		r.Post("/forgot-password", makeHttpHandleFunc(s.handleForgotPassword))
 		//r.Post("/change-password", makeHttpHandleFunc(s.handleChangePassword))
 		//r.Delete("/sessions", makeHttpHandleFunc(s.handleDeleteSessions))
@@ -40,7 +40,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 
 	r.Group(func(r chi.Router) {
 		//r.Use(s.VerifySecurityVersion)
-		//r.Get("/auth/identity", makeHttpHandleFunc(s.handleIdentity))
+		r.Get("/auth/identity", makeHttpHandleFunc(s.handleIdentity))
 		r.Get("/auth/refresh", makeHttpHandleFunc(s.handleRefreshToken))
 	})
 
