@@ -19,6 +19,8 @@ type Storage interface {
 	GetAllUsers() ([]*models.User, error)
 	GetUserByID(uuid.UUID) (*models.User, error)
 	GetUserByEmail(string) (*models.User, error)
+	GetUserByWorkosUserID(string) (*models.User, error)
+	CreateUserAuthMethod(*models.UserAuthMethod) error
 	DeleteUserByID(uuid.UUID) error
 	CreateTeam(*models.Team) error
 	UpdateTeam(*models.Team) error
@@ -108,6 +110,11 @@ func (s *PostgresStore) Init() error {
 		return err
 	}
 
+	err = s.CreateUserAuthMethodsTable()
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -139,6 +146,10 @@ func (s *PostgresStore) CreateSessionsTable() error {
 	return s.db.AutoMigrate(&models.Session{})
 }
 
+func (s *PostgresStore) CreateUserAuthMethodsTable() error {
+	return s.db.AutoMigrate(&models.UserAuthMethod{})
+}
+
 func (s *PostgresStore) CreateUser(user *models.User) error {
 	result := s.db.Create(user)
 	return result.Error
@@ -154,6 +165,18 @@ func (s *PostgresStore) GetUserByID(id uuid.UUID) (*models.User, error) {
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("user not found with id %s", id)
+		}
+		return nil, result.Error
+	}
+	return &user, nil
+}
+
+func (s *PostgresStore) GetUserByWorkosUserID(id string) (*models.User, error) {
+	var user models.User
+	result := s.db.Where("workos_user_id = ?", id).First(&user)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("user not found with email %s", id)
 		}
 		return nil, result.Error
 	}
@@ -183,6 +206,11 @@ func (s *PostgresStore) GetAllUsers() ([]*models.User, error) {
 
 func (s *PostgresStore) DeleteUserByID(id uuid.UUID) error {
 	result := s.db.Delete(&models.User{}, id)
+	return result.Error
+}
+
+func (s *PostgresStore) CreateUserAuthMethod(userAuthMethod *models.UserAuthMethod) error {
+	result := s.db.Create(userAuthMethod)
 	return result.Error
 }
 

@@ -8,6 +8,7 @@ import (
 	"github.com/ip2location/ip2location-go/v9"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/colecaccamise/go-backend/util"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/mileusna/useragent"
+	"github.com/workos/workos-go/v4/pkg/sso"
 	"github.com/workos/workos-go/v4/pkg/usermanagement"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/rand"
@@ -165,11 +167,71 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	)
 
 	if err != nil {
+		// if 403 -- a verification email shouldve been sent -- redirect to login page with message to check email
 		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
 	}
 
 	accessToken := response.AccessToken
 	refreshToken := response.RefreshToken
+
+	// get email for user
+	decoded, err := util.ParseJWT(accessToken)
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+	}
+	workosUserID := decoded.WorkosUserID
+
+	user, err := s.store.GetUserByWorkosUserID(workosUserID)
+	if err != nil || user == nil {
+		// get user data from workos
+		workosUser, err := usermanagement.GetUser(
+			context.Background(),
+			usermanagement.GetUserOpts{
+				User: workosUserID,
+			},
+		)
+		if err != nil {
+			http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+			return nil
+		}
+
+		// create user in our system
+		user = &models.User{
+			WorkosUserID:   workosUserID,
+			FirstName:      workosUser.FirstName,
+			LastName:       workosUser.LastName,
+			Email:          workosUser.Email,
+			EmailConfirmed: workosUser.EmailVerified,
+			AvatarUrl:      workosUser.ProfilePictureURL, // todo(low priority) download this photo and upload it to our system
+		}
+		err = s.store.CreateUser(user)
+		if err != nil {
+			http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+			return nil
+		}
+
+		// create an auth method record
+		var authMethod models.AuthMethod
+		if response.AuthenticationMethod == "GoogleOAuth" {
+			authMethod = models.AuthMethodGoogle
+		} else if response.AuthenticationMethod == "GitHubOAuth" {
+			authMethod = models.AuthMethodGitHub
+		}
+
+		now := time.Now()
+
+		userAuthMethod := &models.UserAuthMethod{
+			UserID:     user.ID,
+			Method:     authMethod,
+			LastUsedAt: &now,
+			IsActive:   true,
+		}
+
+		err = s.store.CreateUserAuthMethod(userAuthMethod)
+		if err != nil {
+			http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+		}
+	}
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth-token",
@@ -240,13 +302,55 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) error {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
 	}
 
-	_, err = util.ParseJWT(authToken.Value)
+	decoded, err := util.ParseJWT(authToken.Value)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	workosUserID := decoded.WorkosUserID
+	workosUser, err := usermanagement.GetUser(
+		context.Background(),
+		usermanagement.GetUserOpts{
+			User: workosUserID,
+		})
+
+	fmt.Println(workosUser)
+
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
 	}
 
 	return WriteJSON(w, http.StatusOK, Response{
 		Data: map[string]bool{
+			"valid": true,
+		},
+	})
+}
+
+func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) error {
+	authToken, err := r.Cookie("auth-token")
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	decoded, err := util.ParseJWT(authToken.Value)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	workosUserID := decoded.WorkosUserID
+
+	user, err := s.store.GetUserByWorkosUserID(workosUserID)
+	if err != nil || user == nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired", Code: "invalid_token"})
+	}
+
+	identityResponse := models.NewUserIdentityResponse(user)
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Data: map[string]interface{}{
+			"user":  identityResponse,
 			"valid": true,
 		},
 	})
@@ -267,17 +371,22 @@ func (s *Server) handleGetAuthorizationUrl(w http.ResponseWriter, r *http.Reques
 	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
 
 	redirectUri := fmt.Sprintf("%s/auth/callback", os.Getenv("API_URL"))
+	apiKey := os.Getenv("WORKOS_API_KEY")
 	clientID := os.Getenv("WORKOS_CLIENT_ID")
 
 	if !validProvider {
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "provider not supported", Code: "invalid_provider"})
 	}
 
-	url, err := usermanagement.GetAuthorizationURL(
-		usermanagement.GetAuthorizationURLOpts{
-			ClientID:    clientID,
+	sso.Configure(
+		apiKey,
+		clientID,
+	)
+
+	url, err := sso.GetAuthorizationURL(
+		sso.GetAuthorizationURLOpts{
 			RedirectURI: redirectUri,
-			Provider:    provider,
+			Provider:    sso.ConnectionType(provider),
 		},
 	)
 	if err != nil {
@@ -312,7 +421,7 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "refresh token is invalid or expired.", Code: "invalid_token"})
 	}
 
-	decoded, err := util.ParseJWT(response.RefreshToken)
+	decoded, err := util.ParseJWT(response.AccessToken)
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "refresh token is invalid or expired.", Code: "invalid_token"})
 	}
@@ -461,50 +570,66 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) error {
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "email is invalid", Code: "email_invalid"})
 	}
 
-	//// validate user doesn't exist
-	//existing, _ := s.store.GetUserByEmail(email)
-	//if existing != nil {
-	//	return WriteJSON(w, http.StatusBadRequest, Error{Error: "an account with this email already exists.", Code: "email_taken"})
-	//}
-	//
-	//usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
-	//
-	//response, err := usermanagement.CreateMagicAuth(
-	//	context.Background(),
-	//	usermanagement.CreateMagicAuthOpts{
-	//		Email: email,
-	//	},
-	//)
-	//
-	//if err != nil {
-	//	fmt.Printf("WorkOS signup magic auth failed: %v\n", err)
-	//	return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-	//}
-	//
-	//// create user in our system
-	//err = s.store.CreateUser(&models.User{
-	//	WorkosID: response.UserId,
-	//	Email:    email,
-	//})
-	//if err != nil {
-	//	fmt.Printf("Failed to create user: %v\n", err)
-	//	return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-	//}
-	//
-	//// send login email
-	//code := response.Code
-	//email = response.Email
-	//
-	//magicLink := fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("APP_URL"), code, email)
-	//fmt.Printf("Magic link: %s\n", magicLink)
-	//
-	//html := fmt.Sprintf("<div>Click this link to login to your dashboard: <a href='%s'>%s</a></div>", magicLink, magicLink)
-	//
-	//err = util.SendEmail(email, "Login to your Dashboard", html)
-	//if err != nil {
-	//	fmt.Printf("Failed to send email: %v\n", err)
-	//	return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-	//}
+	// validate user doesn't exist
+	existing, _ := s.store.GetUserByEmail(email)
+	if existing != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "an account with this email already exists.", Code: "email_taken"})
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	response, err := usermanagement.CreateMagicAuth(
+		context.Background(),
+		usermanagement.CreateMagicAuthOpts{
+			Email: email,
+		},
+	)
+
+	if err != nil {
+		fmt.Printf("WorkOS signup magic auth failed: %v\n", err)
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	// create user in our system
+	user := &models.User{
+		WorkosUserID: response.UserId,
+		Email:        email,
+	}
+	err = s.store.CreateUser(user)
+	if err != nil {
+		fmt.Printf("Failed to create user: %v\n", err)
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	// create email auth method object
+	now := time.Now()
+	authMethod := models.UserAuthMethod{
+		UserID:     user.ID,
+		Method:     models.AuthMethodEmail,
+		Email:      email,
+		IsActive:   true,
+		LastUsedAt: &now,
+	}
+
+	err = s.store.CreateUserAuthMethod(&authMethod)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	// send login email
+	code := response.Code
+	email = response.Email
+
+	magicLink := fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("APP_URL"), code, email)
+	fmt.Printf("Magic link: %s\n", magicLink)
+
+	html := fmt.Sprintf("<div>Click this link to login to your dashboard: <a href='%s'>%s</a></div>", magicLink, magicLink)
+
+	err = util.SendEmail(email, "Login to your Dashboard", html)
+	if err != nil {
+		fmt.Printf("Failed to send email: %v\n", err)
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
 
 	return WriteJSON(w, http.StatusOK, Response{Message: "success", Code: "email_sent"})
 }
@@ -744,21 +869,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
 	}
 
-	// create user in our system
-	err = s.store.CreateUser(&models.User{
-		WorkosID: response.UserId,
-		Email:    email,
-	})
-	if err != nil {
-		fmt.Printf("Failed to create user: %v\n", err)
-		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-	}
-
 	// send login email
 	code := response.Code
 	email = response.Email
 
-	magicLink := fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("APP_URL"), code, email)
+	magicLink := fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("API_URL"), code, email)
 	fmt.Printf("Magic link: %s\n", magicLink)
 
 	html := fmt.Sprintf("<div>Click this link to login to your dashboard: <a href='%s'>%s</a></div>", magicLink, magicLink)
@@ -854,6 +969,28 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 //}
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	authToken, err := r.Cookie("auth-token")
+
+	logoutUrl, _ := url.Parse(fmt.Sprintf("%s/auth/login", os.Getenv("APP_URL")))
+
+	var decoded util.DecodedAuthToken
+	if err == nil && authToken != nil {
+		decoded, _ = util.ParseJWT(authToken.Value)
+		if decoded.SessionID != "" {
+			response, err := usermanagement.GetLogoutURL(
+				usermanagement.GetLogoutURLOpts{
+					SessionID: decoded.SessionID,
+				},
+			)
+			if err == nil && response != nil {
+				logoutUrl = response
+			}
+
+		}
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth-token",
 		Value:    "",
@@ -881,28 +1018,30 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	return WriteJSON(w, http.StatusOK, nil)
+	return WriteJSON(w, http.StatusOK, Response{Message: "successfully logged out.", Data: map[string]string{"redirect_url": logoutUrl.String()}})
 }
 
 func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) error {
 	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
 
-	magicAuthReq := new(models.ConfirmMagicAuthRequest)
-	if err := json.NewDecoder(r.Body).Decode(magicAuthReq); err != nil {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "invalid request.", Code: "invalid_request"})
-	}
+	email := r.URL.Query().Get("email")
+	code := r.URL.Query().Get("code")
 
 	response, err := usermanagement.AuthenticateWithMagicAuth(
 		context.Background(),
 		usermanagement.AuthenticateWithMagicAuthOpts{
 			ClientID: os.Getenv("WORKOS_CLIENT_ID"),
-			Email:    magicAuthReq.Email,
-			Code:     magicAuthReq.Code,
+			Email:    email,
+			Code:     code,
 		},
 	)
 
+	var redirectUrl string
+
 	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "magic link is invalid or expired.", Code: "invalid_magic_link"})
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
 	}
 
 	accessToken := response.AccessToken
@@ -928,7 +1067,9 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	return WriteJSON(w, http.StatusOK, response)
+	redirectUrl = os.Getenv("APP_URL")
+	http.Redirect(w, r, redirectUrl, http.StatusFound)
+	return nil
 }
 
 //func (s *Server) handleConfirmEmailToken(w http.ResponseWriter, r *http.Request) error {
@@ -1394,7 +1535,8 @@ func generateToken(user *models.User, tokenType string, session *models.Session)
 	return signedAuthToken, nil
 }
 
-//func getUserIdentity(s *Server, r *http.Request) (user *models.User, authType string, session *models.Session, err error) {
+// user *models.User, authType string, session *models.Session
+//func getSession(s *Server, r *http.Request) (user, err error) {
 //	if s == nil || r == nil {
 //		return nil, "", nil, fmt.Errorf("both server and request not provided")
 //	}

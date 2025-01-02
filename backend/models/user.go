@@ -46,10 +46,11 @@ type AcceptTermsRequest struct {
 
 type User struct {
 	ID                      uuid.UUID  `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
-	WorkosID                string     `json:"workos_id"`
+	WorkosUserID            string     `json:"workos_user_id"`
 	FirstName               string     `gorm:"" json:"first_name"`
 	LastName                string     `gorm:"" json:"last_name"`
 	Email                   string     `gorm:"unique;not null" json:"email"`
+	EmailConfirmed          bool       `gorm:"default:false" json:"email_confirmed"`
 	UpdatedEmail            string     `gorm:"" json:"updated_email"`
 	CreatedAt               time.Time  `gorm:"autoCreateTime" json:"created_at"`
 	UpdatedAt               time.Time  `gorm:"autoUpdateTime" json:"updated_at"`
@@ -63,11 +64,6 @@ type User struct {
 	DeletedAt               *time.Time `gorm:"default:null" json:"deleted_at"`
 	RestoredAt              *time.Time `gorm:"default:null" json:"restored_at"`
 	SecurityVersion         *time.Time `gorm:"default:null" json:"security_version"`
-	CustomerID              string     `json:"customer_id"`
-	RedeemedCouponAt        *time.Time `gorm:"default:null" json:"redeemed_coupon_at"`
-	FreeTrialAt             *time.Time `gorm:"default:null" json:"free_trial_at"`
-	FreeTrialDuration       int64      `gorm:"default:0" json:"free_trial_duration"`
-	SubscriptionTier        string     `gorm:"default:null" json:"subscription_tier"`
 	TermsAcceptedAt         *time.Time `gorm:"default:null" json:"terms_accepted_at"`
 	OnboardingCompletedAt   *time.Time `gorm:"default:null" json:"onboarding_completed_at"`
 	TeamCreatedOrJoinedAt   *time.Time `gorm:"default:null" json:"team_created_or_joined_at"`
@@ -109,7 +105,7 @@ func NewUserIdentityResponse(u *User) *UserIdentityResponse {
 		UpdatedEmail:        u.UpdatedEmail,
 		IsAdmin:             u.IsAdmin,
 		AvatarUrl:           u.AvatarUrl,
-		EmailConfirmed:      u.EmailConfirmedAt != nil && *u.EmailConfirmedAt != time.Time{},
+		EmailConfirmed:      (u.EmailConfirmedAt != nil && *u.EmailConfirmedAt != time.Time{}) || u.EmailConfirmed,
 		DeletedAt:           u.DeletedAt,
 		TermsAccepted:       u.TermsAcceptedAt != nil && *u.TermsAcceptedAt != time.Time{},
 		OnboardingCompleted: u.OnboardingCompletedAt != nil && *u.OnboardingCompletedAt != time.Time{},
