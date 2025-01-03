@@ -3,9 +3,13 @@ package api
 import (
 	"crypto/md5"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	cryptoRand "crypto/rand"
@@ -17,191 +21,193 @@ import (
 
 var RESERVED_TEAM_SLUGS = []string{"support", "help", "helpcenter", "banking", "account", "settings", "admin", "system", "faq", "docs", "documentation", "root", "profile", "billing", "login", "signin", "signup", "auth", "signout", "register", "api", "dashboard", "notifications", "team", "teams", "legal", "onboarding", "terms", "privacy"}
 
-//func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error {
-//	user, _, _, err := getUserIdentity(s, r)
-//
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
-//	}
-//
-//	teamReq := new(models.CreateTeamRequest)
-//
-//	if err := json.NewDecoder(r.Body).Decode(teamReq); err != nil {
-//		errorMsg := "invalid request"
-//		if err == io.EOF {
-//			errorMsg = "request body is empty"
-//		}
-//		return WriteJSON(w, http.StatusBadRequest, Error{Error: errorMsg, Code: "invalid_request"})
-//	}
-//
-//	// validate team name
-//
-//	// trim whitespace
-//	teamReq.Name = strings.TrimSpace(teamReq.Name)
-//
-//	// check length
-//	if len(teamReq.Name) < 3 || len(teamReq.Name) > 32 {
-//		return WriteJSON(w, http.StatusBadRequest, Error{
-//			Message: "invalid team name",
-//			Error:   "team name must be between 3 and 32 characters.",
-//			Code:    "team_name_length",
-//		})
-//	}
-//
-//	// validate characters (allow alphanumeric, spaces, hyphens, underscores)
-//	if !regexp.MustCompile(`^[a-zA-Z0-9][-a-zA-Z0-9\s_]*[a-zA-Z0-9]$`).MatchString(teamReq.Name) {
-//		return WriteJSON(w, http.StatusBadRequest, Error{
-//			Message: "invalid team name",
-//			Error:   "team name can only contain letters, numbers, spaces, hyphens and underscores, and must start and end with a letter or number.",
-//			Code:    "team_name_invalid",
-//		})
-//	}
-//
-//	// check for consecutive special characters
-//	if regexp.MustCompile(`[-_\s]{2,}`).MatchString(teamReq.Name) {
-//		return WriteJSON(w, http.StatusBadRequest, Error{
-//			Message: "invalid team name",
-//			Error:   "team name cannot contain consecutive special characters.",
-//			Code:    "team_name_consecutive",
-//		})
-//	}
-//
-//	// create team
-//	team := models.NewTeam(&models.CreateTeamRequest{
-//		Name: teamReq.Name,
-//	})
-//
-//	// generate unique team slug
-//	i := 0
-//	for {
-//		var slugBase string
-//		if i == 0 {
-//			slugBase = strings.ToLower(team.Name)
-//		} else {
-//			slugBase = fmt.Sprintf("%s %d", strings.ToLower(team.Name), i)
-//		}
-//
-//		team.Slug = util.GenerateSlug(slugBase)
-//
-//		// check slug isn't reserved
-//		slugReserved := false
-//
-//		for _, reserved := range RESERVED_TEAM_SLUGS {
-//			if team.Slug == reserved {
-//				slugReserved = true
-//			}
-//		}
-//
-//		existingTeam, _ := s.store.GetTeamBySlug(team.Slug)
-//		if existingTeam == nil && !slugReserved {
-//			break
-//		}
-//		i++
-//	}
-//
-//	// store team object in db
-//	if err := s.store.CreateTeam(team); err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	// add logged-in user as created by
-//	team.CreatedBy = user.ID
-//	now := time.Now()
-//
-//	// handle onboarding team creation requirement
-//	if user.TeamCreatedOrJoinedAt == nil {
-//		user.TeamCreatedOrJoinedAt = &now
-//	}
-//
-//	user.DefaultTeamSlug = team.Slug
-//
-//	// add logged-in user as initial team owner
-//	teamMember := models.NewTeamMember(&models.CreateTeamMemberRequest{
-//		JoinedAt:  &now,
-//		InvitedBy: user.ID,
-//		TeamID:    team.ID,
-//		UserID:    user.ID,
-//		TeamRole:  "owner",
-//	})
-//
-//	teamMember.Status = "active"
-//
-//	// store team member object in db
-//	if err := s.store.CreateTeamMember(teamMember); err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	// generate initial team invite
-//	inviteToken, err := generateInviteToken()
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	teamInvite := models.NewTeamInvite(&models.CreateTeamInviteRequest{
-//		TeamID:   team.ID,
-//		TeamRole: "member",
-//	})
-//
-//	err = s.store.CreateTeamInvite(teamInvite)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	teamInvite.Token = inviteToken
-//	teamInvite.InviteType = "shared"
-//
-//	team.CurrentTeamInviteID = teamInvite.ID
-//
-//	err = s.store.UpdateTeamInvite(teamInvite)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	err = s.store.UpdateTeam(team)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	// update team record
-//	err = s.store.UpdateTeam(team)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	// update user record
-//	err = s.store.UpdateUser(user)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	return WriteJSON(w, http.StatusCreated, Response{Message: "team created", Code: "team_created", Data: map[string]string{
-//		"slug": team.Slug,
-//	}})
-//}
+func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	user := userSession.User
+
+	teamReq := new(models.CreateTeamRequest)
+
+	if err := json.NewDecoder(r.Body).Decode(teamReq); err != nil {
+		errorMsg := "invalid request"
+		if err == io.EOF {
+			errorMsg = "request body is empty"
+		}
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: errorMsg, Code: "invalid_request"})
+	}
+
+	// validate team name
+
+	// trim whitespace
+	teamReq.Name = strings.TrimSpace(teamReq.Name)
+
+	// check length
+	if len(teamReq.Name) < 3 || len(teamReq.Name) > 32 {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Message: "invalid team name",
+			Error:   "team name must be between 3 and 32 characters.",
+			Code:    "team_name_length",
+		})
+	}
+
+	// validate characters (allow alphanumeric, spaces, hyphens, underscores)
+	if !regexp.MustCompile(`^[a-zA-Z0-9][-a-zA-Z0-9\s_]*[a-zA-Z0-9]$`).MatchString(teamReq.Name) {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Message: "invalid team name",
+			Error:   "team name can only contain letters, numbers, spaces, hyphens and underscores, and must start and end with a letter or number.",
+			Code:    "team_name_invalid",
+		})
+	}
+
+	// check for consecutive special characters
+	if regexp.MustCompile(`[-_\s]{2,}`).MatchString(teamReq.Name) {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Message: "invalid team name",
+			Error:   "team name cannot contain consecutive special characters.",
+			Code:    "team_name_consecutive",
+		})
+	}
+
+	// create team
+	team := models.NewTeam(&models.CreateTeamRequest{
+		Name: teamReq.Name,
+	})
+
+	// generate unique team slug
+	i := 0
+	for {
+		var slugBase string
+		if i == 0 {
+			slugBase = strings.ToLower(team.Name)
+		} else {
+			slugBase = fmt.Sprintf("%s %d", strings.ToLower(team.Name), i)
+		}
+
+		team.Slug = util.GenerateSlug(slugBase)
+
+		// check slug isn't reserved
+		slugReserved := false
+
+		for _, reserved := range RESERVED_TEAM_SLUGS {
+			if team.Slug == reserved {
+				slugReserved = true
+			}
+		}
+
+		existingTeam, _ := s.store.GetTeamBySlug(team.Slug)
+		if existingTeam == nil && !slugReserved {
+			break
+		}
+		i++
+	}
+
+	// store team object in db
+	if err = s.store.CreateTeam(team); err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	// add logged-in user as created by
+	team.CreatedBy = user.ID
+	now := time.Now()
+
+	// handle onboarding team creation requirement
+	if user.TeamCreatedOrJoinedAt == nil {
+		user.TeamCreatedOrJoinedAt = &now
+	}
+
+	user.DefaultTeamSlug = team.Slug
+
+	// add logged-in user as initial team owner
+	teamMember := models.NewTeamMember(&models.CreateTeamMemberRequest{
+		JoinedAt:  &now,
+		InvitedBy: user.ID,
+		TeamID:    team.ID,
+		UserID:    user.ID,
+		TeamRole:  "owner",
+	})
+
+	teamMember.Status = "active"
+
+	// store team member object in db
+	if err := s.store.CreateTeamMember(teamMember); err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	// generate initial team invite
+	inviteToken, err := generateInviteToken()
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	teamInvite := models.NewTeamInvite(&models.CreateTeamInviteRequest{
+		TeamID:   team.ID,
+		TeamRole: "member",
+	})
+
+	err = s.store.CreateTeamInvite(teamInvite)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	teamInvite.Token = inviteToken
+	teamInvite.InviteType = "shared"
+
+	team.CurrentTeamInviteID = teamInvite.ID
+
+	err = s.store.UpdateTeamInvite(teamInvite)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	err = s.store.UpdateTeam(team)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	// update team record
+	err = s.store.UpdateTeam(team)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	// update user record
+	err = s.store.UpdateUser(user)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	return WriteJSON(w, http.StatusCreated, Response{Message: "team created", Code: "team_created", Data: map[string]string{
+		"slug": team.Slug,
+	}})
+}
 
 func (s *Server) handleGetTeamBySlug(w http.ResponseWriter, r *http.Request) error {
 	slug := chi.URLParam(r, "slug")
@@ -242,40 +248,42 @@ func (s *Server) handleGetTeamBySlug(w http.ResponseWriter, r *http.Request) err
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team": teamResponse}})
 }
 
-//func (s *Server) HandleGetTeamMember(w http.ResponseWriter, r *http.Request) error {
-//	slug := chi.URLParam(r, "slug")
-//	if !util.IsValidSlug(slug) {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
-//	}
-//
-//	user, _, _, err := getUserIdentity(s, r)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error.",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	team, err := s.store.GetTeamBySlug(slug)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusNotFound, Error{
-//			Error: "team not found",
-//			Code:  "team_not_found",
-//		})
-//	}
-//
-//	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusNotFound, Error{
-//			Error: "you are not a member of this team.",
-//			Code:  "team_member_not_found",
-//		})
-//	}
-//
-//	teamMemberData := models.NewTeamMemberResponse(teamMember)
-//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_member": teamMemberData}})
-//
-//}
+func (s *Server) HandleGetTeamMember(w http.ResponseWriter, r *http.Request) error {
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	user := userSession.User
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team not found",
+			Code:  "team_not_found",
+		})
+	}
+
+	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "you are not a member of this team.",
+			Code:  "team_member_not_found",
+		})
+	}
+
+	teamMemberData := models.NewTeamMemberResponse(teamMember)
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_member": teamMemberData}})
+
+}
 
 func (s *Server) handleGetUpsells(w http.ResponseWriter, r *http.Request) error {
 	return WriteJSON(w, http.StatusNotImplemented, Error{
