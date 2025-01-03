@@ -101,19 +101,15 @@ export type Customer = {
 };
 
 export type Invite = {
-  id: string;
-  team_id: string;
-  email: string;
-  status: string;
   data: {
-    id: string;
-    type: string;
-    quantity: number;
-    price: {
-      unit_amount: number;
-      currency: string;
+    invite: {
+      team_role: string;
+      token: string;
     };
-    team_name: string;
+    team: {
+      name: string;
+      slug: string;
+    };
   };
 };
 

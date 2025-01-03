@@ -17,6 +17,11 @@ export async function middleware(request: NextRequest) {
   const cookieStore = cookies();
   const pathname = request.nextUrl.pathname;
 
+  // Allow access to team join routes
+  if (pathname.match(/^\/[^\/]+\/join\/[^\/]+$/)) {
+    return NextResponse.next();
+  }
+
   if (!apiUrl) {
     console.error('NEXT_PUBLIC_API_URL is not defined');
     return NextResponse.next();

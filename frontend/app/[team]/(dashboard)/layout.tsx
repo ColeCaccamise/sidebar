@@ -26,7 +26,7 @@ export default async function Layout({
     .catch(() => null);
 
   if (!team) {
-    notFound();
+    return <>{children}</>;
   }
 
   return (
