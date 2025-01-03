@@ -233,6 +233,31 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 		}
 	}
 
+	// add a new auth method for user (if it doesn't already exist)
+	var authMethod models.AuthMethod
+	if response.AuthenticationMethod == "GoogleOAuth" {
+		authMethod = models.AuthMethodGoogle
+	} else if response.AuthenticationMethod == "GitHubOAuth" {
+		authMethod = models.AuthMethodGitHub
+	}
+
+	_, err = s.store.GetAuthMethodByNameForUser(authMethod, user.ID)
+	if err != nil {
+		now := time.Now()
+		userAuthMethod := &models.UserAuthMethod{
+			UserID:     user.ID,
+			Method:     authMethod,
+			Email:      user.Email,
+			IsActive:   true,
+			LastUsedAt: &now,
+		}
+
+		err = s.store.CreateUserAuthMethod(userAuthMethod)
+		if err != nil {
+			fmt.Printf("Error creating auth method: %v\n", err)
+		}
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth-token",
 		Value:    accessToken,
@@ -1644,4 +1669,32 @@ func getClientLocation(r *http.Request) string {
 	} else {
 		return fmt.Sprintf("%s, %s", city.City, country.Country_short)
 	}
+}
+
+type UserSessionResponse struct {
+	User    *models.User    `json:"user"`
+	Session *models.Session `json:"session"`
+}
+
+func getUserSession(s *Server, r *http.Request) (UserSessionResponse, error) {
+	authToken, err := r.Cookie("auth-token")
+	if err != nil {
+		return UserSessionResponse{}, err
+	}
+
+	decoded, err := util.ParseJWT(authToken.Value)
+	if err != nil {
+		return UserSessionResponse{}, err
+	}
+
+	user, err := s.store.GetUserByWorkosUserID(decoded.WorkosUserID)
+	if err != nil {
+		return UserSessionResponse{}, err
+	}
+
+	// todo get session
+	return UserSessionResponse{
+		User:    user,
+		Session: &models.Session{},
+	}, nil
 }

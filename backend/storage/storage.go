@@ -21,6 +21,7 @@ type Storage interface {
 	GetUserByEmail(string) (*models.User, error)
 	GetUserByWorkosUserID(string) (*models.User, error)
 	CreateUserAuthMethod(*models.UserAuthMethod) error
+	GetAuthMethodByNameForUser(models.AuthMethod, uuid.UUID) (*models.UserAuthMethod, error)
 	DeleteUserByID(uuid.UUID) error
 	CreateTeam(*models.Team) error
 	UpdateTeam(*models.Team) error
@@ -169,6 +170,18 @@ func (s *PostgresStore) GetUserByID(id uuid.UUID) (*models.User, error) {
 		return nil, result.Error
 	}
 	return &user, nil
+}
+
+func (s *PostgresStore) GetAuthMethodByNameForUser(authMethod models.AuthMethod, userID uuid.UUID) (*models.UserAuthMethod, error) {
+	var userAuthMethod models.UserAuthMethod
+	result := s.db.Where("user_id = ? AND method = ?", userID, authMethod).First(&userAuthMethod)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("auth method %s not found for user with id %s", authMethod, userID)
+		}
+		return nil, result.Error
+	}
+	return &userAuthMethod, nil
 }
 
 func (s *PostgresStore) GetUserByWorkosUserID(id string) (*models.User, error) {
