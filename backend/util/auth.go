@@ -33,26 +33,26 @@ func IsAuthenticated(authToken *http.Cookie, apiKey string) (bool, string, error
 	return false, "", fmt.Errorf("unauthorized")
 }
 
-func ParseJWTV1(authToken string) (userId string, authTokenType string, sessionId string, err error) {
-	token, err := jwt.Parse(authToken, func(token *jwt.Token) (any, error) {
-		return []byte(os.Getenv("JWT_SECRET")), nil
-	})
-
-	if err != nil {
-		return "", "", "", fmt.Errorf("token invalid or expired")
-	}
-
-	claims := token.Claims.(jwt.MapClaims)
-	userId = claims["user_id"].(string)
-	authTokenType = claims["type"].(string)
-	sessionId = claims["session_id"].(string)
-
-	if userId == "" {
-		return "", "", "", fmt.Errorf("user not found")
-	}
-
-	return userId, authTokenType, sessionId, nil
-}
+//func ParseJWTV1(authToken string) (userId string, authTokenType string, sessionId string, err error) {
+//	token, err := jwt.Parse(authToken, func(token *jwt.Token) (any, error) {
+//		return []byte(os.Getenv("JWT_SECRET")), nil
+//	})
+//
+//	if err != nil {
+//		return "", "", "", fmt.Errorf("token invalid or expired")
+//	}
+//
+//	claims := token.Claims.(jwt.MapClaims)
+//	userId = claims["user_id"].(string)
+//	authTokenType = claims["type"].(string)
+//	sessionId = claims["session_id"].(string)
+//
+//	if userId == "" {
+//		return "", "", "", fmt.Errorf("user not found")
+//	}
+//
+//	return userId, authTokenType, sessionId, nil
+//}
 
 type jwks struct {
 	Keys []struct {
@@ -66,7 +66,6 @@ type jwks struct {
 	} `json:"keys"`
 }
 
-// fetchJWKS gets the jwks from a remote url
 func fetchJWKS(url string) (*jwks, error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -92,7 +91,6 @@ func fetchJWKS(url string) (*jwks, error) {
 	return &keys, nil
 }
 
-// getPublicKeyFromJWKS extracts the rsa public key from x5c certificate chain
 func getPublicKeyFromJWKS(jwks *jwks) (*rsa.PublicKey, error) {
 	// get first key from the set
 	if len(jwks.Keys) == 0 {

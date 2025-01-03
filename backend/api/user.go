@@ -4,6 +4,9 @@ import (
 	//"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
+	"time"
+
 	//"io"
 	"net/http"
 
@@ -288,38 +291,42 @@ func (s *Server) handleGetUserByID(w http.ResponseWriter, r *http.Request) error
 //	}
 //}
 
-//func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error {
-//	user, _, _, err := getUserIdentity(s, r)
-//
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid or expired.", Error: "unauthorized.", Code: "unauthorized"})
-//	}
-//
-//	if user.TermsAcceptedAt != nil {
-//		return WriteJSON(w, http.StatusOK, Response{Message: "terms accepted.", Code: "terms_accepted"})
-//	}
-//
-//	acceptTermsReq := new(models.AcceptTermsRequest)
-//	if err := json.NewDecoder(r.Body).Decode(acceptTermsReq); err != nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "terms must be accepted or declined.", Code: "invalid_input"})
-//	}
-//
-//	if !acceptTermsReq.TermsAccepted {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Error: "terms must be accepted to use our application.", Code: "terms_declined"})
-//	} else {
-//		now := time.Now()
-//		user.TermsAcceptedAt = &now
-//
-//		err = s.store.UpdateUser(user)
-//		if err != nil {
-//			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-//		}
-//
-//		return WriteJSON(w, http.StatusOK, Response{Message: "terms accepted.", Code: "terms_accepted", Data: map[string]string{
-//			"redirect_url": os.Getenv("APP_URL") + "/onboarding/team",
-//		}})
-//	}
-//}
+func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	}
+	user := userSession.User
+	redirectUrl := fmt.Sprintf("%s/onboarding/team", os.Getenv("APP_URL"))
+
+	if user.TermsAcceptedAt != nil {
+
+		return WriteJSON(w, http.StatusOK, Response{Message: "terms accepted.", Code: "terms_accepted", Data: map[string]interface{}{
+			"redirect_url": redirectUrl,
+		}})
+	}
+
+	acceptTermsReq := new(models.AcceptTermsRequest)
+	if err := json.NewDecoder(r.Body).Decode(acceptTermsReq); err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "terms must be accepted or declined.", Code: "invalid_input"})
+	}
+
+	if !acceptTermsReq.TermsAccepted {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "terms must be accepted to use our application.", Code: "terms_declined"})
+	} else {
+		now := time.Now()
+		user.TermsAcceptedAt = &now
+
+		err = s.store.UpdateUser(user)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		return WriteJSON(w, http.StatusOK, Response{Message: "terms accepted.", Code: "terms_accepted", Data: map[string]interface{}{
+			"redirect_url": redirectUrl,
+		}})
+	}
+}
 
 //func (s *Server) handleRestoreUser(w http.ResponseWriter, r *http.Request) error {
 //	user, _, _, err := getUserIdentity(s, r)

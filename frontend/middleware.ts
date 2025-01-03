@@ -12,7 +12,6 @@ const AUTH_ROUTES = [
 const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms'];
 
 export async function middleware(request: NextRequest) {
-  console.log('\n----\n');
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const cookieStore = cookies();
@@ -26,9 +25,6 @@ export async function middleware(request: NextRequest) {
   // get user data
   let isLoggedIn = false;
 
-  console.log('LOGGED IN: ', isLoggedIn);
-  console.log('PATHNAME: ', pathname);
-
   const user = await axios
     .get(`${apiUrl}/auth/identity`, {
       headers: {
@@ -38,7 +34,7 @@ export async function middleware(request: NextRequest) {
     })
     .then((res) => {
       isLoggedIn = true;
-      return res?.data;
+      return res?.data?.data?.user;
     })
     .catch(() => null);
 
