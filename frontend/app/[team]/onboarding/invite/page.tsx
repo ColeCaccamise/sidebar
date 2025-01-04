@@ -25,6 +25,7 @@ import api from '@/lib/axios';
 import { getErrorMessage } from '@/messages';
 import { useRouter } from 'next/navigation';
 import { Team } from '@/types';
+import Spinner from '@/components/ui/spinner';
 
 const MAX_INVITES = 10;
 
@@ -377,18 +378,27 @@ export default function OnboardingInvitePage() {
           <span>Add another</span>
         </Button>
 
-        <div className="flex gap-2">
+        <div className="flex flex-col items-start gap-2">
           <Button
             type="submit"
-            disabled={!emails[0] || hasEmptyInputs()}
-            className="flex-1"
+            disabled={!emails[0] || hasEmptyInputs() || inviteLoading}
+            className="w-full flex-1"
           >
-            {inviteLoading
-              ? 'Inviting...'
-              : emails[0].trim() !== ''
-                ? `Send invites (${emails.length}/${MAX_INVITES})`
-                : 'Enter some emails'}
+            {inviteLoading ? (
+              <p className="flex items-center justify-center gap-2">
+                <Spinner variant="dark" />
+                <span className="text-background">Inviting...</span>
+              </p>
+            ) : emails[0].trim() !== '' ? (
+              `Send invites (${emails.length}/${MAX_INVITES})`
+            ) : (
+              'Enter some emails'
+            )}
           </Button>
+          <p className="text-center text-xs text-typography-weak">
+            {navigator.platform.toLowerCase().includes('mac') ? '⌘' : 'ctrl'} +
+            enter
+          </p>
         </div>
       </form>
 
@@ -403,38 +413,52 @@ export default function OnboardingInvitePage() {
         </div>
 
         <div className="flex flex-col gap-2 md:flex-row">
-          <Input
-            value={inviteLink}
-            readOnly
-            type="text"
-            className="font-mono text-sm"
-            handleClick={(e) => {
-              const input = e.target as HTMLInputElement;
-              input.select();
-              copyInviteLink();
-            }}
-            icon={
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      className="hover:opacity-70"
-                      onClick={() => setShowResetDialog(true)}
-                    >
-                      <ReloadIcon
-                        width={16}
-                        height={16}
-                        className={`transition-all duration-500 ${isRotating ? 'rotate-[360deg]' : ''}`}
-                      />
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Reset invite link</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            }
-          />
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex-1">
+                  <Input
+                    value={inviteLink}
+                    readOnly
+                    type="text"
+                    className="font-mono text-sm"
+                    handleClick={(e) => {
+                      const input = e.target as HTMLInputElement;
+                      input.select();
+                      copyInviteLink();
+                    }}
+                    icon={
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              className="hover:opacity-70"
+                              onClick={() => setShowResetDialog(true)}
+                            >
+                              <ReloadIcon
+                                width={16}
+                                height={16}
+                                className={`transition-all duration-500 ${isRotating ? 'rotate-[360deg]' : ''}`}
+                              />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Reset invite link</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    }
+                  />
+                </div>
+              </TooltipTrigger>
+              <TooltipContent
+                side="bottom"
+                className="max-w-[300px] break-all text-xs"
+              >
+                <p>{inviteLink}</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
           <Button
             type="button"
             variant="unstyled"

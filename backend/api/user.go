@@ -1,9 +1,11 @@
 package api
 
 import (
+	"context"
 	//"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/workos/workos-go/v4/pkg/usermanagement"
 	"os"
 	"time"
 
@@ -54,32 +56,51 @@ func (s *Server) handleGetUserByID(w http.ResponseWriter, r *http.Request) error
 	return WriteJSON(w, http.StatusOK, user)
 }
 
-//func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) error {
-//	user, _, _, err := getUserIdentity(s, r)
-//	if err != nil {
-//		return err
-//	}
-//
-//	updateUserReq := new(models.UpdateUserRequest)
-//	if err := json.NewDecoder(r.Body).Decode(updateUserReq); err != nil {
-//		return err
-//	}
-//
-//	user.FirstName = updateUserReq.FirstName
-//	user.LastName = updateUserReq.LastName
-//
-//	if err := s.store.UpdateUser(user); err != nil {
-//		return err
-//	}
-//
-//	return WriteJSON(w, http.StatusOK, user)
-//}
+func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return err
+	}
+
+	user := userSession.User
+
+	updateUserReq := new(models.UpdateUserRequest)
+	if err := json.NewDecoder(r.Body).Decode(updateUserReq); err != nil {
+		return err
+	}
+
+	user.FirstName = updateUserReq.FirstName
+	user.LastName = updateUserReq.LastName
+
+	if err = s.store.UpdateUser(user); err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "cannot update user.", Code: "internal_server_error"})
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	_, err = usermanagement.UpdateUser(
+		context.Background(),
+		usermanagement.UpdateUserOpts{
+			User:      user.WorkosUserID,
+			FirstName: updateUserReq.FirstName,
+			LastName:  updateUserReq.LastName,
+		},
+	)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "cannot update user.", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, user)
+}
 
 //func (s *Server) handleUpdateUserEmail(w http.ResponseWriter, r *http.Request) error {
-//	user, _, _, err := getUserIdentity(s, r)
+//	userSession, err := getUserSession(s, r)
 //	if err != nil {
 //		return err
 //	}
+//
+//	user := userSession.User
 //
 //	// todo: when updating email
 //	// 1. check if user has a stripe account -> update their email and ensure it succeeds
@@ -98,23 +119,14 @@ func (s *Server) handleGetUserByID(w http.ResponseWriter, r *http.Request) error
 //		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "token is invalid or expired", Code: "invalid_update_token"})
 //	}
 //
-//	userId, authTokenType, sessionId, err := util.ParseJWT(resetEmailToken.Value)
+//	decoded, err := util.ParseJWT(resetEmailToken.Value)
 //
 //	if err != nil {
 //		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "token is invalid or expired", Code: "invalid_update_token"})
 //	}
 //
-//	if uuid.MustParse(userId) != user.ID {
+//	if decoded.WorkosUserID != user.WorkosUserID {
 //		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "cannot reset email", Code: "email_mismatch"})
-//	}
-//
-//	if authTokenType != "reset_email" {
-//		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "token is invalid or expired", Code: "invalid_update_token"})
-//	}
-//
-//	session, err := s.store.GetSessionByID(uuid.MustParse(sessionId))
-//	if err != nil {
-//		return WriteJSON(w, http.StatusForbidden, Error{Message: "forbidden", Error: "session not found", Code: "invalid_update_token"})
 //	}
 //
 //	updateUserEmailReq := new(models.UpdateUserEmailRequest)
@@ -175,7 +187,7 @@ func (s *Server) handleGetUserByID(w http.ResponseWriter, r *http.Request) error
 //
 //	return WriteJSON(w, http.StatusOK, Response{Message: "email update requested", Data: map[string]string{"updated_email": user.UpdatedEmail, "email": user.Email}})
 //}
-//
+
 //func (s *Server) handleResendUpdateEmail(w http.ResponseWriter, r *http.Request) error {
 //	// check that user has outstanding email update request
 //	user, _, session, err := getUserIdentity(s, r)

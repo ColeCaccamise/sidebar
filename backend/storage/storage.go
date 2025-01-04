@@ -30,6 +30,7 @@ type Storage interface {
 	CreateTeamMember(*models.TeamMember) error
 	UpdateTeamMember(*models.TeamMember) error
 	GetTeamInviteBySlugAndToken(string, string) (*models.TeamInvite, error)
+	GetTeamInviteBySlugAndEmail(string, string) (*models.TeamInvite, error)
 	UpdateTeamInvite(*models.TeamInvite) error
 	GetTeamInviteByID(uuid.UUID) (*models.TeamInvite, error)
 	CreateTeamInvite(*models.TeamInvite) error
@@ -337,6 +338,28 @@ func (s *PostgresStore) GetTeamInviteBySlugAndToken(teamSlug string, token strin
 	if err := s.db.Where("team_id = ? AND token = ?", team.ID, token).First(&invite).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("invite not found with slug %s for team %s", token, teamSlug)
+		}
+		return nil, err
+	}
+
+	return &invite, nil
+}
+
+func (s *PostgresStore) GetTeamInviteBySlugAndEmail(teamSlug string, email string) (*models.TeamInvite, error) {
+	// First find the team by slug
+	var team models.Team
+	if err := s.db.Where("slug = ?", teamSlug).First(&team).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with slug %s", teamSlug)
+		}
+		return nil, err
+	}
+
+	// Then find the invite using the team's ID
+	var invite models.TeamInvite
+	if err := s.db.Where("team_id = ? AND email = ?", team.ID, email).First(&invite).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("invite not found with for %s on team %s", email, teamSlug)
 		}
 		return nil, err
 	}

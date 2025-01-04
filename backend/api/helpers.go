@@ -58,9 +58,9 @@ func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	// Handle error case with null message
 	if err, ok := v.(Error); ok {
 		if err.Message == "" {
-			v = Error{Error: err.Error, Code: err.Code}
+			v = Error{Error: err.Error, Code: err.Code, Data: err.Data}
 		} else {
-			v = Error{Message: err.Message, Error: err.Error, Code: err.Code}
+			v = Error{Message: err.Message, Error: err.Error, Code: err.Code, Data: err.Data}
 		}
 	} else if resp, ok := v.(Response); ok {
 		// Only include data if it's not nil and not empty

@@ -59,23 +59,37 @@ export default function AccountSettingsPage() {
   const router = useRouter();
 
   const getUser = useCallback(async () => {
-    const user = await axios
+    const userResponse: User | null = await axios
       .get(`${apiUrl}/auth/identity`, {
         withCredentials: true,
       })
       .then((response) => {
-        return response.data;
+        return response.data.data.user;
       })
       .catch((error) => console.error(error));
 
-    setUser(user);
+    setUser(userResponse);
+
+    console.log(userResponse);
 
     setUserValues({
-      firstName: { initial: user?.first_name, current: user?.first_name },
-      lastName: { initial: user?.last_name, current: user?.last_name },
-      email: { initial: user?.email, current: user?.email },
-      updatedEmail: user?.updated_email,
-      avatar: { initial: user?.avatar_url, current: user?.avatar_url },
+      firstName: {
+        initial: userResponse?.first_name || '',
+        current: userResponse?.first_name || '',
+      },
+      lastName: {
+        initial: userResponse?.last_name || '',
+        current: userResponse?.last_name || '',
+      },
+      email: {
+        initial: userResponse?.email || '',
+        current: userResponse?.email || '',
+      },
+      updatedEmail: userResponse?.updated_email || '',
+      avatar: {
+        initial: userResponse?.avatar_url || '',
+        current: userResponse?.avatar_url || '',
+      },
     });
   }, []);
 
@@ -166,7 +180,7 @@ export default function AccountSettingsPage() {
   if (isLoading) return <Spinner />;
 
   return (
-    <div className="flex w-full flex-col items-center gap-4">
+    <div className="flex w-full flex-col items-center gap-4 pb-8">
       <SettingsBox
         title="Your Name"
         description="This will be your display name in the dashboard."
@@ -200,7 +214,7 @@ export default function AccountSettingsPage() {
           userValues.lastName?.initial === userValues.lastName?.current
         }
       >
-        <div className="flex gap-4">
+        <div className="flex flex-col gap-4">
           <Input
             type="text"
             placeholder="First Name"
@@ -354,122 +368,6 @@ export default function AccountSettingsPage() {
               },
             }))
           }
-        />
-      </SettingsBox>
-      <SettingsBox
-        title="Change Password"
-        description="Passwords must be 8+ characters with at least one uppercase,
-                lowercase, number, and symbol characters."
-        onSettingSubmit={async () => {
-          if (currentPassword == newPassword) {
-            // validate not the same
-            toast({
-              message:
-                'New password cannot be the same as the current password.',
-              mode: 'error',
-            });
-            return;
-          }
-
-          // validate password strength
-          if (newPassword.length < 8) {
-            toast({
-              message: 'Password must be at least 8 characters.',
-              mode: 'error',
-            });
-            return;
-          }
-
-          if (!isValidPassword(newPassword)) {
-            toast({
-              message:
-                'Password must be at least 8 characters with at least one uppercase, lowercase, number, and symbol characters.',
-              mode: 'error',
-            });
-            return;
-          }
-
-          if (newPassword !== confirmedNewPassword) {
-            toast({
-              message: 'Passwords do not match.',
-              mode: 'error',
-            });
-            return;
-          }
-
-          try {
-            const res = await changePassword({
-              oldPassword: currentPassword,
-              newPassword: newPassword,
-              confirmNewPassword: confirmedNewPassword,
-            }).then((r) => r);
-
-            console.log(res.code);
-
-            if (res.error) {
-              toast({
-                message: getErrorMessage(res.code) || 'Cannot update password',
-                mode: 'error',
-              });
-              return;
-            }
-
-            toast({
-              message:
-                'Password updated successfully. You will now be securely logged out.',
-              mode: 'success',
-            });
-
-            router.push('/auth/login');
-
-            setCurrentPassword('');
-            setNewPassword('');
-            setConfirmedNewPassword('');
-          } catch (err) {
-            console.error('Error changing password:', err);
-            toast({
-              message: 'An error occurred while updating password',
-              mode: 'error',
-            });
-          }
-        }}
-        note={
-          <>
-            <p>
-              <span>
-                For security purposes, password changes will log you out of all
-                devices.
-              </span>
-              <span>
-                {' '}
-                <Link href="/auth/forgot-password">Forgot Password?</Link>
-              </span>
-            </p>
-          </>
-        }
-        disabled={
-          currentPassword.length === 0 ||
-          newPassword.length === 0 ||
-          confirmedNewPassword.length === 0
-        }
-      >
-        <Input
-          type="password"
-          placeholder="Current Password"
-          value={currentPassword}
-          handleChange={(e) => setCurrentPassword(e.target.value)}
-        />
-        <Input
-          type="password"
-          placeholder="New Password"
-          value={newPassword}
-          handleChange={(e) => setNewPassword(e.target.value)}
-        />
-        <Input
-          type="password"
-          placeholder="Confirm New Password"
-          value={confirmedNewPassword}
-          handleChange={(e) => setConfirmedNewPassword(e.target.value)}
         />
       </SettingsBox>
       <SettingsBox

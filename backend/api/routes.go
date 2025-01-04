@@ -84,31 +84,31 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Get("/{slug}/upsells", makeHttpHandleFunc(s.handleGetUpsells))
 
 			// invite links
-			//r.Post("/{slug}/invite", makeHttpHandleFunc(s.handleSendTeamInvites))               // send an invite to one or many
+			r.Post("/{slug}/invite", makeHttpHandleFunc(s.handleSendTeamInvites))               // send an invite to one or many
 			r.Get("/{slug}/invite-link", makeHttpHandleFunc(s.handleGetTeamInviteLink))         // get the current invite link
 			r.Post("/{slug}/invite-link", makeHttpHandleFunc(s.handleRegenerateTeamInviteLink)) // regenerate the current invite link
 			// complete onboarding
-			//r.Post("/{slug}/onboarding", makeHttpHandleFunc(s.handleCompleteOnboarding))
+			r.Post("/{slug}/onboarding", makeHttpHandleFunc(s.handleCompleteOnboarding))
 
 			// billing routes
 			r.Route("/{slug}/billing", func(r chi.Router) {
-				//r.Get("/customer", makeHttpHandleFunc(s.handleGetStripeCustomer))
+				r.Get("/customer", makeHttpHandleFunc(s.handleGetStripeCustomer))
 				r.Route("/payment-methods", func(r chi.Router) {
-					//r.Get("/", makeHttpHandleFunc(s.handleGetPaymentMethods))
-					//r.Post("/", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
+					r.Get("/", makeHttpHandleFunc(s.handleGetPaymentMethods))
+					r.Post("/", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
 					r.Patch("/default/{id}", makeHttpHandleFunc(s.handleUpdateDefaultPaymentMethod))
 					//r.Delete("/{id}", makeHttpHandleFunc(s.handleDeletePaymentMethod))
 				})
 				//r.Get("/invoices", makeHttpHandleFunc(s.handleGetInvoices))
 				r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
 				r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
-				//r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
-				//r.Route("/subscription", func(r chi.Router) {
-				//	r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
-				//	r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
-				//	r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
-				//	r.Patch("/interval", makeHttpHandleFunc(s.handleUpdateSubscriptionInterval))
-				//})
+				r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
+				r.Route("/subscription", func(r chi.Router) {
+					r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
+					//r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
+					r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
+					r.Patch("/interval", makeHttpHandleFunc(s.handleUpdateSubscriptionInterval))
+				})
 			})
 		})
 	})
@@ -139,7 +139,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		//r.Use(s.VerifyUserNotDeleted)
 		//r.Use(s.VerifySecurityVersion)
 		r.Route("/users", func(r chi.Router) {
-			//r.Patch("/", makeHttpHandleFunc(s.handleUpdateUser))
+			r.Patch("/", makeHttpHandleFunc(s.handleUpdateUser))
 			//r.Delete("/", makeHttpHandleFunc(s.handleDeleteUser))
 			r.Post("/accept-terms", makeHttpHandleFunc(s.handleAcceptTerms))
 			//r.Patch("/email", makeHttpHandleFunc(s.handleUpdateUserEmail))

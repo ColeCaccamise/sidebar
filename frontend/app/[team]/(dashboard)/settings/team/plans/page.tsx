@@ -310,7 +310,9 @@ export default function PlansPage({ params }: { params: { team: string } }) {
             <ExclamationTriangleIcon className="h-5 w-5 text-warning" />
 
             <span className="text-sm text-warning">
-              Your trial has ended. Add a payment method to restore access.
+              {subscription?.free_trial_active
+                ? `${subscription.free_trial_duration_remaining} days remaining in your trial. Add a payment method to continue uninterrupted access.`
+                : 'Your trial has ended. Add a payment method to restore access.'}
             </span>
           </span>
 

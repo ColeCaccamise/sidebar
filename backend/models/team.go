@@ -73,7 +73,8 @@ type CreateTeamRequest struct {
 
 func NewTeam(req *CreateTeamRequest) *Team {
 	return &Team{
-		Name: req.Name,
+		Name:        req.Name,
+		WorkosOrgID: req.WorkosOrgID,
 	}
 }
 
@@ -116,21 +117,32 @@ const (
 	TeamInviteTypeShared TeamInviteType = "shared"
 )
 
+type TeamInviteStatus string
+
+const (
+	Pending  TeamInviteStatus = "pending"
+	Accepted TeamInviteStatus = "accepted"
+	Expired  TeamInviteStatus = "expired"
+	Revoked  TeamInviteStatus = "revoked"
+)
+
 type TeamInvite struct {
-	ID         uuid.UUID      `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	CreatedAt  time.Time      `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt  time.Time      `gorm:"autoUpdateTime" json:"updated_at"`
-	ExpiresAt  *time.Time     `gorm:"default:null" json:"expires_at"`
-	TeamID     uuid.UUID      `gorm:"type:uuid;not null" json:"team_id"`
-	Email      string         `gorm:"default:null" json:"email"`
-	Token      string         `gorm:"not null" json:"slug"`
-	InviteType TeamInviteType `gorm:"not null" json:"invite_type"`
-	AcceptedAt *time.Time     `gorm:"default:null" json:"accepted_at"`
-	CanceledAt *time.Time     `gorm:"default:null" json:"canceled_at"`
-	TeamRole   TeamRole       `gorm:"default: member" json:"team_role"`
-	InvitedBy  uuid.UUID      `gorm:"type:uuid;default:null" json:"invited_by"`
-	UsedTimes  int            `gorm:"default:null" json:"used_times"`
-	MaxUses    int            `gorm:"default:null" json:"max_uses"`
+	ID             uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	CreatedAt      time.Time        `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
+	ExpiresAt      *time.Time       `gorm:"default:null" json:"expires_at"`
+	WorkosInviteID string           `gorm:"default:null" json:"workos_invite_id"`
+	TeamID         uuid.UUID        `gorm:"type:uuid;not null" json:"team_id"`
+	Email          string           `gorm:"default:null" json:"email"`
+	Token          string           `gorm:"not null" json:"slug"`
+	InviteType     TeamInviteType   `gorm:"not null" json:"invite_type"`
+	State          TeamInviteStatus `gorm:"default:null" json:"state"`
+	AcceptedAt     *time.Time       `gorm:"default:null" json:"accepted_at"`
+	CanceledAt     *time.Time       `gorm:"default:null" json:"canceled_at"`
+	TeamRole       TeamRole         `gorm:"default: member" json:"team_role"`
+	InviterUserID  uuid.UUID        `gorm:"type:uuid;default:null" json:"inviter_user_id"`
+	UsedTimes      int              `gorm:"default:null" json:"used_times"`
+	MaxUses        int              `gorm:"default:null" json:"max_uses"`
 }
 
 type GenerateTeamInviteRequest struct {
@@ -155,7 +167,7 @@ type TeamMember struct {
 	WorkosOrgMembershipID string           `gorm:"default:null" json:"workos_org_membership_id"`
 	JoinedAt              *time.Time       `gorm:"default:null" json:"joined_at"`
 	LeftAt                *time.Time       `gorm:"default:null" json:"left_at"`
-	InvitedBy             uuid.UUID        `gorm:"type:uuid;not null"`
+	InviterUserID         uuid.UUID        `gorm:"type:uuid;default:null"`
 	TeamID                uuid.UUID        `gorm:"type:uuid;not null"`
 	UserID                uuid.UUID        `gorm:"type:uuid;not null"`
 	TeamRole              TeamRole         `gorm:"default:member" json:"team_role"`
@@ -164,21 +176,21 @@ type TeamMember struct {
 }
 
 type CreateTeamMemberRequest struct {
-	JoinedAt  *time.Time
-	InvitedBy uuid.UUID
-	TeamID    uuid.UUID
-	UserID    uuid.UUID
-	TeamRole  TeamRole
-	Email     string
+	JoinedAt      *time.Time
+	InviterUserID uuid.UUID
+	TeamID        uuid.UUID
+	UserID        uuid.UUID
+	TeamRole      TeamRole
+	Email         string
 }
 
 func NewTeamMember(req *CreateTeamMemberRequest) *TeamMember {
 	return &TeamMember{
-		JoinedAt:  req.JoinedAt,
-		InvitedBy: req.InvitedBy,
-		TeamID:    req.TeamID,
-		UserID:    req.UserID,
-		TeamRole:  req.TeamRole,
+		JoinedAt:      req.JoinedAt,
+		InviterUserID: req.InviterUserID,
+		TeamID:        req.TeamID,
+		UserID:        req.UserID,
+		TeamRole:      req.TeamRole,
 	}
 }
 
