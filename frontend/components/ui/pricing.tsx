@@ -323,6 +323,11 @@ export default function Pricing({
         ) : (
           <div>
             <h1 className="text-xl font-bold">Select a plan</h1>
+            {variant === 'onboarding' && (
+              <p className="text-sm">
+                You can change and upgrade your plan at any time.
+              </p>
+            )}
           </div>
         )}
         <div className="flex items-center gap-2 text-sm">
@@ -391,8 +396,6 @@ export default function Pricing({
                     highlight={
                       getPlanType(subscription, plan.price_lookup_key) ===
                       'upgrade'
-                        ? true
-                        : false
                     }
                     subscribeToPrefix={
                       variant === 'onboarding' ? 'Try' : 'Subscribe to'

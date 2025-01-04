@@ -21,7 +21,7 @@ export const errorCodes = {
   new_password_mismatch: 'New passwords do not match.',
   missing_confirm_password: 'Password confirmation is required.',
   internal_server_error:
-    'An unexpected error occurred. Please try again or contact support if the issue persists.',
+    'An error has occured on our end. Please try again or contact support.',
   email_not_provided: 'A valid email address is required.',
   user_not_deleted: 'User is not deleted.',
   user_deleted:
