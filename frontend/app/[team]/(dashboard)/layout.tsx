@@ -2,7 +2,6 @@
 
 import TeamContainer from '@/app/[team]/(dashboard)/team-container';
 import axios from 'axios';
-import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 

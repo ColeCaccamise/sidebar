@@ -13,15 +13,12 @@ import {
   verifyPassword,
   uploadAvatar,
   deleteAvatar,
-  changePassword,
   deleteSessions,
 } from './actions';
 import Button from '@/components/ui/button';
 import toast from '@/lib/toast';
 import Modal from '@/components/ui/modal';
 import AvatarUploader from '@/components/ui/avatar-uploader';
-import Link from 'next/link';
-import { isValidPassword } from '@/lib/validation';
 import { useSearchParams } from 'next/navigation';
 import { getErrorMessage, getResponseMessage } from '@/messages';
 import { useRouter } from 'next/navigation';
@@ -48,10 +45,6 @@ export default function AccountSettingsPage() {
     updatedEmail?: string;
     avatar?: { initial: string; current: string };
   }>({});
-
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmedNewPassword, setConfirmedNewPassword] = useState('');
 
   const searchParams = useSearchParams();
   const message = searchParams.get('message');
