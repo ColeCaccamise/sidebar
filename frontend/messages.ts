@@ -37,7 +37,7 @@ export const errorCodes = {
   email_already_confirmed: 'Your email has already been confirmed.',
   terms_declined:
     'You must accept the Terms of Service and Privacy Policy to use our app.',
-  team_name_length: 'Team name mustbe between 3 and 32 characters.',
+  team_name_length: 'Team name must be between 3 and 32 characters.',
   team_name_taken: 'Team name unavailable.',
   team_name_invalid:
     'Team name can only contain letters, numbers, spaces, hyphens and underscores, and must start and end with a letter or number.',
@@ -45,6 +45,7 @@ export const errorCodes = {
     'Team name cannot contain consecutive special characters.',
   no_emails_provided: 'No emails provided.',
   too_many_invites: 'You can only invite up to 25 people at a time.',
+  already_invited: 'One or more emails has already received an invite.',
   invalid_self_invite: 'You cannot invite yourself.',
   invite_expired: 'This invite has expired. Ask your team for a new one.',
   default: DEFAULT_ERROR_MESSAGE,
