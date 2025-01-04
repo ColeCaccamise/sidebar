@@ -91,34 +91,34 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			//r.Post("/{slug}/onboarding", makeHttpHandleFunc(s.handleCompleteOnboarding))
 
 			// billing routes
-			//r.Route("/{slug}/billing", func(r chi.Router) {
-			//	r.Get("/customer", makeHttpHandleFunc(s.handleGetStripeCustomer))
-			//	r.Route("/payment-methods", func(r chi.Router) {
-			//		r.Get("/", makeHttpHandleFunc(s.handleGetPaymentMethods))
-			//		r.Post("/", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
-			//		r.Patch("/default/{id}", makeHttpHandleFunc(s.handleUpdateDefaultPaymentMethod))
-			//		r.Delete("/{id}", makeHttpHandleFunc(s.handleDeletePaymentMethod))
-			//	})
-			//	r.Get("/invoices", makeHttpHandleFunc(s.handleGetInvoices))
-			//	r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
-			//	r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
-			//	r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
-			//	r.Route("/subscription", func(r chi.Router) {
-			//		r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
-			//		r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
-			//		r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
-			//		r.Patch("/interval", makeHttpHandleFunc(s.handleUpdateSubscriptionInterval))
-			//	})
-			//})
+			r.Route("/{slug}/billing", func(r chi.Router) {
+				//r.Get("/customer", makeHttpHandleFunc(s.handleGetStripeCustomer))
+				r.Route("/payment-methods", func(r chi.Router) {
+					//r.Get("/", makeHttpHandleFunc(s.handleGetPaymentMethods))
+					//r.Post("/", makeHttpHandleFunc(s.handleUpdatePaymentMethod))
+					r.Patch("/default/{id}", makeHttpHandleFunc(s.handleUpdateDefaultPaymentMethod))
+					//r.Delete("/{id}", makeHttpHandleFunc(s.handleDeletePaymentMethod))
+				})
+				//r.Get("/invoices", makeHttpHandleFunc(s.handleGetInvoices))
+				r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
+				r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
+				//r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
+				//r.Route("/subscription", func(r chi.Router) {
+				//	r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
+				//	r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
+				//	r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
+				//	r.Patch("/interval", makeHttpHandleFunc(s.handleUpdateSubscriptionInterval))
+				//})
+			})
 		})
 	})
 
 	// unprotected team routes
 	// join links
-	//r.Get("/teams/{slug}/join/{token}", makeHttpHandleFunc(s.handleVerifyInviteLink)) // after landing on invite link - get data for shared link and check validity
+	r.Get("/teams/{slug}/join/{token}", makeHttpHandleFunc(s.handleGetTeamInvite)) // after landing on invite link - get data for shared link and check validity
 	r.Post("/team/{slug}/join/{token}", makeHttpHandleFunc(s.handleUseInviteLink)) // onboard a new team member from this link (checking its valid etc)
 
-	// TODO: secure these routes to admins only
+	// TODO: secure these routes to application admins only
 	//r.Group(func(r chi.Router) {
 	//	r.Use(middleware.VerifyAuth)
 	//	r.Route("/users", func(r chi.Router) {
@@ -160,16 +160,16 @@ func (s *Server) SetupRoutes() *chi.Mux {
 	// subscription routes
 	//r.Group(func(r chi.Router) {
 	//	r.Use(middleware.VerifyAuth)
-	//	r.Use(s.VerifyUserNotDeleted)
-	//	r.Use(s.VerifySecurityVersion)
+	//	//r.Use(s.VerifyUserNotDeleted)
+	//	//r.Use(s.VerifySecurityVersion)
 	//	r.Route("/billing", func(r chi.Router) {
 	//		r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
-	//		r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
-	//		r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
+	//		//r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
+	//		//r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
 	//		r.Route("/subscriptions", func(r chi.Router) {
-	//			r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
-	//			r.Post("/cancel", makeHttpHandleFunc(s.handleCancelSubscription))
-	//			r.Post("/renew", makeHttpHandleFunc(s.handleRenewSubscription))
+	//			//r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
+	//			//r.Post("/cancel", makeHttpHandleFunc(s.handleCancelSubscription))
+	//			//r.Post("/renew", makeHttpHandleFunc(s.handleRenewSubscription))
 	//		})
 	//	})
 	//})

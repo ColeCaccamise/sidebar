@@ -22,7 +22,7 @@ require (
 	github.com/rs/cors v1.11.1
 	github.com/stripe/stripe-go v70.15.0+incompatible
 	github.com/stripe/stripe-go/v80 v80.2.1
-	github.com/workos/workos-go/v4 v4.26.0
+	github.com/workos/workos-go/v4 v4.27.0
 	golang.org/x/crypto v0.31.0
 	golang.org/x/exp v0.0.0-20241217172543-b2144cdd0a67
 	golang.org/x/text v0.21.0

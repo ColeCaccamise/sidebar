@@ -13,6 +13,7 @@ type Team struct {
 	CreatedBy                uuid.UUID  `gorm:"type:uuid" json:"created_by"`
 	Name                     string     `gorm:"not null" json:"name"`
 	Slug                     string     `gorm:"not null" json:"slug"`
+	WorkosOrgID              string     `gorm:"" json:"workos_org_id"` // todo not null
 	DeletedAt                *time.Time `gorm:"default:null" json:"deleted_at"`
 	CurrentTeamInviteID      uuid.UUID  `gorm:"default:null" json:"team_invite"`
 	StripeOnboardedAt        *time.Time `gorm:"default:null" json:"stripe_onboarded_at"`
@@ -66,7 +67,8 @@ func NewTeamMemberResponse(t *TeamMember) *TeamMemberResponse {
 }
 
 type CreateTeamRequest struct {
-	Name string
+	Name        string
+	WorkosOrgID string
 }
 
 func NewTeam(req *CreateTeamRequest) *Team {
@@ -147,17 +149,18 @@ type CreateTeamInviteRequest struct {
 }
 
 type TeamMember struct {
-	ID          uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
-	CreatedAt   time.Time        `gorm:"autoCreateTime" json:"created_at"`
-	UpdatedAt   time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
-	JoinedAt    *time.Time       `gorm:"default:null" json:"joined_at"`
-	LeftAt      *time.Time       `gorm:"default:null" json:"left_at"`
-	InvitedBy   uuid.UUID        `gorm:"type:uuid;not null"`
-	TeamID      uuid.UUID        `gorm:"type:uuid;not null"`
-	UserID      uuid.UUID        `gorm:"type:uuid;not null"`
-	TeamRole    TeamRole         `gorm:"default:member" json:"team_role"`
-	Status      TeamMemberStatus `gorm:"default:null" json:"status"`
-	OnboardedAt *time.Time       `gorm:"default:null" json:"onboarded_at"`
+	ID                    uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()"`
+	CreatedAt             time.Time        `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt             time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
+	WorkosOrgMembershipID string           `gorm:"default:null" json:"workos_org_membership_id"`
+	JoinedAt              *time.Time       `gorm:"default:null" json:"joined_at"`
+	LeftAt                *time.Time       `gorm:"default:null" json:"left_at"`
+	InvitedBy             uuid.UUID        `gorm:"type:uuid;not null"`
+	TeamID                uuid.UUID        `gorm:"type:uuid;not null"`
+	UserID                uuid.UUID        `gorm:"type:uuid;not null"`
+	TeamRole              TeamRole         `gorm:"default:member" json:"team_role"`
+	Status                TeamMemberStatus `gorm:"default:null" json:"status"`
+	OnboardedAt           *time.Time       `gorm:"default:null" json:"onboarded_at"`
 }
 
 type CreateTeamMemberRequest struct {

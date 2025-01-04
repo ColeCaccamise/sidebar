@@ -8,6 +8,7 @@ import { getErrorMessage, getResponseMessage } from '@/messages';
 import axios from 'axios';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Spinner from '@/components/ui/spinner';
 
 export default function OnboardingTeamPage() {
   const router = useRouter();
@@ -84,8 +85,19 @@ export default function OnboardingTeamPage() {
           type="text"
         />
 
-        <Button type="submit" disabled={!teamName} className="w-full">
-          {loading ? 'Creating...' : 'Continue'}
+        <Button
+          type="submit"
+          disabled={!teamName || loading}
+          className="w-full"
+        >
+          {loading ? (
+            <p className="flex items-center gap-2">
+              <Spinner variant="dark" />
+              <span className="text-background">Creating...</span>
+            </p>
+          ) : (
+            'Continue'
+          )}
         </Button>
       </form>
     </div>

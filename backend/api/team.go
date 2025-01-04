@@ -1,10 +1,12 @@
 package api
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/workos/workos-go/v4/pkg/usermanagement"
 	"io"
 	"net/http"
 	"os"
@@ -13,10 +15,12 @@ import (
 	"time"
 
 	cryptoRand "crypto/rand"
+
 	"github.com/colecaccamise/go-backend/models"
 	"github.com/colecaccamise/go-backend/util"
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
+	"github.com/workos/workos-go/v4/pkg/organizations"
 )
 
 var RESERVED_TEAM_SLUGS = []string{"support", "help", "helpcenter", "banking", "account", "settings", "admin", "system", "faq", "docs", "documentation", "root", "profile", "billing", "login", "signin", "signup", "auth", "signout", "register", "api", "dashboard", "notifications", "team", "teams", "legal", "onboarding", "terms", "privacy"}
@@ -72,9 +76,28 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 		})
 	}
 
+	// create workos organization
+	organizations.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	// todo later add/update domain data for an org
+	org, err := organizations.CreateOrganization(
+		context.Background(),
+		organizations.CreateOrganizationOpts{
+			Name: teamReq.Name,
+		},
+	)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
 	// create team
 	team := models.NewTeam(&models.CreateTeamRequest{
-		Name: teamReq.Name,
+		Name:        teamReq.Name,
+		WorkosOrgID: org.ID,
 	})
 
 	// generate unique team slug
@@ -124,6 +147,25 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 
 	user.DefaultTeamSlug = team.Slug
 
+	// create workos org membership
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	organizationMembership, err := usermanagement.CreateOrganizationMembership(
+		context.Background(),
+		usermanagement.CreateOrganizationMembershipOpts{
+			UserID:         user.WorkosUserID,
+			OrganizationID: org.ID,
+			RoleSlug:       "owner",
+		},
+	)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
 	// add logged-in user as initial team owner
 	teamMember := models.NewTeamMember(&models.CreateTeamMemberRequest{
 		JoinedAt:  &now,
@@ -134,9 +176,10 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 	})
 
 	teamMember.Status = "active"
+	teamMember.WorkosOrgMembershipID = organizationMembership.ID
 
 	// store team member object in db
-	if err := s.store.CreateTeamMember(teamMember); err != nil {
+	if err = s.store.CreateTeamMember(teamMember); err != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{
 			Error: "internal server error.",
 			Code:  "internal_server_error",
@@ -461,6 +504,76 @@ func (s *Server) handleGetUpsells(w http.ResponseWriter, r *http.Request) error 
 //	return WriteJSON(w, http.StatusOK, Response{Message: "invites sent", Code: "invites_sent", Data: map[string]interface{}{"redirect_url": fmt.Sprintf("%s/%s/onboarding/welcome", os.Getenv("APP_URL"), slug)}})
 //}
 
+func (s *Server) handleGetTeamInvite(w http.ResponseWriter, r *http.Request) error {
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	token := chi.URLParam(r, "token")
+	teamInvite, err := s.store.GetTeamInviteBySlugAndToken(slug, token)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	// validate link isn't expired
+	expired := teamInvite.ExpiresAt != nil && *teamInvite.ExpiresAt != time.Time{}
+	if expired {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	// validate link isn't canceled
+	if teamInvite.CanceledAt != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	// validate number of uses
+	if teamInvite.UsedTimes > teamInvite.MaxUses {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team not found.",
+			Code:  "team_not_found",
+		})
+	}
+
+	// check if user exists
+	user, _ := s.store.GetUserByEmail(teamInvite.Email)
+	if user != nil {
+		// check if they're already on this team
+		teamMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+		if teamMember != nil {
+			return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"redirect_url": fmt.Sprintf("%s/%s", os.Getenv("APP_URL"), team.Slug)}})
+		}
+	}
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{
+		"team": map[string]interface{}{
+			"name": team.Name,
+			"slug": team.Slug,
+		},
+		"invite": map[string]interface{}{
+			"token":     teamInvite.Token,
+			"team_role": teamInvite.TeamRole,
+		},
+	}})
+
+}
+
 func (s *Server) handleGetTeamInviteLink(w http.ResponseWriter, r *http.Request) error {
 	slug := chi.URLParam(r, "slug")
 	if !util.IsValidSlug(slug) {
@@ -570,85 +683,98 @@ func (s *Server) handleRegenerateTeamInviteLink(w http.ResponseWriter, r *http.R
 	}})
 }
 
-//func (s *Server) handleVerifyInviteLink(w http.ResponseWriter, r *http.Request) error {
-//	slug := chi.URLParam(r, "slug")
-//	token := chi.URLParam(r, "token")
-//
-//	team, err := s.store.GetTeamBySlug(slug)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusNotFound, Error{
-//			Error: "team not found",
-//			Code:  "team_not_found",
-//		})
-//	}
-//
-//	// check that user isn't already a team member
-//	user, _, _, _ := getUserIdentity(s, r)
-//
-//	if user != nil {
-//		existingMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
-//		if existingMember != nil {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "user already a team member", Code: "user_already_a_team_member"})
-//		}
-//	}
-//
-//	invite, err := s.store.GetTeamInviteBySlugAndToken(slug, token)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "invite link expired",
-//			Code:  "invite_link_expired",
-//			Data: map[string]interface{}{
-//				"team_name": team.Name,
-//			},
-//		})
-//	}
-//
-//	// check invite isn't expired
-//	expired := invite.ExpiresAt != nil && *invite.ExpiresAt != time.Time{}
-//
-//	if expired {
-//		return WriteJSON(w, http.StatusForbidden, Error{
-//			Error: "invite link expired",
-//			Code:  "invite_expired",
-//			Data: map[string]interface{}{
-//				"team_name": team.Name,
-//			},
-//		})
-//	}
-//
-//	// check usage limit hasn't been hit
-//	if invite.UsedTimes >= invite.MaxUses && invite.MaxUses != 0 {
-//		return WriteJSON(w, http.StatusForbidden, Error{
-//			Error: "invite link expired",
-//			Code:  "invite_expired",
-//			Data: map[string]interface{}{
-//				"team_name": team.Name,
-//			},
-//		})
-//	}
-//
-//	// check that email specified matches logged in user
-//	existingUser, _ := s.store.GetUserByEmail(invite.Email)
-//	if existingUser != nil {
-//		if existingUser.Email != invite.Email {
-//			return WriteJSON(w, http.StatusForbidden, Error{
-//				Error: "invite link expired",
-//				Code:  "invite_expired",
-//				Data: map[string]interface{}{
-//					"team_name": team.Name,
-//				},
-//			})
-//		}
-//	}
-//
-//	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{
-//		"team_name": team.Name,
-//	}})
-//}
+func (s *Server) handleVerifyInviteLink(w http.ResponseWriter, r *http.Request) error {
+	slug := chi.URLParam(r, "slug")
+	token := chi.URLParam(r, "token")
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team not found",
+			Code:  "team_not_found",
+		})
+	}
+
+	// check that user isn't already a team member
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{
+			Error: "unauthorized",
+			Code:  "unauthorized",
+		})
+	}
+	user := userSession.User
+
+	if user != nil {
+		existingMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+		if existingMember != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "user already a team member", Code: "user_already_a_team_member"})
+		}
+	}
+
+	invite, err := s.store.GetTeamInviteBySlugAndToken(slug, token)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "invite link expired",
+			Code:  "invite_link_expired",
+			Data: map[string]interface{}{
+				"team_name": team.Name,
+			},
+		})
+	}
+
+	// check invite isn't expired
+	expired := invite.ExpiresAt != nil && *invite.ExpiresAt != time.Time{}
+
+	if expired {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "invite link expired",
+			Code:  "invite_expired",
+			Data: map[string]interface{}{
+				"team_name": team.Name,
+			},
+		})
+	}
+
+	// check usage limit hasn't been hit
+	if invite.UsedTimes >= invite.MaxUses && invite.MaxUses != 0 {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "invite link expired",
+			Code:  "invite_expired",
+			Data: map[string]interface{}{
+				"team_name": team.Name,
+			},
+		})
+	}
+
+	// check that email specified matches logged in user
+	existingUser, _ := s.store.GetUserByEmail(invite.Email)
+	if existingUser != nil {
+		if existingUser.Email != invite.Email {
+			return WriteJSON(w, http.StatusForbidden, Error{
+				Error: "invite link expired",
+				Code:  "invite_expired",
+				Data: map[string]interface{}{
+					"team_name": team.Name,
+				},
+			})
+		}
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{
+		"team_name": team.Name,
+	}})
+}
 
 func (s *Server) handleUseInviteLink(w http.ResponseWriter, r *http.Request) error {
 	slug := chi.URLParam(r, "slug")
 	token := chi.URLParam(r, "token")
+
+	var user *models.User
+	userSession, err := getUserSession(s, r)
+	if err == nil {
+		user = userSession.User
+	}
 
 	team, err := s.store.GetTeamBySlug(slug)
 	if err != nil {
@@ -694,8 +820,8 @@ func (s *Server) handleUseInviteLink(w http.ResponseWriter, r *http.Request) err
 	}
 
 	// check that email specified matches logged in user
-	user, _ := s.store.GetUserByEmail(invite.Email)
-	if user != nil {
+	emailUser, _ := s.store.GetUserByEmail(invite.Email)
+	if emailUser != nil && user != nil && invite.Email != "" {
 		if user.Email != invite.Email {
 			return WriteJSON(w, http.StatusForbidden, Error{
 				Error: "invite link expired",
@@ -724,7 +850,7 @@ func (s *Server) handleUseInviteLink(w http.ResponseWriter, r *http.Request) err
 
 	teamMember.Status = "active"
 
-	if err := s.store.CreateTeamMember(teamMember); err != nil {
+	if err = s.store.CreateTeamMember(teamMember); err != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "failed to create team member", Code: "failed_to_create_team_member"})
 	}
 
