@@ -22,6 +22,7 @@ import AvatarUploader from '@/components/ui/avatar-uploader';
 import { useSearchParams } from 'next/navigation';
 import { getErrorMessage, getResponseMessage } from '@/messages';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -242,6 +243,7 @@ export default function AccountSettingsPage() {
         title="Your Email"
         description="This will be the email you use to log in to your dashboard and receive notifications."
         ref={emailForm}
+        showSubmitButton={false}
         onSettingSubmit={async () => {
           if (canUpdateEmail) {
             await updateEmail();
@@ -277,7 +279,12 @@ export default function AccountSettingsPage() {
               </Button>
             </span>
           ) : (
-            "Email changes require verification. You'll be logged out of all devices after confirming."
+            <span>
+              If you&apos;d like to change your email,{' '}
+              <Link href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}>
+                contact us
+              </Link>
+            </span>
           )
         }
         disabled={
@@ -351,6 +358,7 @@ export default function AccountSettingsPage() {
         <Input
           type="email"
           placeholder="Email"
+          disabled
           value={userValues.email?.current}
           handleChange={(e) =>
             setUserValues((prev) => ({

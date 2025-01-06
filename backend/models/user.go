@@ -63,7 +63,7 @@ type User struct {
 	AvatarThumbnailUrl      string     `gorm:"default:null" json:"avatar_thumbnail_url"`
 	DeletedAt               *time.Time `gorm:"default:null" json:"deleted_at"`
 	RestoredAt              *time.Time `gorm:"default:null" json:"restored_at"`
-	SecurityVersion         *time.Time `gorm:"default:null" json:"security_version"`
+	Version                 *time.Time `gorm:"default:null" json:"version"`
 	TermsAcceptedAt         *time.Time `gorm:"default:null" json:"terms_accepted_at"`
 	OnboardingCompletedAt   *time.Time `gorm:"default:null" json:"onboarding_completed_at"`
 	TeamCreatedOrJoinedAt   *time.Time `gorm:"default:null" json:"team_created_or_joined_at"`

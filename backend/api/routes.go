@@ -56,6 +56,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.VerifyAuth)
+		r.Get("/auth/sessions", makeHttpHandleFunc(s.handleGetSessions))
 		//r.Use(s.VerifyUserNotDeleted)
 		//r.Use(s.VerifySecurityVersion)
 		//r.Post("/auth/verify-password", makeHttpHandleFunc(s.handleVerifyPassword))

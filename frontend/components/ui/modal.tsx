@@ -40,7 +40,7 @@ export default function Modal({
       />
       <div className="fixed inset-0 flex w-screen items-center justify-center">
         <DialogPanel
-          className={`max-w-lg gap-4 rounded-md border border-stroke-weak bg-background p-8 ${className}`}
+          className={`gap-4 rounded-md border border-stroke-weak bg-background p-8 ${className}`}
         >
           {hint && hint}
           {title ? (

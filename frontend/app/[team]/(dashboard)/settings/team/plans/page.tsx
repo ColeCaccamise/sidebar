@@ -305,9 +305,9 @@ export default function PlansPage({ params }: { params: { team: string } }) {
   return (
     <div className="w-full pb-8">
       {paymentMethods.length === 0 && (
-        <div className="mb-8 flex items-center justify-between gap-2 rounded-md border border-warning-stroke-weak bg-warning-fill px-4 py-2">
-          <span className="flex items-center gap-2">
-            <ExclamationTriangleIcon className="h-5 w-5 text-warning" />
+        <div className="mb-8 flex w-full flex-col items-center justify-between gap-2 rounded-md border border-warning-stroke-weak bg-warning-fill px-4 py-2 md:flex-row">
+          <span className="flex items-center gap-4">
+            <ExclamationTriangleIcon className="h-5 w-5 min-w-5 text-warning" />
 
             <span className="text-sm text-warning">
               {subscription?.free_trial_active
@@ -318,7 +318,7 @@ export default function PlansPage({ params }: { params: { team: string } }) {
 
           <Button
             variant="unstyled"
-            className="btn-small bg-warning-fill text-sm text-warning"
+            className="btn-small w-full bg-warning-fill text-sm text-warning md:w-fit"
             handleClick={handleUpdatePaymentMethod}
           >
             Update payment method

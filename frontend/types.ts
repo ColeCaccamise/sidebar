@@ -20,6 +20,16 @@ export type TeamMember = {
   onboarded: boolean;
 };
 
+export type Session = {
+  id: string;
+  original_sign_in_at: string;
+  device: string;
+  last_location: string;
+  ip_address: string;
+  last_seen_at: string;
+  auth_method: string;
+};
+
 export type ApiResponse = {
   message: string;
   code: ResponseCode;

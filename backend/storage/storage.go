@@ -49,7 +49,9 @@ type Storage interface {
 	CreatePrompt(*models.Prompt) error
 	UpdatePrompt(*models.Prompt) error
 	CreateSession(*models.Session) error
+	GetSessionsByUserID(userID uuid.UUID) ([]*models.Session, error)
 	GetSessionByID(uuid.UUID) (*models.Session, error)
+	GetSessionByWorkosSessionID(string) (*models.Session, error)
 	UpdateSession(*models.Session) error
 	DeleteSessionByID(uuid.UUID) error
 	DeleteSessionsByUserID(uuid.UUID) error
@@ -243,6 +245,27 @@ func (s *PostgresStore) GetSessionByID(id uuid.UUID) (*models.Session, error) {
 		return nil, result.Error
 	}
 	return &session, nil
+}
+
+func (s *PostgresStore) GetSessionByWorkosSessionID(id string) (*models.Session, error) {
+	var session models.Session
+	result := s.db.Where("workos_session_id = ?", id).First(&session)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with name %s", session)
+		}
+		return nil, result.Error
+	}
+	return &session, nil
+}
+
+func (s *PostgresStore) GetSessionsByUserID(userID uuid.UUID) ([]*models.Session, error) {
+	var sessions []*models.Session
+	result := s.db.Where("user_id = ?", userID).Find(&sessions)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return sessions, nil
 }
 
 func (s *PostgresStore) UpdateSession(session *models.Session) error {

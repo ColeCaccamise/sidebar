@@ -36,6 +36,7 @@ type Session struct {
 	ID               uuid.UUID  `json:"id" gorm:"primary_key;type:uuid;default:gen_random_uuid()"`
 	CreatedAt        time.Time  `json:"created_at" gorm:"autoCreateTime"`
 	UpdatedAt        time.Time  `json:"updated_at" gorm:"autoCreateTime"`
+	WorkosSessionID  string     `json:"workos_session_id"`
 	OriginalSignInAt *time.Time `json:"original_sign_in_at"`
 	UserID           uuid.UUID  `json:"user_id"`
 	Version          *time.Time `json:"version"`
@@ -43,6 +44,31 @@ type Session struct {
 	IPAddress        string     `json:"ip_address"`
 	LastLocation     string     `json:"last_location"`
 	LastSeenAt       *time.Time `json:"last_seen_at"`
+	AuthMethod       AuthMethod `json:"auth_method"`
+}
+
+type SessionResponse struct {
+	ID               uuid.UUID  `json:"id"`
+	OriginalSignInAt *time.Time `json:"original_sign_in_at"`
+	Version          *time.Time `json:"version"`
+	Device           string     `json:"device"`
+	IPAddress        string     `json:"ip_address"`
+	LastLocation     string     `json:"last_location"`
+	LastSeenAt       *time.Time `json:"last_seen_at"`
+	AuthMethod       AuthMethod `json:"auth_method"`
+}
+
+func NewSessionResponse(s *Session) *SessionResponse {
+	return &SessionResponse{
+		ID:               s.ID,
+		OriginalSignInAt: s.OriginalSignInAt,
+		Version:          s.Version,
+		Device:           s.Device,
+		IPAddress:        s.IPAddress,
+		LastLocation:     s.LastLocation,
+		LastSeenAt:       s.LastSeenAt,
+		AuthMethod:       s.AuthMethod,
+	}
 }
 
 type AuthMethod string

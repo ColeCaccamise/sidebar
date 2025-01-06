@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/go-chi/chi"
-	"github.com/ip2location/ip2location-go/v9"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/go-chi/chi"
+	"github.com/ip2location/ip2location-go/v9"
 
 	"github.com/colecaccamise/go-backend/models"
 	"github.com/colecaccamise/go-backend/util"
@@ -352,24 +353,38 @@ func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) error {
 	})
 }
 
+func (s *Server) handleGetSessions(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	sessions, err := s.store.GetSessionsByUserID(userSession.User.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	var sessionsResponse []*models.SessionResponse
+	for _, session := range sessions {
+		sessionsResponse = append(sessionsResponse, models.NewSessionResponse(session))
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Data: map[string]interface{}{
+			"sessions":           sessions,
+			"current_session_id": userSession.Session.ID,
+		},
+	})
+}
+
 func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) error {
-	authToken, err := r.Cookie("auth-token")
+	userSession, err := getUserSession(s, r)
 
 	if err != nil {
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
 	}
 
-	decoded, err := util.ParseJWT(authToken.Value)
-	if err != nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
-	}
-
-	workosUserID := decoded.WorkosUserID
-
-	user, err := s.store.GetUserByWorkosUserID(workosUserID)
-	if err != nil || user == nil {
-		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired", Code: "invalid_token"})
-	}
+	user := userSession.User
 
 	identityResponse := models.NewUserIdentityResponse(user)
 
@@ -1092,6 +1107,40 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	// create session
+	decoded, err := util.ParseJWT(accessToken)
+	if err != nil {
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
+	}
+
+	user, err := s.store.GetUserByWorkosUserID(decoded.WorkosUserID)
+	if err != nil || user == nil {
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=not_found", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+	}
+
+	now := time.Now()
+	session := models.Session{
+		WorkosSessionID:  decoded.SessionID,
+		OriginalSignInAt: &now,
+		UserID:           user.ID,
+		Version:          &now,
+		Device:           getClientDevice(r),
+		IPAddress:        getClientIP(r),
+		LastLocation:     getClientLocation(r),
+		LastSeenAt:       &now,
+		AuthMethod:       models.AuthMethodEmail,
+	}
+
+	err = s.store.CreateSession(&session)
+	if err != nil {
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
+	}
+
 	redirectUrl = os.Getenv("APP_URL")
 	http.Redirect(w, r, redirectUrl, http.StatusFound)
 	return nil
@@ -1547,7 +1596,7 @@ func generateToken(user *models.User, tokenType string, session *models.Session)
 			return time.Now().Add(time.Minute * 15).Unix()
 		}(),
 		"type":    tokenType,
-		"version": user.SecurityVersion,
+		"version": user.Version,
 	}
 
 	authToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -1635,7 +1684,7 @@ func getClientDevice(r *http.Request) string {
 	userAgent := useragent.Parse(ua)
 
 	if userAgent.Name == "" && userAgent.OS == "" {
-		return "Unknown"
+		return ""
 	}
 
 	if userAgent.Name != "" && userAgent.OS == "" {
@@ -1653,7 +1702,7 @@ func getClientLocation(r *http.Request) string {
 	loc, err := ip2location.OpenDB("./IP-COUNTRY-REGION-CITY-LATITUDE-LONGITUDE-ZIPCODE-TIMEZONE-ISP-DOMAIN-NETSPEED-AREACODE-WEATHER-MOBILE-ELEVATION-USAGETYPE-ADDRESSTYPE-CATEGORY-DISTRICT-ASN.BIN")
 
 	if err != nil {
-		return "Unknown"
+		return ""
 	}
 
 	ip := getClientIP(r)
@@ -1661,7 +1710,7 @@ func getClientLocation(r *http.Request) string {
 	country, _ := loc.Get_country_short(ip)
 
 	if city.City == "" && country.Country_short == "" {
-		return "Unknown"
+		return ""
 	} else if city.City == "" && country.Country_short != "" {
 		return country.Country_short
 	} else if city.City != "" && country.Country_short == "" {
@@ -1692,9 +1741,13 @@ func getUserSession(s *Server, r *http.Request) (UserSessionResponse, error) {
 		return UserSessionResponse{}, err
 	}
 
-	// todo get session
+	session, err := s.store.GetSessionByWorkosSessionID(decoded.SessionID)
+	if err != nil {
+		return UserSessionResponse{}, err
+	}
+
 	return UserSessionResponse{
 		User:    user,
-		Session: &models.Session{},
+		Session: session,
 	}, nil
 }
