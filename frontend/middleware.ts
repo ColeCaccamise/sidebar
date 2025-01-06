@@ -154,6 +154,8 @@ export async function middleware(request: NextRequest) {
     })
     .catch(() => null);
 
+  console.log('TEAM: ', team);
+
   let teamMember = await axios
     .get(`${apiUrl}/teams/${teamSlug}/member`, {
       headers: {
@@ -318,6 +320,8 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(`${dashboardUrl}`);
     }
   }
+
+  console.log('PATHNAME: ', pathname);
 
   // redirect to default team slug when landing on root page
   if (pathname === `/`) {

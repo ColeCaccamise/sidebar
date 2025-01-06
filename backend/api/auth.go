@@ -279,6 +279,27 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 		SameSite: http.SameSiteLaxMode,
 	})
 
+	// create session
+	now := time.Now()
+	session := models.Session{
+		WorkosSessionID:  decoded.SessionID,
+		OriginalSignInAt: &now,
+		UserID:           user.ID,
+		Version:          &now,
+		Device:           getClientDevice(r),
+		IPAddress:        getClientIP(r),
+		LastLocation:     getClientLocation(r),
+		LastSeenAt:       &now,
+		AuthMethod:       authMethod,
+	}
+
+	err = s.store.CreateSession(&session)
+	if err != nil {
+		redirectUrl := fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
+		return nil
+	}
+
 	http.Redirect(w, r, appUrl, http.StatusTemporaryRedirect)
 	return nil
 }

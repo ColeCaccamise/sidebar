@@ -57,71 +57,156 @@ function SecurityPageContent() {
   const sessions = data?.sessions;
   const currentSessionId = data?.current_session_id;
 
+  const currentSession = sessions?.find((s) => s.id === currentSessionId);
+  const otherSessions = sessions
+    ?.filter((s) => s.id !== currentSessionId)
+    ?.sort(
+      (a, b) =>
+        new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
+    );
+
   return (
     <>
       <h1>Security & Access</h1>
 
-      <span className="text-lg font-bold">Sessions</span>
-      <p>Devices currently logged in to your account</p>
+      <div className="flex w-full flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <span className="text-lg font-bold text-typography-strong">
+            Sessions
+          </span>
+          <p>Devices currently logged in to your account</p>
+        </div>
 
-      <div className="flex justify-end">
-        <Button variant="unstyled">Log out of all devices</Button>
-      </div>
-
-      {sessions?.map((session) => (
-        <Button
-          variant="unstyled"
-          key={session.ip_address}
-          className="group flex flex-col gap-2 rounded-lg border border-stroke-weak bg-fill p-4 hover:bg-secondary-fill"
-          handleClick={() => {
-            setSelectedSession(session);
-            setIsOpen(true);
-          }}
-        >
-          <div className="flex w-full items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="flex h-10 w-10 items-center justify-center rounded-md bg-fill">
-                <FontAwesomeIcon
-                  icon={getBrowserIcon(session.device)}
-                  className="h-5 w-5 text-typography-muted"
-                />
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-medium">{session.device}</span>
+        {currentSession && (
+          <Button
+            variant="unstyled"
+            key={currentSession.ip_address}
+            className="group flex flex-col gap-2 rounded-lg border border-stroke-weak bg-fill p-4 hover:bg-secondary-fill"
+            handleClick={() => {
+              setSelectedSession(currentSession);
+              setIsOpen(true);
+            }}
+          >
+            <div className="flex w-full items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="flex h-10 w-10 items-center justify-center rounded-md bg-fill">
+                  <FontAwesomeIcon
+                    icon={getBrowserIcon(currentSession.device)}
+                    className="h-5 w-5 text-typography-muted"
+                  />
                 </div>
-                <div className="flex items-center gap-2">
-                  {session.id === currentSessionId ? (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{currentSession.device}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1">
                       <span className="h-2 w-2 rounded-full bg-green-500" />
                       <span className="text-sm text-typography-weak">
                         Current session
                       </span>
                     </div>
-                  ) : null}
 
-                  {session.last_location ? (
-                    <>
-                      <div className="h-1 w-1 rounded-full bg-typography-muted"></div>
-                      <span className="text-sm text-typography-muted">
-                        {session.last_location}
-                      </span>
-                    </>
-                  ) : null}
+                    {currentSession.last_location && (
+                      <>
+                        <div className="h-1 w-1 rounded-full bg-typography-muted"></div>
+                        <span className="text-sm text-typography-muted">
+                          {currentSession.last_location}
+                        </span>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end justify-center gap-1">
+          </Button>
+        )}
+
+        {otherSessions && otherSessions.length > 0 && (
+          <div className="flex flex-col rounded-lg border border-stroke-weak bg-fill">
+            <div className="flex w-full items-center justify-between border-b border-stroke-weak p-4">
+              <span className="text-sm font-medium text-typography-strong">
+                {otherSessions.length} other session
+                {otherSessions.length !== 1 ? 's' : ''}
+              </span>
               <Button
                 variant="unstyled"
-                className="btn btn-small hidden hover:bg-accent group-hover:block"
+                className="rounded-md px-2 py-1 text-sm hover:bg-secondary-fill"
               >
-                Log out
+                Revoke all
               </Button>
             </div>
+
+            <div className="flex flex-col">
+              {otherSessions.map((session) => (
+                <Button
+                  variant="unstyled"
+                  key={session.ip_address}
+                  className="group flex flex-col gap-2 p-4 hover:bg-secondary-fill"
+                  handleClick={() => {
+                    setSelectedSession(session);
+                    setIsOpen(true);
+                  }}
+                >
+                  <div className="flex w-full items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-md bg-fill">
+                        <FontAwesomeIcon
+                          icon={getBrowserIcon(session.device)}
+                          className="h-5 w-5 text-typography-muted"
+                        />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{session.device}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {session.last_location && (
+                            <span className="text-sm text-typography-muted">
+                              {session.last_location}
+                            </span>
+                          )}
+
+                          {session.last_seen_at && (
+                            <span className="text-sm text-typography-muted">
+                              {(() => {
+                                const lastSeen = new Date(session.last_seen_at);
+                                const now = new Date();
+                                const diffHours = Math.floor(
+                                  (now.getTime() - lastSeen.getTime()) /
+                                    (1000 * 60 * 60),
+                                );
+                                const diffDays = Math.floor(diffHours / 24);
+                                const diffWeeks = Math.floor(diffDays / 7);
+
+                                if (diffWeeks > 0) {
+                                  return `Last seen ${diffWeeks} ${diffWeeks === 1 ? 'week' : 'weeks'} ago`;
+                                }
+                                if (diffDays > 0) {
+                                  return `Last seen ${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
+                                }
+                                return `Last seen ${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+                              })()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end justify-center gap-1">
+                      <Button
+                        variant="unstyled"
+                        className="btn btn-small hidden text-sm hover:bg-accent group-hover:block"
+                      >
+                        Revoke
+                      </Button>
+                    </div>
+                  </div>
+                </Button>
+              ))}
+            </div>
           </div>
-        </Button>
-      ))}
+        )}
+      </div>
 
       <Modal
         open={isOpen}
@@ -171,6 +256,9 @@ function SecurityPageContent() {
                     month: 'short',
                     day: 'numeric',
                     year: 'numeric',
+                    hour: 'numeric',
+                    minute: 'numeric',
+                    timeZoneName: 'short',
                   })}
                 </span>
               </div>

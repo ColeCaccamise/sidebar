@@ -174,427 +174,371 @@ export default function AccountSettingsPage() {
   if (isLoading) return <Spinner />;
 
   return (
-    <div className="flex w-full flex-col items-center gap-4 pb-8">
-      <SettingsBox
-        title="Your Name"
-        description="This will be your display name in the dashboard."
-        note="Max 32 characters."
-        onSettingSubmit={async () => {
-          await updateUser({
-            user,
-            firstName: userValues.firstName?.current,
-            lastName: userValues.lastName?.current,
-          });
+    <>
+      <h1>Profile</h1>
+      <div className="flex w-full flex-col items-center gap-8 pb-8">
+        <SettingsBox
+          title="Your Name"
+          description="This will be your display name in the dashboard."
+          note="Max 32 characters."
+          onSettingSubmit={async () => {
+            await updateUser({
+              user,
+              firstName: userValues.firstName?.current,
+              lastName: userValues.lastName?.current,
+            });
 
-          setUserValues((prev) => ({
-            ...prev,
-            firstName: {
-              initial: prev.firstName?.current || '',
-              current: prev.firstName?.current || '',
-            },
-            lastName: {
-              initial: prev.lastName?.current || '',
-              current: prev.lastName?.current || '',
-            },
-          }));
-
-          toast({
-            message: 'Profile updated',
-            mode: 'success',
-          });
-        }}
-        disabled={
-          userValues.firstName?.initial === userValues.firstName?.current &&
-          userValues.lastName?.initial === userValues.lastName?.current
-        }
-      >
-        <div className="flex flex-col gap-4">
-          <Input
-            type="text"
-            placeholder="First Name"
-            value={userValues.firstName?.current}
-            handleChange={(e) =>
-              setUserValues((prev) => ({
-                ...prev,
-                firstName: {
-                  initial: prev.firstName?.initial || '',
-                  current: e.target.value,
-                },
-              }))
-            }
-          />
-          <Input
-            type="text"
-            placeholder="Last Name"
-            value={userValues.lastName?.current}
-            handleChange={(e) =>
-              setUserValues((prev) => ({
-                ...prev,
-                lastName: {
-                  initial: prev.lastName?.initial || '',
-                  current: e.target.value,
-                },
-              }))
-            }
-          />
-        </div>
-      </SettingsBox>
-      <SettingsBox
-        title="Your Email"
-        description="This will be the email you use to log in to your dashboard and receive notifications."
-        ref={emailForm}
-        showSubmitButton={false}
-        onSettingSubmit={async () => {
-          if (canUpdateEmail) {
-            await updateEmail();
-          } else {
-            if (editingEmail) {
-              setEditingEmail(false);
-            } else {
-              setEditingEmail(true);
-            }
-          }
-        }}
-        note={
-          userValues.updatedEmail &&
-          userValues.email?.initial !== userValues.updatedEmail ? (
-            <span className="text-sm">
-              To update your email, click the confirmation link we sent to{' '}
-              <strong>{userValues.updatedEmail}</strong>.{' '}
-              <Button
-                className="underline"
-                variant="link"
-                handleClick={() =>
-                  resendUpdateEmailConfirmation({ user }).then(() => {
-                    toast({
-                      message: 'Email sent',
-                      description:
-                        'Please check your email for a confirmation link.',
-                      mode: 'success',
-                    });
-                  })
-                }
-              >
-                Resend
-              </Button>
-            </span>
-          ) : (
-            <span>
-              If you&apos;d like to change your email,{' '}
-              <Link href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}>
-                contact us
-              </Link>
-            </span>
-          )
-        }
-        disabled={
-          userValues.email?.initial === userValues.email?.current ||
-          userValues.email?.current === userValues.updatedEmail
-        }
-      >
-        <Modal
-          title="Confirm your password"
-          open={editingEmail}
-          setOpen={setEditingEmail}
-          onClose={() => {
-            setEditingEmail(false);
-            setPassword('');
-          }}
-        >
-          <p className="text-sm">
-            Before you can update your email, please type in your password.
-          </p>
-          <form
-            className="flex flex-col gap-4"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              setPasswordVerifyLoading(true);
-
-              try {
-                const res = await verifyPassword({
-                  password: password || '',
-                });
-
-                if (res.error) {
-                  setPassword('');
-                  toast({ message: 'Invalid password', mode: 'error' });
-                  setCanUpdateEmail(false);
-                  return;
-                }
-
-                setEditingEmail(false);
-                setPassword('');
-                setCanUpdateEmail(true);
-
-                await updateEmail();
-              } catch (error) {
-                console.log(error);
-                setPassword('');
-                toast({
-                  message: 'An error occurred verifying your password',
-                  mode: 'error',
-                });
-              } finally {
-                setPasswordVerifyLoading(false);
-              }
-            }}
-          >
-            <Input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              handleChange={(e) => setPassword(e.target.value)}
-            />
-            <Button
-              type="submit"
-              className="w-full"
-              disabled={password.length === 0 || passwordVerifyLoading}
-              loading={passwordVerifyLoading}
-            >
-              Confirm
-            </Button>
-          </form>
-        </Modal>
-        <Input
-          type="email"
-          placeholder="Email"
-          disabled
-          value={userValues.email?.current}
-          handleChange={(e) =>
             setUserValues((prev) => ({
               ...prev,
-              email: {
-                initial: prev.email?.initial || '',
-                current: e.target.value,
+              firstName: {
+                initial: prev.firstName?.current || '',
+                current: prev.firstName?.current || '',
               },
-            }))
-          }
-        />
-      </SettingsBox>
-      <SettingsBox
-        title="Your Avatar"
-        description="This is your avatar in the dashboard."
-        onSettingSubmit={async () => {
-          const formData = new FormData();
-          formData.append('avatar', avatar || '');
-          await uploadAvatar({ user, formData })
-            .then((res) => {
-              console.log(res);
-              toast({
-                message: 'Avatar updated.',
-                mode: 'success',
-              });
-              setUserValues((prev) => ({
-                ...prev,
-                avatar: {
-                  initial: res.location,
-                  current: res.location,
-                },
-              }));
-            })
-            .catch((error) => {
-              console.error(error);
-              toast({
-                message:
-                  'There was a problem updating your avatar. Please try again.',
-                mode: 'error',
-              });
-            });
-        }}
-        disabled={
-          !avatar || userValues.avatar?.initial === userValues.avatar?.current
-        }
-        note="Square image recommended. Accepted file types: .png, .jpg. Max file size: 2MB."
-      >
-        <div className="flex pt-2">
-          <AvatarUploader
-            handleChange={(e) => {
-              setAvatar(e);
-              setUserValues((prev) => ({
-                ...prev,
-                avatar: {
-                  initial: prev.avatar?.initial || '',
-                  current: URL.createObjectURL(e),
-                },
-              }));
-            }}
-            initialAvatar={userValues.avatar?.initial || ''}
-            handleDelete={async () => {
-              if (userValues.avatar?.initial) {
-                await deleteAvatar()
-                  .then((res) => {
-                    if (res == null) {
-                      toast({ message: 'Avatar deleted.', mode: 'success' });
+              lastName: {
+                initial: prev.lastName?.current || '',
+                current: prev.lastName?.current || '',
+              },
+            }));
 
-                      setUserValues((prev) => ({
-                        ...prev,
-                        avatar: {
-                          initial: '',
-                          current: '',
-                        },
-                      }));
-                    } else {
+            toast({
+              message: 'Profile updated',
+              mode: 'success',
+            });
+          }}
+          disabled={
+            userValues.firstName?.initial === userValues.firstName?.current &&
+            userValues.lastName?.initial === userValues.lastName?.current
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <Input
+              type="text"
+              placeholder="First Name"
+              value={userValues.firstName?.current}
+              handleChange={(e) =>
+                setUserValues((prev) => ({
+                  ...prev,
+                  firstName: {
+                    initial: prev.firstName?.initial || '',
+                    current: e.target.value,
+                  },
+                }))
+              }
+            />
+            <Input
+              type="text"
+              placeholder="Last Name"
+              value={userValues.lastName?.current}
+              handleChange={(e) =>
+                setUserValues((prev) => ({
+                  ...prev,
+                  lastName: {
+                    initial: prev.lastName?.initial || '',
+                    current: e.target.value,
+                  },
+                }))
+              }
+            />
+          </div>
+        </SettingsBox>
+        <SettingsBox
+          title="Your Email"
+          description="This will be the email you use to log in to your dashboard and receive notifications."
+          ref={emailForm}
+          showSubmitButton={false}
+          onSettingSubmit={async () => {
+            if (canUpdateEmail) {
+              await updateEmail();
+            } else {
+              if (editingEmail) {
+                setEditingEmail(false);
+              } else {
+                setEditingEmail(true);
+              }
+            }
+          }}
+          note={
+            userValues.updatedEmail &&
+            userValues.email?.initial !== userValues.updatedEmail ? (
+              <span className="text-sm">
+                To update your email, click the confirmation link we sent to{' '}
+                <strong>{userValues.updatedEmail}</strong>.{' '}
+                <Button
+                  className="underline"
+                  variant="link"
+                  handleClick={() =>
+                    resendUpdateEmailConfirmation({ user }).then(() => {
+                      toast({
+                        message: 'Email sent',
+                        description:
+                          'Please check your email for a confirmation link.',
+                        mode: 'success',
+                      });
+                    })
+                  }
+                >
+                  Resend
+                </Button>
+              </span>
+            ) : (
+              <span>
+                If you&apos;d like to change your email,{' '}
+                <Link href={`mailto:${process.env.NEXT_PUBLIC_SUPPORT_EMAIL}`}>
+                  contact us
+                </Link>
+              </span>
+            )
+          }
+          disabled={
+            userValues.email?.initial === userValues.email?.current ||
+            userValues.email?.current === userValues.updatedEmail
+          }
+        >
+          <Modal
+            title="Confirm your password"
+            open={editingEmail}
+            setOpen={setEditingEmail}
+            onClose={() => {
+              setEditingEmail(false);
+              setPassword('');
+            }}
+          >
+            <p className="text-sm">
+              Before you can update your email, please type in your password.
+            </p>
+            <form
+              className="flex flex-col gap-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                setPasswordVerifyLoading(true);
+
+                try {
+                  const res = await verifyPassword({
+                    password: password || '',
+                  });
+
+                  if (res.error) {
+                    setPassword('');
+                    toast({ message: 'Invalid password', mode: 'error' });
+                    setCanUpdateEmail(false);
+                    return;
+                  }
+
+                  setEditingEmail(false);
+                  setPassword('');
+                  setCanUpdateEmail(true);
+
+                  await updateEmail();
+                } catch (error) {
+                  console.log(error);
+                  setPassword('');
+                  toast({
+                    message: 'An error occurred verifying your password',
+                    mode: 'error',
+                  });
+                } finally {
+                  setPasswordVerifyLoading(false);
+                }
+              }}
+            >
+              <Input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                handleChange={(e) => setPassword(e.target.value)}
+              />
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={password.length === 0 || passwordVerifyLoading}
+                loading={passwordVerifyLoading}
+              >
+                Confirm
+              </Button>
+            </form>
+          </Modal>
+          <Input
+            type="email"
+            placeholder="Email"
+            disabled
+            value={userValues.email?.current}
+            handleChange={(e) =>
+              setUserValues((prev) => ({
+                ...prev,
+                email: {
+                  initial: prev.email?.initial || '',
+                  current: e.target.value,
+                },
+              }))
+            }
+          />
+        </SettingsBox>
+        <SettingsBox
+          title="Your Avatar"
+          description="This is your avatar in the dashboard."
+          onSettingSubmit={async () => {
+            const formData = new FormData();
+            formData.append('avatar', avatar || '');
+            await uploadAvatar({ user, formData })
+              .then((res) => {
+                console.log(res);
+                toast({
+                  message: 'Avatar updated.',
+                  mode: 'success',
+                });
+                setUserValues((prev) => ({
+                  ...prev,
+                  avatar: {
+                    initial: res.location,
+                    current: res.location,
+                  },
+                }));
+              })
+              .catch((error) => {
+                console.error(error);
+                toast({
+                  message:
+                    'There was a problem updating your avatar. Please try again.',
+                  mode: 'error',
+                });
+              });
+          }}
+          disabled={
+            !avatar || userValues.avatar?.initial === userValues.avatar?.current
+          }
+          note="Square image recommended. Accepted file types: .png, .jpg. Max file size: 2MB."
+        >
+          <div className="flex pt-2">
+            <AvatarUploader
+              handleChange={(e) => {
+                setAvatar(e);
+                setUserValues((prev) => ({
+                  ...prev,
+                  avatar: {
+                    initial: prev.avatar?.initial || '',
+                    current: URL.createObjectURL(e),
+                  },
+                }));
+              }}
+              initialAvatar={userValues.avatar?.initial || ''}
+              handleDelete={async () => {
+                if (userValues.avatar?.initial) {
+                  await deleteAvatar()
+                    .then((res) => {
+                      if (res == null) {
+                        toast({ message: 'Avatar deleted.', mode: 'success' });
+
+                        setUserValues((prev) => ({
+                          ...prev,
+                          avatar: {
+                            initial: '',
+                            current: '',
+                          },
+                        }));
+                      } else {
+                        toast({
+                          message: 'There was a problem deleting your avatar.',
+                          mode: 'error',
+                        });
+                      }
+                    })
+                    .catch(() => {
                       toast({
                         message: 'There was a problem deleting your avatar.',
                         mode: 'error',
                       });
-                    }
+                    });
+                } else {
+                  setUserValues((prev) => ({
+                    ...prev,
+                    avatar: {
+                      initial: '',
+                      current: '',
+                    },
+                  }));
+                }
+              }}
+            />
+          </div>
+        </SettingsBox>
+
+        <SettingsBox
+          submitText="Delete Account"
+          disabled={false}
+          variant="destructive"
+          title="Delete Account"
+          description="Permanently delete your account and all associated data. This action cannot be undone - please proceed with caution."
+          onSettingSubmit={async () => {
+            setShowDeleteModal(true);
+          }}
+        >
+          <Modal
+            title="Confirm Delete"
+            hint={
+              <span className="text-sm font-bold uppercase text-error">
+                Danger Zone
+              </span>
+            }
+            open={showDeleteModal}
+            setOpen={setShowDeleteModal}
+            onClose={() => setShowDeleteModal(false)}
+          >
+            <form
+              className="flex flex-col gap-4 py-2"
+              onSubmit={async (e) => {
+                e.preventDefault();
+
+                await axios
+                  .delete(`${apiUrl}/users`, {
+                    data: { password: deletePassword },
+                    withCredentials: true,
                   })
-                  .catch(() => {
+                  .then(() => {
                     toast({
-                      message: 'There was a problem deleting your avatar.',
+                      message: 'Account deleted.',
+                      mode: 'success',
+                    });
+                    router.push('/auth/login');
+                  })
+                  .catch((err) => {
+                    toast({
+                      message: getErrorMessage(err.response.data.code),
                       mode: 'error',
                     });
                   });
-              } else {
-                setUserValues((prev) => ({
-                  ...prev,
-                  avatar: {
-                    initial: '',
-                    current: '',
-                  },
-                }));
-              }
-            }}
-          />
-        </div>
-      </SettingsBox>
-      <SettingsBox
-        title="Session Management"
-        description="Manage your active sessions and devices."
-        note=""
-        onSettingSubmit={async () => {}}
-        disabled={false}
-        showSubmitButton={false}
-      >
-        <Modal
-          title="Log out of all devices"
-          open={showLogoutModal}
-          setOpen={setShowLogoutModal}
-          onClose={() => {}}
-          canClose={true}
-          showCloseButton={false}
-        >
-          <div className="flex flex-col items-start justify-between gap-4">
-            <p>Are you sure you want to log out of all devices?</p>
-
-            <div className="flex w-full justify-end gap-4 pt-4">
-              <Button
-                variant="unstyled"
-                className="btn btn-secondary bg-gray text-typography-strong"
-                handleClick={() => setShowLogoutModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                handleClick={async () => {
-                  await deleteSessions().then((res) => {
-                    setShowLogoutModal(false);
-
-                    console.log(res);
-
-                    toast({
-                      message: 'Logged out of all devices.',
-                      mode: 'success',
-                    });
-
-                    router.push('/auth/login');
-                  });
-                }}
-              >
-                Log out
-              </Button>
-            </div>
-          </div>
-        </Modal>
-        <div className="flex items-center justify-between gap-4 py-4">
-          <p>Log out of all devices</p>
-          <Button
-            handleClick={async () => {
-              setShowLogoutModal(true);
-            }}
-          >
-            Log out
-          </Button>
-        </div>
-      </SettingsBox>
-      <SettingsBox
-        submitText="Delete Account"
-        disabled={false}
-        variant="destructive"
-        title="Delete Account"
-        description="Permanently delete your account and all associated data. This action cannot be undone - please proceed with caution."
-        onSettingSubmit={async () => {
-          setShowDeleteModal(true);
-        }}
-      >
-        <Modal
-          title="Confirm Delete"
-          hint={
-            <span className="text-sm font-bold uppercase text-error">
-              Danger Zone
-            </span>
-          }
-          open={showDeleteModal}
-          setOpen={setShowDeleteModal}
-          onClose={() => setShowDeleteModal(false)}
-        >
-          <form
-            className="flex flex-col gap-4 py-2"
-            onSubmit={async (e) => {
-              e.preventDefault();
-
-              await axios
-                .delete(`${apiUrl}/users`, {
-                  data: { password: deletePassword },
-                  withCredentials: true,
-                })
-                .then(() => {
-                  toast({
-                    message: 'Account deleted.',
-                    mode: 'success',
-                  });
-                  router.push('/auth/login');
-                })
-                .catch((err) => {
-                  toast({
-                    message: getErrorMessage(err.response.data.code),
-                    mode: 'error',
-                  });
-                });
-            }}
-          >
-            <p>Are you sure you want to delete your account?</p>
-            <p>
-              This action is irreversible. All associated data will be
-              permanently deleted.
-            </p>
-            <p>
-              If you&apos;re sure you want to continue, please type in your
-              password to confirm.
-            </p>
-            <Input
-              type="password"
-              placeholder="Enter your password"
-              label="Confirm password"
-              value={deletePassword}
-              handleChange={(e) => setDeletePassword(e.target.value)}
-            />
-            <Button
-              disabled={deletePassword.length === 0}
-              type="submit"
-              className="w-full"
-              variant="destructive"
+              }}
             >
-              Request Permanent Account Deletion
-            </Button>
-            <span className="text-low-contrast-text text-sm">
-              This will delete your account and all associated data.
-            </span>
-          </form>
-        </Modal>
-      </SettingsBox>
-    </div>
+              <p>Are you sure you want to delete your account?</p>
+              <p>
+                This action is irreversible. All associated data will be
+                permanently deleted.
+              </p>
+              <p>
+                If you&apos;re sure you want to continue, please type in your
+                password to confirm.
+              </p>
+              <Input
+                type="password"
+                placeholder="Enter your password"
+                label="Confirm password"
+                value={deletePassword}
+                handleChange={(e) => setDeletePassword(e.target.value)}
+              />
+              <Button
+                disabled={deletePassword.length === 0}
+                type="submit"
+                className="w-full"
+                variant="destructive"
+              >
+                Request Permanent Account Deletion
+              </Button>
+              <span className="text-low-contrast-text text-sm">
+                This will delete your account and all associated data.
+              </span>
+            </form>
+          </Modal>
+        </SettingsBox>
+      </div>
+    </>
   );
 }
