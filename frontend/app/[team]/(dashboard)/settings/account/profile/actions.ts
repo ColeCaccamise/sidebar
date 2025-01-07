@@ -245,3 +245,19 @@ export async function deleteSessions() {
 
   return response;
 }
+
+export async function deleteAccount({
+  email,
+  reason,
+  otherReason,
+}: {
+  email: string;
+  reason: string;
+  otherReason: string;
+}) {
+  if (!email || !reason || (reason === 'other' && !otherReason)) return;
+
+  const response = await axios.delete(`${apiUrl}/users`, {
+    headers: { Cookie: `auth-token=${cookies().get('auth-token')?.value}` },
+  });
+}

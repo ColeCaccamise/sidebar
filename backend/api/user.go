@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"github.com/colecaccamise/go-backend/util"
+
 	//"bytes"
 	"encoding/json"
 	"fmt"
@@ -221,87 +223,91 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) error 
 //	return WriteJSON(w, http.StatusOK, Response{Message: "email sent.", Code: "email_sent"})
 //}
 
-//func (s *Server) handleDeleteUser(w http.ResponseWriter, r *http.Request) error {
-//	deleteUserReq := new(models.DeleteUserRequest)
-//	if err := json.NewDecoder(r.Body).Decode(deleteUserReq); err != nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "empty body.", Code: "empty_body"})
-//	}
-//
-//	password := deleteUserReq.Password
-//
-//	if password == "" {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "password is required.", Code: "missing_password"})
-//	}
-//
-//	user, _, _, err := getUserIdentity(s, r)
-//	if err != nil {
-//		return err
-//	}
-//
-//	if user.DeletedAt != nil {
-//		if !comparePasswords(user.HashedPassword, password) {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "password is incorrect.", Code: "invalid_password"})
-//		}
-//
-//		http.SetCookie(w, &http.Cookie{
-//			Name:     "auth-token",
-//			Value:    "",
-//			Path:     "/",
-//			Expires:  time.Unix(0, 0),
-//			Secure:   true,
-//			SameSite: http.SameSiteLaxMode,
-//		})
-//		http.SetCookie(w, &http.Cookie{
-//			Name:     "refresh-token",
-//			Value:    "",
-//			Path:     "/",
-//			Expires:  time.Unix(0, 0),
-//			Secure:   true,
-//			SameSite: http.SameSiteLaxMode,
-//		})
-//
-//		return WriteJSON(w, http.StatusNoContent, nil)
-//	} else {
-//		if !comparePasswords(user.HashedPassword, password) {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Error: "password is incorrect.", Code: "invalid_password"})
-//		}
-//
-//		// Send warning email
-//		err = util.SendEmail(user.Email, "SECURITY NOTICE: Account Deletion Initiated", "Your account has been deleted. If this was not you, please contact support immediately. After 90 days, this data will no longer be recoverable.")
-//		if err != nil {
-//			fmt.Printf("Error sending deletion email: %v\n", err)
-//			return err
-//		}
-//
-//		now := time.Now()
-//		user.DeletedAt = &now
-//
-//		if err := s.store.UpdateUser(user); err != nil {
-//			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
-//		}
-//
-//		// todo set up cron task that watches out for outstanding account deletion requests
-//
-//		http.SetCookie(w, &http.Cookie{
-//			Name:     "auth-token",
-//			Value:    "",
-//			Path:     "/",
-//			Expires:  time.Unix(0, 0),
-//			Secure:   true,
-//			SameSite: http.SameSiteLaxMode,
-//		})
-//		http.SetCookie(w, &http.Cookie{
-//			Name:     "refresh-token",
-//			Value:    "",
-//			Path:     "/",
-//			Expires:  time.Unix(0, 0),
-//			Secure:   true,
-//			SameSite: http.SameSiteLaxMode,
-//		})
-//
-//		return WriteJSON(w, http.StatusNoContent, nil)
-//	}
-//}
+func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
+	deleteAccountReq := new(models.DeleteAccountRequest)
+	if err := json.NewDecoder(r.Body).Decode(deleteAccountReq); err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "empty body.", Code: "empty_body"})
+	}
+
+	reason := deleteAccountReq.Reason
+	otherReason := deleteAccountReq.OtherReason
+	email := deleteAccountReq.Email
+
+	if reason == "" {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "reason is required.", Code: "missing_deleted_reason"})
+	}
+
+	if reason == "other" && otherReason == "" {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "other reason is required.", Code: "missing_other_deleted_reason"})
+
+	}
+
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+	user := userSession.User
+
+	if email != user.Email {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "email is incorrect.", Code: "incorrect_email"})
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	err = usermanagement.RevokeSession(
+		context.Background(),
+		usermanagement.RevokeSessionOpts{
+			SessionID: userSession.Session.WorkosSessionID,
+		})
+
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	session := userSession.Session
+	now := time.Now()
+	session.RevokedAt = &now
+
+	err = s.store.UpdateSession(session)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth-token",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh-token",
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	if user.DeletedAt == nil {
+		// Send warning email
+		err = util.SendEmail(user.Email, "SECURITY NOTICE: Account Deletion Initiated", "Your account has been deleted. If this was not you, please contact support immediately. After 90 days, this data will no longer be recoverable.")
+		if err != nil {
+			fmt.Printf("Error sending deletion email: %v\n", err)
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		user.DeletedAt = &now
+
+		if err = s.store.UpdateUser(user); err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+	}
+
+	return WriteJSON(w, http.StatusNoContent, nil)
+}
 
 func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error {
 	userSession, err := getUserSession(s, r)

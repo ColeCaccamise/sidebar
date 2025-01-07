@@ -143,7 +143,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		//r.Use(s.VerifySecurityVersion)
 		r.Route("/users", func(r chi.Router) {
 			r.Patch("/", makeHttpHandleFunc(s.handleUpdateUser))
-			//r.Delete("/", makeHttpHandleFunc(s.handleDeleteUser))
+			r.Delete("/", makeHttpHandleFunc(s.handleDeleteAccount))
 			r.Post("/accept-terms", makeHttpHandleFunc(s.handleAcceptTerms))
 			//r.Patch("/email", makeHttpHandleFunc(s.handleUpdateUserEmail))
 			//r.Post("/resend-email", makeHttpHandleFunc(s.handleResendUpdateEmail))

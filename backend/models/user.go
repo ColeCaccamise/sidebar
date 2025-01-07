@@ -24,6 +24,12 @@ type DeleteUserRequest struct {
 	Password string `json:"password"`
 }
 
+type DeleteAccountRequest struct {
+	Reason      string `json:"reason"`
+	OtherReason string `json:"other_reason"`
+	Email       string `json:"email"`
+}
+
 type ChangeUserPasswordRequest struct {
 	OldPassword        string `json:"old_password"`
 	NewPassword        string `json:"new_password"`
@@ -70,6 +76,8 @@ type User struct {
 	TeammatesInvitedAt      *time.Time `gorm:"default:null" json:"teammates_invited_at"` // accepted or declined at
 	DefaultTeamSlug         string     `gorm:"default:null" json:"default_team_slug"`
 	TokenRefreshedAt        *time.Time `gorm:"default:null" json:"token_refreshed_at"`
+	DeletedReason           string     `gorm:"default:null" json:"deleted_reason"`
+	DeletedOtherReason      string     `gorm:"default:null" json:"deleted_other_reason"`
 }
 
 type UserIdentityResponse struct {

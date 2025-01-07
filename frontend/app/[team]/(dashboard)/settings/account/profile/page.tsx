@@ -23,6 +23,9 @@ import { useSearchParams } from 'next/navigation';
 import { getErrorMessage, getResponseMessage } from '@/messages';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { AsteriskIcon } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -46,6 +49,18 @@ export default function AccountSettingsPage() {
     updatedEmail?: string;
     avatar?: { initial: string; current: string };
   }>({});
+
+  const [deleteAccountValues, setDeleteAccountValues] = useState<{
+    reason: string;
+    otherReason: string;
+    step: number;
+    email: string;
+  }>({
+    reason: '',
+    otherReason: '',
+    step: 0,
+    email: '',
+  });
 
   const searchParams = useSearchParams();
   const message = searchParams.get('message');
@@ -86,6 +101,8 @@ export default function AccountSettingsPage() {
       },
     });
   }, []);
+
+  async function handleDeleteAccount() {}
 
   useEffect(() => {
     setIsLoading(true);
@@ -476,7 +493,182 @@ export default function AccountSettingsPage() {
             title="Delete your account?"
             open={showDeleteModal}
             setOpen={setShowDeleteModal}
-            onClose={() => setShowDeleteModal(false)}
+            onClose={() => {
+              setShowDeleteModal(false);
+              setDeleteAccountValues({
+                reason: '',
+                otherReason: '',
+                step: 0,
+                email: '',
+              });
+            }}
+            className="w-full max-w-2xl"
+            currentStep={deleteAccountValues.step}
+            steps={[
+              {
+                title: 'Delete your account?',
+                children: (
+                  <p>
+                    This action will result in the immediate loss of access to
+                    Asana and the permanent removal of your account data across
+                    all workspaces or organizations you are associated with.
+                    There will be no option for recovery.
+                  </p>
+                ),
+                submitText: 'Continue with deletion',
+                cancelText: 'Keep account',
+                handleSubmit: () => {
+                  setDeleteAccountValues((prev) => ({
+                    ...prev,
+                    step: 1,
+                  }));
+                },
+              },
+              {
+                title: 'Delete your account?',
+                children: (
+                  <div className="flex flex-col gap-4">
+                    <p className="flex items-center gap-1 text-sm">
+                      Please share why you are deleting your account{' '}
+                      <AsteriskIcon className="h-3 w-3 text-error" />
+                    </p>
+                    <RadioGroup
+                      value={deleteAccountValues.reason}
+                      onValueChange={(value) =>
+                        setDeleteAccountValues((prev) => ({
+                          ...prev,
+                          reason: value,
+                        }))
+                      }
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="no-data" id="no-data" />
+                        <Label htmlFor="no-data">
+                          I no longer want Dashboard to have my data
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="start-over" id="start-over" />
+                        <Label htmlFor="start-over">
+                          I want to clear my data and start over
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="better-tool" id="better-tool" />
+                        <Label htmlFor="better-tool">
+                          I found another tool that better suits my needs
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem
+                          value="no-longer-using"
+                          id="no-longer-using"
+                        />
+                        <Label htmlFor="no-longer-using">
+                          I am no longer using Dashboard
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem
+                          value="too-expensive"
+                          id="too-expensive"
+                        />
+                        <Label htmlFor="too-expensive">
+                          The features I need are too expensive
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem
+                          value="missing-features"
+                          id="missing-features"
+                        />
+                        <Label htmlFor="missing-features">
+                          Dashboard lacks certain features I need
+                        </Label>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="other" id="other" />
+                          <Label htmlFor="other">Other</Label>
+                        </div>
+                        {deleteAccountValues.reason === 'other' && (
+                          <div className="py-2 pl-6">
+                            <Input
+                              variant="textarea"
+                              type="textarea"
+                              placeholder="Please tell us more..."
+                              value={deleteAccountValues.otherReason}
+                              handleChange={(e) =>
+                                setDeleteAccountValues((prev) => ({
+                                  ...prev,
+                                  otherReason: e.target.value,
+                                }))
+                              }
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </RadioGroup>
+                  </div>
+                ),
+                cancelText: 'Keep account',
+                submitText: 'Continue with deletion',
+                handleSubmit: () => {
+                  setDeleteAccountValues((prev) => ({
+                    ...prev,
+                    step: 2,
+                  }));
+                },
+                handleBack: () => {
+                  setDeleteAccountValues((prev) => ({
+                    ...prev,
+                    step: 0,
+                  }));
+                },
+                disabled:
+                  deleteAccountValues.reason === '' ||
+                  (deleteAccountValues.reason === 'other' &&
+                    deleteAccountValues.otherReason === ''),
+              },
+              {
+                title: 'Delete your account?',
+                cancelText: 'Keep account',
+                submitText: 'Delete account',
+                handleSubmit: () => {
+                  console.log('Delete account data:');
+                  console.log(deleteAccountValues);
+                },
+                disabled:
+                  deleteAccountValues.email !== userValues.email?.current,
+                handleBack: () => {
+                  setDeleteAccountValues((prev) => ({
+                    ...prev,
+                    step: 1,
+                  }));
+                },
+                children: (
+                  <form className="flex flex-col gap-4">
+                    <p>
+                      Deleting your account is permanent and cannot be undone.
+                      You will permanently lose data for all teams you are
+                      associated with.
+                    </p>
+                    <p>To delete your account, type your email.</p>
+                    <Input
+                      type="email"
+                      placeholder="Enter your email"
+                      value={deleteAccountValues.email}
+                      handleChange={(e) =>
+                        setDeleteAccountValues((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
+                    />
+                  </form>
+                ),
+              },
+            ]}
           >
             <form
               className="flex flex-col gap-4 py-2"
@@ -503,14 +695,11 @@ export default function AccountSettingsPage() {
                   });
               }}
             >
-              <p>Are you sure you want to delete your account?</p>
               <p>
-                This action is irreversible. All associated data will be
-                permanently deleted.
-              </p>
-              <p>
-                If you&apos;re sure you want to continue, please type in your
-                password to confirm.
+                This action will result in the immediate loss of access to Asana
+                and the permanent removal of your account data across all
+                workspaces or organizations you are associated with. There will
+                be no option for recovery.
               </p>
               <Input
                 type="password"
