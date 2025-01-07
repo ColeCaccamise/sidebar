@@ -1,6 +1,16 @@
 import { Dialog, DialogPanel, DialogBackdrop } from '@headlessui/react';
-import { Cross1Icon } from '@radix-ui/react-icons';
+import { ArrowLeftIcon, Cross1Icon } from '@radix-ui/react-icons';
 import Button from '@/components/ui/button';
+
+type Step = {
+  children: React.ReactNode;
+  submitText?: string;
+  cancelText?: string;
+  handleSubmit?: () => void;
+  title?: string;
+  disabled?: boolean;
+  handleBack?: () => void;
+};
 
 export default function Modal({
   open = false,
@@ -12,6 +22,8 @@ export default function Modal({
   canClose = true,
   showCloseButton = true,
   className,
+  steps,
+  currentStep = 0,
   handleSubmit = () => {},
   submitText = 'Submit',
   cancelText = 'Cancel',
@@ -25,6 +37,8 @@ export default function Modal({
   canClose?: boolean;
   showCloseButton?: boolean;
   className?: string;
+  steps?: Step[];
+  currentStep?: number;
   handleSubmit?: () => void;
   submitText?: string;
   cancelText?: string;
@@ -34,6 +48,17 @@ export default function Modal({
     setOpen(false);
   };
 
+  const activeStep = steps?.[currentStep];
+  const showContent = !steps ? children : activeStep?.children;
+  const showSubmitText = !steps
+    ? submitText
+    : (activeStep?.submitText ?? submitText);
+  const showCancelText = !steps
+    ? cancelText
+    : (activeStep?.cancelText ?? cancelText);
+  const showHandleSubmit = !steps
+    ? handleSubmit
+    : (activeStep?.handleSubmit ?? handleSubmit);
   return (
     <Dialog
       open={open}
@@ -49,10 +74,15 @@ export default function Modal({
           className={`flex flex-col rounded-md border border-stroke-weak bg-background ${className}`}
         >
           {hint && hint}
-          {title ? (
+          {(!steps ? title : activeStep?.title) ? (
             <div className="flex justify-between border-b border-stroke-weak p-4">
+              {activeStep?.handleBack && (
+                <Button handleClick={activeStep.handleBack} variant="unstyled">
+                  <ArrowLeftIcon />
+                </Button>
+              )}
               <h3 className="text-lg font-bold text-typography-strong">
-                {title}
+                {!steps ? title : activeStep?.title}
               </h3>
               {canClose && showCloseButton && (
                 <Button
@@ -66,27 +96,28 @@ export default function Modal({
             </div>
           ) : null}
 
-          <div className="p-6">{children}</div>
+          <div className="p-6">{showContent}</div>
 
-          {(handleSubmit || cancelText) && (
+          {(!!showHandleSubmit || !!showCancelText) && (
             <div className="border-t border-stroke-weak p-4">
               <div className="flex justify-end gap-3">
-                {cancelText && (
+                {showCancelText && (
                   <Button
                     variant="unstyled"
                     className="btn btn-outline btn-small"
                     handleClick={handleClose}
                   >
-                    Keep account
+                    {showCancelText}
                   </Button>
                 )}
-                {handleSubmit && (
+                {showHandleSubmit && (
                   <Button
                     className="btn btn-small btn-brand-secondary"
                     variant="unstyled"
-                    handleClick={handleSubmit}
+                    handleClick={showHandleSubmit}
+                    disabled={activeStep?.disabled}
                   >
-                    Continue with deletion
+                    {showSubmitText}
                   </Button>
                 )}
               </div>

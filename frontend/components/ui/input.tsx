@@ -72,6 +72,29 @@ const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   },
   ref: ForwardedRef<HTMLInputElement>,
 ) {
+  if (type === 'radio') {
+    return (
+      <div className="flex items-center gap-2">
+        <input
+          ref={ref}
+          type="radio"
+          id={htmlFor}
+          name={name}
+          value={value}
+          // checked={value === 'true'}
+          onChange={handleChange}
+          disabled={disabled}
+          className={`accent-primary h-4 w-4 cursor-pointer ${className}`}
+        />
+        {label && (
+          <label htmlFor={htmlFor} className="cursor-pointer text-sm">
+            {label}
+          </label>
+        )}
+      </div>
+    );
+  }
+
   if (variant == 'unstyled' || type == 'file') {
     return (
       <input
