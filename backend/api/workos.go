@@ -1,9 +1,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/colecaccamise/go-backend/util"
 	"github.com/mileusna/useragent"
+	"github.com/workos/workos-go/v4/pkg/usermanagement"
 	"github.com/workos/workos-go/v4/pkg/webhooks"
 	"io"
 	"net/http"
@@ -156,6 +159,35 @@ func (s *Server) handleWorkosWebhook(w http.ResponseWriter, r *http.Request) err
 			fmt.Printf("unknown session event: %s\n", event)
 		}
 
+	case "email_verification":
+		if event == "email_verification.created" {
+			email := data.Email
+			userID := data.UserID
+			emailVerificationID := data.ID
+			emailVerified := data.EmailVerified
+
+			if !emailVerified {
+				response, err := usermanagement.GetEmailVerification(
+					context.Background(),
+					usermanagement.GetEmailVerificationOpts{
+						EmailVerification: emailVerificationID,
+					},
+				)
+				if err != nil {
+					return WriteJSON(w, http.StatusInternalServerError, Error{Error: err.Error()})
+				}
+
+				emailCode := response.Code
+
+				url := fmt.Sprintf("%s/auth/verify-email?code=%s&id=%s", os.Getenv("API_URL"), emailCode, userID)
+
+				err = util.SendEmail(email, "verify your email", fmt.Sprintf("verify your email: %s", url))
+				if err != nil {
+					return WriteJSON(w, http.StatusInternalServerError, Error{Error: err.Error()})
+				}
+			}
+
+		}
 	default:
 		fmt.Printf("unhandled workos webhook event: %s\n", event)
 	}

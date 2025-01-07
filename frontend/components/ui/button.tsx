@@ -18,7 +18,7 @@ export default function Button({
   variant?: string;
   loading?: boolean;
   disabled?: boolean;
-  handleClick?: () => void;
+  handleClick?: (e: React.MouseEvent) => void;
   href?: string;
 }) {
   // const backgroundColor = color ? `bg-${color}` : undefined;

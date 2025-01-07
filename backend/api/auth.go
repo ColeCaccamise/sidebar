@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"net/http"
 	"net/url"
@@ -44,107 +45,120 @@ import (
 //	})
 //}
 
-//func (s *Server) VerifySecurityVersion(next http.Handler) http.Handler {
-//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//		user, _, _, err := getUserIdentity(s, r)
-//		if err != nil {
-//			// proceed to next route (to allow refresh)
-//			next.ServeHTTP(w, r)
-//		}
-//
-//		authToken, err := r.Cookie("auth-token")
-//		if err != nil {
-//			authToken = nil
-//		}
-//		refreshToken, err := r.Cookie("refresh-token")
-//		if err != nil {
-//			refreshToken = nil
-//		}
-//		if authToken != nil {
-//			// Parse token to get claims
-//			_, _, _, err = util.ParseJWT(authToken.Value)
-//			if err != nil {
-//				_ = WriteJSON(w, http.StatusUnauthorized, Error{
-//					Error: "session expired. please log in again.",
-//					Code:  "session_expired",
-//				})
-//				return
-//			}
-//
-//			// Get token claims
-//			token, err := jwt.Parse(authToken.Value, func(token *jwt.Token) (interface{}, error) {
-//				return []byte(os.Getenv("JWT_SECRET")), nil
-//			})
-//			if err != nil {
-//				_ = WriteJSON(w, http.StatusUnauthorized, Error{
-//					Error: "session expired. please log in again.",
-//					Code:  "session_expired",
-//				})
-//				return
-//			}
-//
-//			claims := token.Claims.(jwt.MapClaims)
-//			tokenSecurityVersion := claims["version"]
-//
-//			var refreshTokenSecurityVersion interface{}
-//			if refreshToken != nil {
-//				refreshTokenParsed, err := jwt.Parse(refreshToken.Value, func(token *jwt.Token) (interface{}, error) {
-//					return []byte(os.Getenv("JWT_SECRET")), nil
-//				})
-//				if err == nil {
-//					refreshClaims := refreshTokenParsed.Claims.(jwt.MapClaims)
-//					refreshTokenSecurityVersion = refreshClaims["version"]
-//				}
-//			}
-//
-//			if user.SecurityVersion != nil {
-//				tokenTime, err := time.Parse(time.RFC3339, tokenSecurityVersion.(string))
-//				if err != nil {
-//					WriteJSON(w, http.StatusUnauthorized, Error{Error: "session expired. please log in again.", Code: "session_expired"})
-//					return
-//				}
-//
-//				var refreshTokenTime time.Time
-//				if refreshTokenSecurityVersion != nil {
-//					refreshTokenTime, err = time.Parse(time.RFC3339, refreshTokenSecurityVersion.(string))
-//					if err != nil {
-//						WriteJSON(w, http.StatusUnauthorized, Error{Error: "session expired. please log in again.", Code: "session_expired"})
-//						return
-//					}
-//				}
-//
-//				if tokenTime.Before(*user.SecurityVersion) ||
-//					(refreshTokenSecurityVersion != nil && refreshTokenTime.Before(*user.SecurityVersion)) {
-//					http.SetCookie(w, &http.Cookie{
-//						Name:     "auth-token",
-//						Value:    "",
-//						Path:     "/",
-//						Expires:  time.Unix(0, 0),
-//						Secure:   true,
-//						SameSite: http.SameSiteLaxMode,
-//					})
-//					http.SetCookie(w, &http.Cookie{
-//						Name:     "refresh-token",
-//						Value:    "",
-//						Path:     "/",
-//						Expires:  time.Unix(0, 0),
-//						Secure:   true,
-//						SameSite: http.SameSiteLaxMode,
-//					})
-//
-//					_ = WriteJSON(w, http.StatusUnauthorized, Error{
-//						Error: "session expired. please log in again.",
-//						Code:  "session_expired",
-//					})
-//					return
-//				}
-//			}
-//
-//		}
-//
-//		next.ServeHTTP(w, r)
-//	})
-//}
+func (s *Server) VerifySecurityVersion(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userSession, err := getUserSession(s, r)
+		if err != nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		session := userSession.Session
+		if session == nil {
+			http.SetCookie(w, &http.Cookie{
+				Name:     "auth-token",
+				Value:    "",
+				Path:     "/",
+				Expires:  time.Unix(0, 0),
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			})
+			http.SetCookie(w, &http.Cookie{
+				Name:     "refresh-token",
+				Value:    "",
+				Path:     "/",
+				Expires:  time.Unix(0, 0),
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			})
+
+			_ = WriteJSON(w, http.StatusUnauthorized, Error{
+				Error: "session expired. please log in again.",
+				Code:  "session_expired",
+			})
+			return
+		}
+
+		// handle explicitly revoked sessions
+		if session.RevokedAt != nil {
+			http.SetCookie(w, &http.Cookie{
+				Name:     "auth-token",
+				Value:    "",
+				Path:     "/",
+				Expires:  time.Unix(0, 0),
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			})
+			http.SetCookie(w, &http.Cookie{
+				Name:     "refresh-token",
+				Value:    "",
+				Path:     "/",
+				Expires:  time.Unix(0, 0),
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			})
+
+			_ = WriteJSON(w, http.StatusUnauthorized, Error{Error: "session expired. please log in again.", Code: "session_expired"})
+			return
+		}
+
+		version := userSession.Session.Version
+		user := userSession.User
+
+		if user.Version != nil && version.Before(*user.Version) {
+			http.SetCookie(w, &http.Cookie{
+				Name:     "auth-token",
+				Value:    "",
+				Path:     "/",
+				Expires:  time.Unix(0, 0),
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			})
+			http.SetCookie(w, &http.Cookie{
+				Name:     "refresh-token",
+				Value:    "",
+				Path:     "/",
+				Expires:  time.Unix(0, 0),
+				Secure:   true,
+				SameSite: http.SameSiteLaxMode,
+			})
+
+			_ = WriteJSON(w, http.StatusUnauthorized, Error{
+				Error: "session expired. please log in again.",
+				Code:  "session_expired",
+			})
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
+// verify user email via code
+func (s *Server) handleVerifyEmail(w http.ResponseWriter, r *http.Request) error {
+	code := r.URL.Query().Get("code")
+	userID := r.URL.Query().Get("id")
+
+	redirectUrl := fmt.Sprintf("%s/", os.Getenv("APP_URL"))
+
+	response, err := usermanagement.VerifyEmail(
+		context.Background(),
+		usermanagement.VerifyEmailOpts{
+			Code: code,
+			User: userID,
+		})
+
+	if err != nil {
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
+	}
+
+	fmt.Printf("response: %+v\n", response)
+	fmt.Printf("err: %+v\n", err)
+
+	return nil
+}
 
 // authenticate a user using OAuth/SSO
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
@@ -168,6 +182,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	)
 
 	if err != nil {
+
 		// if 403 -- a verification email shouldve been sent -- redirect to login page with message to check email
 		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
 	}
@@ -387,14 +402,96 @@ func (s *Server) handleGetSessions(w http.ResponseWriter, r *http.Request) error
 
 	var sessionsResponse []*models.SessionResponse
 	for _, session := range sessions {
-		sessionsResponse = append(sessionsResponse, models.NewSessionResponse(session))
+		if session.RevokedAt == nil {
+			sessionsResponse = append(sessionsResponse, models.NewSessionResponse(session))
+		}
 	}
 
 	return WriteJSON(w, http.StatusOK, Response{
 		Data: map[string]interface{}{
-			"sessions":           sessions,
+			"sessions":           sessionsResponse,
 			"current_session_id": userSession.Session.ID,
 		},
+	})
+}
+
+func (s *Server) handleRevokeSession(w http.ResponseWriter, r *http.Request) error {
+	id := chi.URLParam(r, "id")
+
+	_, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	session, err := s.store.GetSessionByID(uuid.MustParse(id))
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "session is invalid.", Code: "invalid_session"})
+	}
+
+	now := time.Now()
+	session.RevokedAt = &now
+
+	err = s.store.UpdateSession(session)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+	err = usermanagement.RevokeSession(context.Background(),
+		usermanagement.RevokeSessionOpts{
+			SessionID: session.WorkosSessionID,
+		})
+
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "session is invalid.", Code: "invalid_session"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Message: "session revoked.",
+	})
+}
+func (s *Server) handleRevokeSessions(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	sessions, err := s.store.GetSessionsByUserID(userSession.User.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	now := time.Now()
+	for _, session := range sessions {
+		// Skip current session
+		if session.ID == userSession.Session.ID {
+			continue
+		}
+
+		if session.RevokedAt == nil {
+			session.RevokedAt = &now
+
+			err = s.store.UpdateSession(session)
+			if err != nil {
+				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+
+			err = usermanagement.RevokeSession(
+				context.Background(),
+				usermanagement.RevokeSessionOpts{
+					SessionID: session.WorkosSessionID,
+				})
+
+			if err != nil {
+				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+		}
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Message: "sessions revoked.",
 	})
 }
 
@@ -1078,6 +1175,17 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
 		Secure:   true,
 		SameSite: http.SameSiteLaxMode,
 	})
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+	err = usermanagement.RevokeSession(context.Background(),
+		usermanagement.RevokeSessionOpts{
+			SessionID: decoded.SessionID,
+		})
+
+	if err != nil {
+		fmt.Printf("Failed to revoke session: %v\n", err)
+		return WriteJSON(w, http.StatusOK, Response{Message: "internal server error.", Code: "internal_server_error"})
+	}
 
 	return WriteJSON(w, http.StatusOK, Response{Message: "successfully logged out.", Data: map[string]string{"redirect_url": logoutUrl.String()}})
 }

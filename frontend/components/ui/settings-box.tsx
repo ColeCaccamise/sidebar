@@ -53,7 +53,7 @@ const SettingsBox = forwardRef(function SettingsBox(
         variant === 'destructive'
           ? 'border-error-stroke-weak'
           : 'border-stroke-weak'
-      } w-full max-w-4xl gap-2 rounded-md`}
+      } w-full max-w-5xl gap-2 rounded-md`}
     >
       <div className="flex flex-col gap-4 px-8 py-6">
         <div className="flex flex-col gap-4">

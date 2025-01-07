@@ -5,6 +5,7 @@ import {
   useQuery,
   QueryClient,
   QueryClientProvider,
+  useQueryClient,
 } from '@tanstack/react-query';
 import api from '@/lib/axios';
 import {
@@ -21,6 +22,7 @@ import Button from '@/components/ui/button';
 import Modal from '@/components/ui/modal';
 import { useState } from 'react';
 import Divider from '@/components/ui/divider';
+import { handleLogout, revokeAllSessions, revokeSession } from './actions';
 
 const queryClient = new QueryClient();
 
@@ -38,6 +40,7 @@ function getBrowserIcon(device: string) {
 function SecurityPageContent() {
   const [isOpen, setIsOpen] = useState(false);
   const [selectedSession, setSelectedSession] = useState<Session | null>(null);
+  const queryClient = useQueryClient();
 
   // fetch active sessions and current session id
   const { data } = useQuery<{
@@ -80,7 +83,7 @@ function SecurityPageContent() {
         {currentSession && (
           <Button
             variant="unstyled"
-            key={currentSession.ip_address}
+            key={currentSession.id}
             className="group flex flex-col gap-2 rounded-lg border border-stroke-weak bg-fill p-4 hover:bg-secondary-fill"
             handleClick={() => {
               setSelectedSession(currentSession);
@@ -118,6 +121,16 @@ function SecurityPageContent() {
                   </div>
                 </div>
               </div>
+              <Button
+                variant="unstyled"
+                className="btn-small btn hidden text-sm hover:bg-accent group-hover:block"
+                handleClick={async (e) => {
+                  e.stopPropagation();
+                  await handleLogout();
+                }}
+              >
+                Log out
+              </Button>
             </div>
           </Button>
         )}
@@ -131,7 +144,23 @@ function SecurityPageContent() {
               </span>
               <Button
                 variant="unstyled"
-                className="rounded-md px-2 py-1 text-sm hover:bg-secondary-fill"
+                className="btn btn-small rounded-md px-2 py-1 text-sm hover:bg-secondary-fill"
+                handleClick={async (e) => {
+                  e.stopPropagation();
+                  const res = await revokeAllSessions();
+                  if (!res.error) {
+                    queryClient.setQueryData(['sessions'], (oldData: any) => ({
+                      ...oldData,
+                      sessions: oldData.sessions.filter(
+                        (s: Session) => s.id === currentSessionId,
+                      ),
+                    }));
+                    setSelectedSession(null);
+                    setIsOpen(false);
+                  } else {
+                    console.error(res.code);
+                  }
+                }}
               >
                 Revoke all
               </Button>
@@ -141,7 +170,7 @@ function SecurityPageContent() {
               {otherSessions.map((session) => (
                 <Button
                   variant="unstyled"
-                  key={session.ip_address}
+                  key={session.id}
                   className="group flex flex-col gap-2 p-4 hover:bg-secondary-fill"
                   handleClick={() => {
                     setSelectedSession(session);
@@ -172,10 +201,11 @@ function SecurityPageContent() {
                               {(() => {
                                 const lastSeen = new Date(session.last_seen_at);
                                 const now = new Date();
-                                const diffHours = Math.floor(
+                                const diffMinutes = Math.floor(
                                   (now.getTime() - lastSeen.getTime()) /
-                                    (1000 * 60 * 60),
+                                    (1000 * 60),
                                 );
+                                const diffHours = Math.floor(diffMinutes / 60);
                                 const diffDays = Math.floor(diffHours / 24);
                                 const diffWeeks = Math.floor(diffDays / 7);
 
@@ -185,7 +215,13 @@ function SecurityPageContent() {
                                 if (diffDays > 0) {
                                   return `Last seen ${diffDays} ${diffDays === 1 ? 'day' : 'days'} ago`;
                                 }
-                                return `Last seen ${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+                                if (diffHours > 0) {
+                                  return `Last seen ${diffHours} ${diffHours === 1 ? 'hour' : 'hours'} ago`;
+                                }
+                                if (diffMinutes > 0) {
+                                  return `Last seen ${diffMinutes} ${diffMinutes === 1 ? 'minute' : 'minutes'} ago`;
+                                }
+                                return 'Last seen moments ago';
                               })()}
                             </span>
                           )}
@@ -196,6 +232,25 @@ function SecurityPageContent() {
                       <Button
                         variant="unstyled"
                         className="btn btn-small hidden text-sm hover:bg-accent group-hover:block"
+                        handleClick={async (e) => {
+                          e.stopPropagation();
+                          const res = await revokeSession(session.id);
+                          if (!res.error) {
+                            queryClient.setQueryData(
+                              ['sessions'],
+                              (oldData: any) => ({
+                                ...oldData,
+                                sessions: oldData.sessions.filter(
+                                  (s: Session) => s.id !== session.id,
+                                ),
+                              }),
+                            );
+                            setSelectedSession(null);
+                            setIsOpen(false);
+                          } else {
+                            console.error(res.code);
+                          }
+                        }}
                       >
                         Revoke
                       </Button>
@@ -276,8 +331,29 @@ function SecurityPageContent() {
               </div>
             </div>
             <div>
-              <Button variant="destructive" className="btn-small">
-                Revoke session
+              <Button
+                variant="destructive"
+                className="btn-small"
+                handleClick={async (e) => {
+                  e.stopPropagation();
+                  const res = await revokeSession(selectedSession.id);
+                  if (!res.error) {
+                    queryClient.setQueryData(['sessions'], (oldData: any) => ({
+                      ...oldData,
+                      sessions: oldData?.sessions?.filter(
+                        (s: Session) => s.id !== selectedSession.id,
+                      ),
+                    }));
+                    setSelectedSession(null);
+                    setIsOpen(false);
+                  } else {
+                    console.error(res.code);
+                  }
+                }}
+              >
+                {selectedSession.id === currentSessionId
+                  ? 'Log out of this device'
+                  : 'Revoke session'}
               </Button>
             </div>
           </div>

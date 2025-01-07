@@ -30,23 +30,23 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		r.Get("/confirm", makeHttpHandleFunc(s.handleConfirmMagicAuth))
 		r.Post("/forgot-password", makeHttpHandleFunc(s.handleForgotPassword))
 		//r.Post("/change-password", makeHttpHandleFunc(s.handleChangePassword))
-		//r.Delete("/sessions", makeHttpHandleFunc(s.handleDeleteSessions))
 
 		// WorkOS
 		r.Get("/callback", makeHttpHandleFunc(s.handleCallback))
 		r.Get("/verify", makeHttpHandleFunc(s.handleVerify))
+		r.Get("/verify-email", makeHttpHandleFunc(s.handleVerifyEmail))
 		r.Get("/authorize/{provider}", makeHttpHandleFunc(s.handleGetAuthorizationUrl))
 	})
 
 	r.Group(func(r chi.Router) {
-		//r.Use(s.VerifySecurityVersion)
+		r.Use(s.VerifySecurityVersion)
 		r.Get("/auth/identity", makeHttpHandleFunc(s.handleIdentity))
 		r.Get("/auth/refresh", makeHttpHandleFunc(s.handleRefreshToken))
 	})
 
 	r.Group(func(r chi.Router) {
 		//r.Use(s.VerifyUserNotDeleted)
-		//r.Use(s.VerifySecurityVersion)
+		r.Use(s.VerifySecurityVersion)
 		r.Route("/tokens", func(r chi.Router) {
 			r.Get("/", makeHttpHandleFunc(s.handleGetAllTokens))
 			// r.Post("/", makeHttpHandleFunc(s.handleCreateToken))
@@ -55,10 +55,12 @@ func (s *Server) SetupRoutes() *chi.Mux {
 	})
 
 	r.Group(func(r chi.Router) {
+		r.Use(s.VerifySecurityVersion)
 		r.Use(middleware.VerifyAuth)
 		r.Get("/auth/sessions", makeHttpHandleFunc(s.handleGetSessions))
+		r.Delete("/auth/sessions/{id}", makeHttpHandleFunc(s.handleRevokeSession))
+		r.Delete("/auth/sessions", makeHttpHandleFunc(s.handleRevokeSessions))
 		//r.Use(s.VerifyUserNotDeleted)
-		//r.Use(s.VerifySecurityVersion)
 		//r.Post("/auth/verify-password", makeHttpHandleFunc(s.handleVerifyPassword))
 	})
 
@@ -66,7 +68,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.VerifyAuth)
 		//r.Use(s.VerifyUserNotDeleted)
-		//r.Use(s.VerifySecurityVersion)
+		r.Use(s.VerifySecurityVersion)
 		r.Route("/prompts", func(r chi.Router) {
 			//r.Get("/", makeHttpHandleFunc(s.handleGetPrompts))
 			r.Patch("/{id}/dismiss", makeHttpHandleFunc(s.handleDismissPrompt))
@@ -77,7 +79,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.VerifyAuth)
 		//r.Use(s.VerifyUserNotDeleted)
-		//r.Use(s.VerifySecurityVersion)
+		r.Use(s.VerifySecurityVersion)
 		r.Route("/teams", func(r chi.Router) {
 			r.Post("/", makeHttpHandleFunc(s.handleCreateTeam))
 			r.Get("/{slug}", makeHttpHandleFunc(s.handleGetTeamBySlug))
@@ -100,13 +102,13 @@ func (s *Server) SetupRoutes() *chi.Mux {
 					r.Patch("/default/{id}", makeHttpHandleFunc(s.handleUpdateDefaultPaymentMethod))
 					//r.Delete("/{id}", makeHttpHandleFunc(s.handleDeletePaymentMethod))
 				})
-				//r.Get("/invoices", makeHttpHandleFunc(s.handleGetInvoices))
+				r.Get("/invoices", makeHttpHandleFunc(s.handleGetInvoices))
 				r.Get("/plans", makeHttpHandleFunc(s.handleGetPlans))
 				r.Post("/checkout", makeHttpHandleFunc(s.handleCreateCheckoutSession))
 				r.Post("/portal", makeHttpHandleFunc(s.handleCreatePortalSession))
 				r.Route("/subscription", func(r chi.Router) {
 					r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
-					//r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
+					r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
 					r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
 					r.Patch("/interval", makeHttpHandleFunc(s.handleUpdateSubscriptionInterval))
 				})

@@ -45,6 +45,7 @@ type Session struct {
 	LastLocation     string     `json:"last_location"`
 	LastSeenAt       *time.Time `json:"last_seen_at"`
 	AuthMethod       AuthMethod `json:"auth_method"`
+	RevokedAt        *time.Time `json:"revoked_at"`
 }
 
 type SessionResponse struct {

@@ -473,12 +473,7 @@ export default function AccountSettingsPage() {
           }}
         >
           <Modal
-            title="Confirm Delete"
-            hint={
-              <span className="text-sm font-bold uppercase text-error">
-                Danger Zone
-              </span>
-            }
+            title="Delete your account?"
             open={showDeleteModal}
             setOpen={setShowDeleteModal}
             onClose={() => setShowDeleteModal(false)}

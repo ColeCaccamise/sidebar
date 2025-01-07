@@ -1,9 +1,9 @@
 .btn {
-  @apply inline-flex w-fit items-center justify-center rounded-md bg-none px-6 py-3 font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
+  @apply inline-flex h-10 w-fit items-center justify-center rounded-md bg-none px-4 font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
 }
 
 .btn-small {
-  @apply inline-flex w-fit items-center justify-center rounded-md bg-none px-4 py-2 font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
+  @apply inline-flex w-fit items-center justify-center rounded-md bg-none px-3.5 py-2 text-sm font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
 }
 
 .btn-brand {
@@ -12,6 +12,10 @@
 
 .btn-brand-secondary {
   @apply bg-brand-secondary text-typography-strong hover:opacity-90;
+}
+
+.btn-outline {
+  @apply border border-stroke-weak bg-transparent text-typography-strong hover:bg-fill;
 }
 
 button[type='submit'].btn-brand,
