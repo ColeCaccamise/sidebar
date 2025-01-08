@@ -4,9 +4,6 @@ import Button from '@/components/ui/button';
 
 type Step = {
   children: React.ReactNode;
-  submitText?: string;
-  cancelText?: string;
-  handleSubmit?: () => void;
   title?: string;
   disabled?: boolean;
   handleBack?: () => void;
@@ -24,9 +21,11 @@ export default function Modal({
   className,
   steps,
   currentStep = 0,
-  handleSubmit = () => {},
+  handleSubmit,
   submitText = 'Submit',
   cancelText = 'Cancel',
+  showSubmitButton = false,
+  showCancelButton = false,
 }: {
   open?: boolean;
   setOpen?: (open: boolean) => void;
@@ -42,6 +41,8 @@ export default function Modal({
   handleSubmit?: () => void;
   submitText?: string;
   cancelText?: string;
+  showSubmitButton?: boolean;
+  showCancelButton?: boolean;
 }) {
   const handleClose = () => {
     onClose();
@@ -50,15 +51,7 @@ export default function Modal({
 
   const activeStep = steps?.[currentStep];
   const showContent = !steps ? children : activeStep?.children;
-  const showSubmitText = !steps
-    ? submitText
-    : (activeStep?.submitText ?? submitText);
-  const showCancelText = !steps
-    ? cancelText
-    : (activeStep?.cancelText ?? cancelText);
-  const showHandleSubmit = !steps
-    ? handleSubmit
-    : (activeStep?.handleSubmit ?? handleSubmit);
+
   return (
     <Dialog
       open={open}
@@ -98,31 +91,32 @@ export default function Modal({
 
           <div className="p-6">{showContent}</div>
 
-          {(!!showHandleSubmit || !!showCancelText) && (
+          {(!steps && (showSubmitButton || showCancelButton)) ||
+          (steps && (!!handleSubmit || showCancelButton)) ? (
             <div className="border-t border-stroke-weak p-4">
               <div className="flex justify-end gap-3">
-                {showCancelText && (
+                {showCancelButton && (
                   <Button
                     variant="unstyled"
                     className="btn btn-outline btn-small"
                     handleClick={handleClose}
                   >
-                    {showCancelText}
+                    {cancelText}
                   </Button>
                 )}
-                {showHandleSubmit && (
+                {((!steps && showSubmitButton) || steps) && handleSubmit && (
                   <Button
                     className="btn btn-small btn-brand-secondary"
                     variant="unstyled"
-                    handleClick={showHandleSubmit}
+                    handleClick={handleSubmit}
                     disabled={activeStep?.disabled}
                   >
-                    {showSubmitText}
+                    {submitText}
                   </Button>
                 )}
               </div>
             </div>
-          )}
+          ) : null}
         </DialogPanel>
       </div>
     </Dialog>

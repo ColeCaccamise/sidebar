@@ -123,7 +123,7 @@ function SecurityPageContent() {
               </div>
               <Button
                 variant="unstyled"
-                className="btn-small btn hidden text-sm hover:bg-accent group-hover:block"
+                className="btn-small btn hidden h-10 px-4 text-sm hover:bg-accent group-hover:block"
                 handleClick={async (e) => {
                   e.stopPropagation();
                   await handleLogout();
@@ -144,7 +144,7 @@ function SecurityPageContent() {
               </span>
               <Button
                 variant="unstyled"
-                className="btn btn-small rounded-md px-2 py-1 text-sm hover:bg-secondary-fill"
+                className="btn btn-small h-10 rounded-md px-4 py-1 text-sm hover:bg-secondary-fill"
                 handleClick={async (e) => {
                   e.stopPropagation();
                   const res = await revokeAllSessions();
@@ -231,7 +231,7 @@ function SecurityPageContent() {
                     <div className="flex flex-col items-end justify-center gap-1">
                       <Button
                         variant="unstyled"
-                        className="btn btn-small hidden text-sm hover:bg-accent group-hover:block"
+                        className="btn btn-small hidden h-10 px-4 text-sm hover:bg-accent group-hover:block"
                         handleClick={async (e) => {
                           e.stopPropagation();
                           const res = await revokeSession(session.id);
@@ -271,6 +271,36 @@ function SecurityPageContent() {
         }}
         title="Session"
         className="w-full max-w-xl"
+        submitText={
+          selectedSession?.id === currentSessionId
+            ? 'Log out of this device'
+            : 'Revoke session'
+        }
+        showSubmitButton={true}
+        handleSubmit={() => {
+          if (!selectedSession) return;
+          if (selectedSession.id === currentSessionId) {
+            handleLogout();
+          } else {
+            revokeSession(selectedSession.id).then((res) => {
+              if (!res.error) {
+                queryClient.setQueryData(['sessions'], (oldData: any) => {
+                  if (!oldData) return oldData;
+                  return {
+                    ...oldData,
+                    sessions: oldData.sessions.filter(
+                      (s: Session) => s.id !== selectedSession.id,
+                    ),
+                  };
+                });
+                setSelectedSession(null);
+                setIsOpen(false);
+              } else {
+                console.error(res.code);
+              }
+            });
+          }
+        }}
       >
         {selectedSession && (
           <div className="flex flex-col items-end gap-8">
@@ -329,32 +359,6 @@ function SecurityPageContent() {
                   <span className="text-typography-muted">Unknown</span>
                 )}
               </div>
-            </div>
-            <div>
-              <Button
-                variant="destructive"
-                className="btn-small"
-                handleClick={async (e) => {
-                  e.stopPropagation();
-                  const res = await revokeSession(selectedSession.id);
-                  if (!res.error) {
-                    queryClient.setQueryData(['sessions'], (oldData: any) => ({
-                      ...oldData,
-                      sessions: oldData?.sessions?.filter(
-                        (s: Session) => s.id !== selectedSession.id,
-                      ),
-                    }));
-                    setSelectedSession(null);
-                    setIsOpen(false);
-                  } else {
-                    console.error(res.code);
-                  }
-                }}
-              >
-                {selectedSession.id === currentSessionId
-                  ? 'Log out of this device'
-                  : 'Revoke session'}
-              </Button>
             </div>
           </div>
         )}
