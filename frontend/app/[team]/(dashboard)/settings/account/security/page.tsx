@@ -68,8 +68,136 @@ function SecurityPageContent() {
         new Date(b.last_seen_at).getTime() - new Date(a.last_seen_at).getTime(),
     );
 
+  const authMethodMapping = {
+    email: 'Email',
+    google: 'Google',
+    github: 'GitHub',
+  };
+
+  const [revokeModalOpen, setRevokeModalOpen] = useState(false);
+  const [logoutModalOpen, setLogoutModalOpen] = useState(false);
+  const [revokeSessionModalOpen, setRevokeSessionModalOpen] = useState(false);
+  const [revokeAllModalOpen, setRevokeAllModalOpen] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+    null,
+  );
+
   return (
     <>
+      <Modal
+        title="Revoke session?"
+        open={revokeModalOpen}
+        submitText="Revoke session"
+        showSubmitButton={true}
+        onClose={() => {
+          setSelectedSessionId(null);
+          setRevokeModalOpen(false);
+        }}
+        handleSubmit={async () => {
+          if (!selectedSessionId) return;
+
+          const res = await revokeSession(selectedSessionId);
+          if (!res.error) {
+            queryClient.setQueryData(['sessions'], (oldData: any) => ({
+              ...oldData,
+              sessions: oldData.sessions.filter(
+                (s: Session) => s.id !== selectedSessionId,
+              ),
+            }));
+            setSelectedSessionId(null);
+            setRevokeModalOpen(false);
+          } else {
+            console.error(res.code);
+          }
+        }}
+      >
+        <div className="flex flex-col gap-2">
+          <p>Are you sure you want to revoke access to this device?</p>
+        </div>
+      </Modal>
+
+      <Modal
+        title="Revoke all sessions?"
+        open={revokeAllModalOpen}
+        submitText="Revoke all sessions"
+        onClose={() => {
+          setRevokeAllModalOpen(false);
+        }}
+        handleSubmit={async () => {
+          const res = await revokeAllSessions();
+          if (!res.error) {
+            queryClient.setQueryData(['sessions'], (oldData: any) => ({
+              ...oldData,
+              sessions: oldData.sessions.filter(
+                (s: Session) => s.id === currentSessionId,
+              ),
+            }));
+            setRevokeAllModalOpen(false);
+          } else {
+            console.error(res.code);
+          }
+        }}
+      >
+        <div className="flex flex-col gap-2">
+          <p>Are you sure you want to revoke access to all devices?</p>
+        </div>
+      </Modal>
+
+      <Modal
+        title="Log out?"
+        open={logoutModalOpen}
+        submitText="Log out"
+        showSubmitButton={true}
+        onClose={() => {
+          setLogoutModalOpen(false);
+        }}
+        handleSubmit={async () => {
+          await handleLogout();
+        }}
+      >
+        <div className="flex flex-col gap-2">
+          <p>Are you sure you want to revoke access to this device?</p>
+        </div>
+      </Modal>
+
+      <Modal
+        title="Revoke session?"
+        open={revokeSessionModalOpen}
+        submitText="Revoke session"
+        showSubmitButton={true}
+        onClose={() => {
+          setRevokeSessionModalOpen(false);
+        }}
+        handleSubmit={async () => {
+          if (!selectedSession) return;
+          if (selectedSession.id === currentSessionId) {
+            handleLogout();
+          } else {
+            revokeSession(selectedSession.id).then((res) => {
+              if (!res.error) {
+                queryClient.setQueryData(['sessions'], (oldData: any) => {
+                  if (!oldData) return oldData;
+                  return {
+                    ...oldData,
+                    sessions: oldData.sessions.filter(
+                      (s: Session) => s.id !== selectedSession.id,
+                    ),
+                  };
+                });
+                setSelectedSession(null);
+                setIsOpen(false);
+              } else {
+                console.error(res.code);
+              }
+            });
+          }
+        }}
+      >
+        <div className="flex flex-col gap-2">
+          <p>Are you sure you want to revoke access to this device?</p>
+        </div>
+      </Modal>
+
       <h1>Security & Access</h1>
 
       <div className="flex w-full flex-col gap-6">
@@ -126,7 +254,8 @@ function SecurityPageContent() {
                 className="btn-small btn hidden h-10 px-4 text-sm hover:bg-accent group-hover:block"
                 handleClick={async (e) => {
                   e.stopPropagation();
-                  await handleLogout();
+
+                  setLogoutModalOpen(true);
                 }}
               >
                 Log out
@@ -147,19 +276,7 @@ function SecurityPageContent() {
                 className="btn btn-small h-10 rounded-md px-4 py-1 text-sm hover:bg-secondary-fill"
                 handleClick={async (e) => {
                   e.stopPropagation();
-                  const res = await revokeAllSessions();
-                  if (!res.error) {
-                    queryClient.setQueryData(['sessions'], (oldData: any) => ({
-                      ...oldData,
-                      sessions: oldData.sessions.filter(
-                        (s: Session) => s.id === currentSessionId,
-                      ),
-                    }));
-                    setSelectedSession(null);
-                    setIsOpen(false);
-                  } else {
-                    console.error(res.code);
-                  }
+                  setRevokeAllModalOpen(true);
                 }}
               >
                 Revoke all
@@ -234,22 +351,8 @@ function SecurityPageContent() {
                         className="btn btn-small hidden h-10 px-4 text-sm hover:bg-accent group-hover:block"
                         handleClick={async (e) => {
                           e.stopPropagation();
-                          const res = await revokeSession(session.id);
-                          if (!res.error) {
-                            queryClient.setQueryData(
-                              ['sessions'],
-                              (oldData: any) => ({
-                                ...oldData,
-                                sessions: oldData.sessions.filter(
-                                  (s: Session) => s.id !== session.id,
-                                ),
-                              }),
-                            );
-                            setSelectedSession(null);
-                            setIsOpen(false);
-                          } else {
-                            console.error(res.code);
-                          }
+                          setSelectedSessionId(session.id);
+                          setRevokeModalOpen(true);
                         }}
                       >
                         Revoke
@@ -273,33 +376,12 @@ function SecurityPageContent() {
         className="w-full max-w-xl"
         submitText={
           selectedSession?.id === currentSessionId
-            ? 'Log out of this device'
+            ? 'Log out'
             : 'Revoke session'
         }
         showSubmitButton={true}
         handleSubmit={() => {
-          if (!selectedSession) return;
-          if (selectedSession.id === currentSessionId) {
-            handleLogout();
-          } else {
-            revokeSession(selectedSession.id).then((res) => {
-              if (!res.error) {
-                queryClient.setQueryData(['sessions'], (oldData: any) => {
-                  if (!oldData) return oldData;
-                  return {
-                    ...oldData,
-                    sessions: oldData.sessions.filter(
-                      (s: Session) => s.id !== selectedSession.id,
-                    ),
-                  };
-                });
-                setSelectedSession(null);
-                setIsOpen(false);
-              } else {
-                console.error(res.code);
-              }
-            });
-          }
+          setRevokeSessionModalOpen(true);
         }}
       >
         {selectedSession && (
@@ -353,7 +435,11 @@ function SecurityPageContent() {
                 <span className="text-typography-strong">Method</span>
                 {selectedSession.auth_method ? (
                   <span className="text-typography-strong">
-                    {selectedSession.auth_method}
+                    {
+                      authMethodMapping[
+                        selectedSession.auth_method as keyof typeof authMethodMapping
+                      ]
+                    }
                   </span>
                 ) : (
                   <span className="text-typography-muted">Unknown</span>

@@ -321,8 +321,6 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  console.log('PATHNAME: ', pathname);
-
   // redirect to default team slug when landing on root page
   if (pathname === `/`) {
     return NextResponse.redirect(`${appUrl}/${user?.default_team_slug}`);

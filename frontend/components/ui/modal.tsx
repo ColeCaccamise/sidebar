@@ -1,12 +1,14 @@
 import { Dialog, DialogPanel, DialogBackdrop } from '@headlessui/react';
 import { ArrowLeftIcon, Cross1Icon } from '@radix-ui/react-icons';
 import Button from '@/components/ui/button';
+import Spinner from './spinner';
 
 type Step = {
   children: React.ReactNode;
   title?: string;
   disabled?: boolean;
-  handleBack?: () => void;
+  handleBack?: () => void | Promise<void>;
+  handleSubmit?: () => void | Promise<void>;
 };
 
 export default function Modal({
@@ -24,8 +26,9 @@ export default function Modal({
   handleSubmit,
   submitText = 'Submit',
   cancelText = 'Cancel',
-  showSubmitButton = false,
-  showCancelButton = false,
+  showSubmitButton = true,
+  showCancelButton = true,
+  isLoading = false,
 }: {
   open?: boolean;
   setOpen?: (open: boolean) => void;
@@ -41,8 +44,9 @@ export default function Modal({
   handleSubmit?: () => void;
   submitText?: string;
   cancelText?: string;
-  showSubmitButton?: boolean;
   showCancelButton?: boolean;
+  showSubmitButton?: boolean;
+  isLoading?: boolean;
 }) {
   const handleClose = () => {
     onClose();
@@ -62,7 +66,7 @@ export default function Modal({
         className="fixed inset-0 bg-black/40"
         onClick={canClose ? handleClose : () => {}}
       />
-      <div className="fixed inset-0 flex w-screen items-center justify-center">
+      <div className="fixed inset-0 flex w-screen items-center justify-center px-8">
         <DialogPanel
           className={`flex flex-col rounded-md border border-stroke-weak bg-background ${className}`}
         >
@@ -99,7 +103,7 @@ export default function Modal({
                   <Button
                     variant="unstyled"
                     className="btn btn-outline btn-small"
-                    handleClick={handleClose}
+                    handleClick={activeStep?.handleBack || handleClose}
                   >
                     {cancelText}
                   </Button>
@@ -108,9 +112,14 @@ export default function Modal({
                   <Button
                     className="btn btn-small btn-brand-secondary"
                     variant="unstyled"
-                    handleClick={handleSubmit}
-                    disabled={activeStep?.disabled}
+                    handleClick={activeStep?.handleSubmit || handleSubmit}
+                    disabled={activeStep?.disabled || isLoading}
                   >
+                    {isLoading && (
+                      <span className="mr-2">
+                        <Spinner variant="light" />
+                      </span>
+                    )}
                     {submitText}
                   </Button>
                 )}
