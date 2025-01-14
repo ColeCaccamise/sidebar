@@ -104,10 +104,18 @@ export async function middleware(request: NextRequest) {
   const termsAccepted = user?.terms_accepted;
   const teamCreatedOrJoined = user?.team_created_or_joined;
   const teammatesInvited = user?.teammates_invited;
+  const deleted = user?.deleted;
   let teamSlug = user?.default_team_slug;
   let dashboardUrl = `${appUrl}/${teamSlug}`;
 
-  console.log('EMAIL CONFIRMED: ', emailConfirmed);
+  // redirect to deleted page if user has been deleted
+  if (deleted) {
+    if (pathname === `/deleted`) {
+      return NextResponse.next();
+    } else {
+      return NextResponse.redirect(`${appUrl}/deleted`);
+    }
+  }
 
   // todo decide if we want WorkOS password auth
   // verify email confirmed
@@ -297,7 +305,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  const USER_ONBOARDING_ROUTES = ['/onboarding/terms', '/onboarding/team'];
+  const USER_ONBOARDING_ROUTES = ['/onboarding/terms'];
   const TEAM_ONBOARDING_ROUTES = [
     `/${currentTeamSlug}/onboarding/plans`,
     `/${currentTeamSlug}/onboarding/invite`,

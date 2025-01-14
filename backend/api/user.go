@@ -61,7 +61,7 @@ func (s *Server) handleGetUserByID(w http.ResponseWriter, r *http.Request) error
 func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) error {
 	userSession, err := getUserSession(s, r)
 	if err != nil {
-		return err
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "cannot update user.", Code: "internal_server_error"})
 	}
 
 	user := userSession.User
@@ -224,6 +224,7 @@ func (s *Server) handleUpdateUser(w http.ResponseWriter, r *http.Request) error 
 //}
 
 func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) error {
+	// todo handle team deletion - mark team as deleted when this user is the only owner
 	deleteAccountReq := new(models.DeleteAccountRequest)
 	if err := json.NewDecoder(r.Body).Decode(deleteAccountReq); err != nil {
 		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "empty body.", Code: "empty_body"})
@@ -239,7 +240,6 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) err
 
 	if reason == "other" && otherReason == "" {
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "other reason is required.", Code: "missing_other_deleted_reason"})
-
 	}
 
 	userSession, err := getUserSession(s, r)
@@ -302,6 +302,62 @@ func (s *Server) handleDeleteAccount(w http.ResponseWriter, r *http.Request) err
 		user.DeletedAt = &now
 
 		if err = s.store.UpdateUser(user); err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		// update security version
+		user.Version = &now
+
+		// revoke all active sessions
+		sessions, err := s.store.GetActiveSessionsByUserID(user.ID)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		for _, sess := range sessions {
+			err = usermanagement.RevokeSession(
+				context.Background(),
+				usermanagement.RevokeSessionOpts{
+					SessionID: sess.WorkosSessionID,
+				})
+
+			if err != nil {
+				fmt.Printf("Error revoking session: %v\n", err)
+				return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+
+			sess.RevokedAt = &now
+			if err = s.store.UpdateSession(sess); err != nil {
+				fmt.Printf("Error revoking session: %v\n", err)
+				return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+		}
+
+	}
+
+	return WriteJSON(w, http.StatusNoContent, nil)
+}
+
+func (s *Server) handleRestoreAccount(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized.", Code: "unauthorized"})
+	}
+
+	user := userSession.User
+	restorable := time.Since(*user.DeletedAt) < time.Hour*24*60
+
+	if !restorable {
+		return WriteJSON(w, http.StatusForbidden, Error{Error: "account cannot be restored. please contact support.", Code: "forbidden"})
+	}
+
+	if user.DeletedAt != nil && restorable {
+		user.DeletedAt = nil
+		now := time.Now()
+		user.RestoredAt = &now
+
+		err = s.store.UpdateUser(user)
+		if err != nil {
 			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
 		}
 	}

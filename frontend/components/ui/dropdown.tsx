@@ -2,8 +2,22 @@
 
 import { Menu, MenuButton, MenuItems } from '@headlessui/react';
 import DropdownMenuItem from '@/components/ui/dropdown-menu-item';
-import { ChevronDownIcon } from '@radix-ui/react-icons';
+import { ChevronDownIcon, ChevronRightIcon } from '@radix-ui/react-icons';
 import Divider from './divider';
+
+type DropdownItem = {
+  id?: string;
+  icon?: React.ReactNode;
+  label?: string;
+  href?: string;
+  kbd?: string;
+  handleClick?: () => void;
+  divider?: boolean;
+  disabled?: boolean;
+  destructive?: boolean;
+  tooltip?: string;
+  subItems?: Array<DropdownItem>;
+};
 
 export default function Dropdown({
   children,
@@ -14,18 +28,7 @@ export default function Dropdown({
   dropdownContent,
 }: {
   children: React.ReactNode;
-  menuItems?: Array<{
-    id?: string;
-    icon?: React.ReactNode;
-    label?: string;
-    href?: string;
-    kbd?: string;
-    handleClick?: () => void;
-    divider?: boolean;
-    disabled?: boolean;
-    destructive?: boolean;
-    tooltip?: string;
-  }>;
+  menuItems?: Array<DropdownItem>;
   showIcon?: boolean;
   position?: 'left' | 'right';
   top?: boolean;
@@ -49,6 +52,37 @@ export default function Dropdown({
             <div key={item.id || index}>
               {item.divider ? (
                 <Divider className="-mx-1 my-1 h-[1px] w-[calc(100%+0.5rem)]" />
+              ) : item.subItems ? (
+                <Menu as="div" className="relative w-full">
+                  {({ open }) => (
+                    <>
+                      <MenuButton className="transition-effect flex w-full items-center justify-between gap-2 whitespace-nowrap rounded-md p-2 text-sm hover:bg-fill">
+                        <div className="flex items-center gap-2">
+                          {item.icon}
+                          {item.label}
+                        </div>
+                        <ChevronRightIcon className="h-4 w-4" />
+                      </MenuButton>
+                      {open && (
+                        <MenuItems className="absolute left-full top-0 ml-1 min-w-48 origin-top-left rounded-lg border border-stroke-weak bg-fill-solid p-1 shadow-lg">
+                          {item?.subItems?.map((subItem, subIndex) => (
+                            <DropdownMenuItem
+                              key={subItem.id || subIndex}
+                              icon={subItem.icon}
+                              label={subItem.label}
+                              kbd={subItem.kbd}
+                              href={subItem.href}
+                              handleClick={subItem.handleClick}
+                              disabled={subItem.disabled}
+                              destructive={subItem.destructive}
+                              tooltip={subItem.tooltip}
+                            />
+                          ))}
+                        </MenuItems>
+                      )}
+                    </>
+                  )}
+                </Menu>
               ) : (
                 <DropdownMenuItem
                   icon={item.icon}

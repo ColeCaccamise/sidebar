@@ -1,9 +1,8 @@
-'use server';
-
 import TeamContainer from '@/app/[team]/(dashboard)/team-container';
-import axios from 'axios';
-import { cookies } from 'next/headers';
 import { Suspense } from 'react';
+import { Team } from '@/types';
+import { cookies } from 'next/headers';
+import axios from 'axios';
 
 export default async function Layout({
   children,
@@ -12,25 +11,35 @@ export default async function Layout({
   children: React.ReactNode;
   params: { team: string };
 }) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  const cookieStore = cookies();
+  const allCookies = cookieStore.getAll();
+  const cookieHeader = allCookies
+    .map((cookie) => `${cookie.name}=${cookie.value}`)
+    .join('; ');
 
-  const team = await axios
-    .get(`${apiUrl}/teams/${params.team}`, {
+  const teamData = await axios
+    .get(`${process.env.NEXT_PUBLIC_API_URL}/teams/${params.team}`, {
       headers: {
-        Cookie: `auth-token=${cookies().get('auth-token')?.value}`,
+        Cookie: cookieHeader,
+        'Content-Type': 'application/json',
       },
-      withCredentials: true,
     })
-    .then((resp) => resp.data.data.team)
+    .then((resp) => {
+      const team = resp.data.data.team;
+      return {
+        id: team.id,
+        name: team.name,
+      } as Team;
+    })
     .catch(() => null);
 
-  if (!team) {
+  if (!teamData) {
     return <>{children}</>;
   }
 
   return (
     <Suspense>
-      <TeamContainer slug={params.team} team={team}>
+      <TeamContainer slug={params.team} team={teamData}>
         {children}
       </TeamContainer>
     </Suspense>

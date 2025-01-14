@@ -31,13 +31,13 @@ export type Session = {
 };
 
 export type ApiResponse = {
-  message: string;
+  message?: string;
   code: ResponseCode;
-  error: null | undefined;
+  error?: null | undefined;
 };
 
 export type ApiError = {
-  message: string;
+  message?: string;
   error: string;
   code: ErrorCode;
 };
@@ -77,6 +77,7 @@ export type Subscription = {
 export type Team = {
   id: string;
   name: string;
+  slug: string;
 };
 
 export type TeamPaymentMethod = {

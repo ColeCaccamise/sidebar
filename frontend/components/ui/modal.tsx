@@ -13,9 +13,9 @@ type Step = {
 
 export default function Modal({
   open = false,
-  setOpen = () => {},
+  setOpen,
   children,
-  onClose = () => {},
+  onClose,
   title,
   hint,
   canClose = true,
@@ -41,7 +41,7 @@ export default function Modal({
   className?: string;
   steps?: Step[];
   currentStep?: number;
-  handleSubmit?: () => void;
+  handleSubmit?: () => void | Promise<void>;
   submitText?: string;
   cancelText?: string;
   showCancelButton?: boolean;
@@ -49,8 +49,8 @@ export default function Modal({
   isLoading?: boolean;
 }) {
   const handleClose = () => {
-    onClose();
-    setOpen(false);
+    onClose?.();
+    setOpen?.(false);
   };
 
   const activeStep = steps?.[currentStep];

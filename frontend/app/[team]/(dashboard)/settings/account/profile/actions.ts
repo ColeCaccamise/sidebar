@@ -254,10 +254,44 @@ export async function deleteAccount({
   email: string;
   reason: string;
   otherReason: string;
-}) {
-  if (!email || !reason || (reason === 'other' && !otherReason)) return;
+}): Promise<ApiResponse | ApiError> {
+  if (!email || !reason || (reason === 'other' && !otherReason)) {
+    console.log('Please fill in all fields');
+    return {
+      error: 'Please fill in all fields',
+      code: 'invalid_request',
+    };
+  }
 
-  const response = await axios.delete(`${apiUrl}/users`, {
-    headers: { Cookie: `auth-token=${cookies().get('auth-token')?.value}` },
-  });
+  const response = await axios
+    .post(
+      `${apiUrl}/users/delete`,
+      {
+        email,
+        reason,
+        other_reason: otherReason,
+      },
+      {
+        headers: { Cookie: `auth-token=${cookies().get('auth-token')?.value}` },
+      },
+    )
+    .then((res) => {
+      console.log('res', res);
+      const setCookie = res.headers['set-cookie'];
+      if (setCookie) {
+        const parsedCookies = setCookie.map((cookie) =>
+          parseNextCookie(cookie),
+        );
+        parsedCookies.forEach((cookie) => {
+          cookies().set(cookie.name, cookie.value, cookie.options);
+        });
+      }
+      return res.data;
+    })
+    .catch((err) => {
+      console.log('err', err);
+      return err.response.data;
+    });
+
+  return response;
 }

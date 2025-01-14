@@ -81,6 +81,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		//r.Use(s.VerifyUserNotDeleted)
 		r.Use(s.VerifySecurityVersion)
 		r.Route("/teams", func(r chi.Router) {
+			r.Get("/", makeHttpHandleFunc(s.handleListTeams))
 			r.Post("/", makeHttpHandleFunc(s.handleCreateTeam))
 			r.Get("/{slug}", makeHttpHandleFunc(s.handleGetTeamBySlug))
 			r.Get("/{slug}/member", makeHttpHandleFunc(s.HandleGetTeamMember))
@@ -143,7 +144,8 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		//r.Use(s.VerifySecurityVersion)
 		r.Route("/users", func(r chi.Router) {
 			r.Patch("/", makeHttpHandleFunc(s.handleUpdateUser))
-			r.Delete("/", makeHttpHandleFunc(s.handleDeleteAccount))
+			r.Post("/delete", makeHttpHandleFunc(s.handleDeleteAccount))
+			r.Post("/restore", makeHttpHandleFunc(s.handleRestoreAccount))
 			r.Post("/accept-terms", makeHttpHandleFunc(s.handleAcceptTerms))
 			//r.Patch("/email", makeHttpHandleFunc(s.handleUpdateUserEmail))
 			//r.Post("/resend-email", makeHttpHandleFunc(s.handleResendUpdateEmail))

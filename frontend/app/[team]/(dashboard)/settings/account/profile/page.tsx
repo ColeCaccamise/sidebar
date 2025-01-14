@@ -14,6 +14,7 @@ import {
   uploadAvatar,
   deleteAvatar,
   deleteSessions,
+  deleteAccount,
 } from './actions';
 import Button from '@/components/ui/button';
 import toast from '@/lib/toast';
@@ -55,11 +56,17 @@ export default function AccountSettingsPage() {
     otherReason: string;
     step: number;
     email: string;
+    submitText: string;
+    cancelText: string;
+    isLoading: boolean;
   }>({
     reason: '',
     otherReason: '',
     step: 0,
     email: '',
+    submitText: 'Continue with deletion',
+    cancelText: 'Keep account',
+    isLoading: false,
   });
 
   const searchParams = useSearchParams();
@@ -491,16 +498,26 @@ export default function AccountSettingsPage() {
         >
           <Modal
             title="Delete your account?"
+            submitText={deleteAccountValues.submitText}
+            cancelText={deleteAccountValues.cancelText}
             open={showDeleteModal}
             setOpen={setShowDeleteModal}
+            isLoading={deleteAccountValues.isLoading}
             onClose={() => {
               setShowDeleteModal(false);
-              setDeleteAccountValues({
+              setDeleteAccountValues((prev) => ({
+                ...prev,
                 reason: '',
                 otherReason: '',
                 step: 0,
                 email: '',
-              });
+              }));
+            }}
+            handleSubmit={() => {
+              setDeleteAccountValues((prev) => ({
+                ...prev,
+                step: prev.step + 1,
+              }));
             }}
             className="w-full max-w-2xl"
             currentStep={deleteAccountValues.step}
@@ -515,8 +532,6 @@ export default function AccountSettingsPage() {
                     There will be no option for recovery.
                   </p>
                 ),
-                submitText: 'Continue with deletion',
-                cancelText: 'Keep account',
                 handleSubmit: () => {
                   setDeleteAccountValues((prev) => ({
                     ...prev,
@@ -611,12 +626,11 @@ export default function AccountSettingsPage() {
                     </RadioGroup>
                   </div>
                 ),
-                cancelText: 'Keep account',
-                submitText: 'Continue with deletion',
                 handleSubmit: () => {
                   setDeleteAccountValues((prev) => ({
                     ...prev,
-                    step: 2,
+                    step: prev.step + 1,
+                    submitText: 'Delete account',
                   }));
                 },
                 handleBack: () => {
@@ -632,11 +646,31 @@ export default function AccountSettingsPage() {
               },
               {
                 title: 'Delete your account?',
-                cancelText: 'Keep account',
-                submitText: 'Delete account',
-                handleSubmit: () => {
-                  console.log('Delete account data:');
-                  console.log(deleteAccountValues);
+                handleSubmit: async () => {
+                  setDeleteAccountValues((prev) => ({
+                    ...prev,
+                    isLoading: true,
+                    submitText: 'Deleting account...',
+                  }));
+                  const resp = await deleteAccount({
+                    email: deleteAccountValues.email,
+                    reason: deleteAccountValues.reason,
+                    otherReason: deleteAccountValues.otherReason,
+                  });
+
+                  setDeleteAccountValues((prev) => ({
+                    ...prev,
+                    isLoading: false,
+                    submitText: 'Delete account',
+                  }));
+
+                  if (resp.error) {
+                    toast({
+                      message:
+                        getErrorMessage(resp.code) || 'Something went wrong',
+                      mode: 'error',
+                    });
+                  }
                 },
                 disabled:
                   deleteAccountValues.email !== userValues.email?.current,
@@ -647,7 +681,29 @@ export default function AccountSettingsPage() {
                   }));
                 },
                 children: (
-                  <form className="flex flex-col gap-4">
+                  <form
+                    className="flex flex-col gap-4"
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+
+                      const resp = await deleteAccount({
+                        email: deleteAccountValues.email,
+                        reason: deleteAccountValues.reason,
+                        otherReason: deleteAccountValues.otherReason,
+                      });
+
+                      if (resp.error) {
+                        toast({
+                          message:
+                            getErrorMessage(resp.code) ||
+                            'Something went wrong',
+                          mode: 'error',
+                        });
+                      } else {
+                        router.push('/');
+                      }
+                    }}
+                  >
                     <p>
                       Deleting your account is permanent and cannot be undone.
                       You will permanently lose data for all teams you are
@@ -675,31 +731,24 @@ export default function AccountSettingsPage() {
               onSubmit={async (e) => {
                 e.preventDefault();
 
-                await axios
-                  .delete(`${apiUrl}/users`, {
-                    data: { password: deletePassword },
-                    withCredentials: true,
-                  })
-                  .then(() => {
-                    toast({
-                      message: 'Account deleted.',
-                      mode: 'success',
-                    });
-                    router.push('/auth/login');
-                  })
-                  .catch((err) => {
-                    toast({
-                      message: getErrorMessage(err.response.data.code),
-                      mode: 'error',
-                    });
+                const resp = await deleteAccount({
+                  email: deleteAccountValues.email,
+                  reason: deleteAccountValues.reason,
+                  otherReason: deleteAccountValues.otherReason,
+                });
+
+                if (resp.error) {
+                  toast({
+                    message:
+                      getErrorMessage(resp.code) || 'Something went wrong',
+                    mode: 'error',
                   });
+                }
               }}
             >
               <p>
-                This action will result in the immediate loss of access to Asana
-                and the permanent removal of your account data across all
-                workspaces or organizations you are associated with. There will
-                be no option for recovery.
+                This will permanently delete your account and all associated
+                data. This action cannot be undone.
               </p>
               <Input
                 type="password"

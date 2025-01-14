@@ -34,6 +34,7 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Team, Subscription, User, TeamMember } from '@/types';
+import Modal from '@/components/ui/modal';
 
 export default function TeamContainer({
   slug,
@@ -45,12 +46,32 @@ export default function TeamContainer({
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
+  const [switchTeamOpen, setSwitchTeamOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [teamMember, setTeamMember] = useState<TeamMember | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [teams, setTeams] = useState<Team[]>([]);
+
+  useEffect(() => {
+    // fetch teams
+    async function fetchTeams() {
+      try {
+        const response = await api.get('/teams', {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        setTeams(response.data.data);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    fetchTeams();
+  }, []);
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -96,8 +117,7 @@ export default function TeamContainer({
           },
         })
         .then((res) => {
-          setUser(res?.data);
-          console.log('user: ', res?.data);
+          setUser(res?.data?.data?.user);
         })
         .catch((err) => {
           console.error(err?.response?.data);
@@ -156,6 +176,7 @@ export default function TeamContainer({
       id: 'switch-team',
       label: 'Switch team',
       kbd: 'O then T',
+      handleClick: () => setSwitchTeamOpen(true),
     },
     {
       id: 'logout',
@@ -398,6 +419,65 @@ export default function TeamContainer({
           </CommandGroup>
         </CommandList>
       </CommandDialog>
+
+      <Modal
+        open={switchTeamOpen}
+        setOpen={setSwitchTeamOpen}
+        title="Switch team"
+        className="w-full max-w-lg"
+      >
+        <div className="flex w-full flex-col gap-4">
+          <p className="text-sm text-typography-weak">
+            Select a team to switch to
+          </p>
+          <div className="grid gap-4">
+            {teams?.map((team: Team) => (
+              <button
+                key={team.id}
+                onClick={() => {
+                  router.push(`/${team.slug}`);
+                  setSwitchTeamOpen(false);
+                }}
+                className="flex items-center justify-between rounded-lg border border-stroke-weak bg-background p-4 text-left hover:bg-fill"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-weak bg-fill">
+                    <span className="text-sm font-medium">
+                      {team.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-medium">{team.name}</p>
+                    <p className="text-xs text-typography-weak">
+                      {process.env.NEXT_PUBLIC_APP_URL}/{team.slug}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ))}
+
+            <button
+              onClick={() => {
+                router.push('/onboarding/team');
+                setSwitchTeamOpen(false);
+              }}
+              className="flex items-center justify-between rounded-lg border border-stroke-weak bg-background p-4 text-left hover:bg-fill"
+            >
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-weak bg-fill">
+                  <span className="text-sm font-medium">+</span>
+                </div>
+                <div>
+                  <p className="font-medium">Create or join a new team</p>
+                  <p className="text-xs text-typography-weak">
+                    Start fresh with a new team
+                  </p>
+                </div>
+              </div>
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

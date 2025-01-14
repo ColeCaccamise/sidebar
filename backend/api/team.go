@@ -25,6 +25,25 @@ import (
 
 var RESERVED_TEAM_SLUGS = []string{"support", "help", "helpcenter", "banking", "account", "settings", "admin", "system", "faq", "docs", "documentation", "root", "profile", "billing", "login", "signin", "signup", "auth", "signout", "register", "api", "dashboard", "notifications", "team", "teams", "legal", "onboarding", "terms", "privacy"}
 
+func (s *Server) handleListTeams(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	user := userSession.User
+	teams, err := s.store.GetTeamsByUserID(user.ID)
+
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Data: teams,
+	})
+}
+
 func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error {
 	userSession, err := getUserSession(s, r)
 

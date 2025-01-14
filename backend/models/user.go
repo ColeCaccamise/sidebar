@@ -95,6 +95,8 @@ type UserIdentityResponse struct {
 	TeamCreatedOrJoined bool       `json:"team_created_or_joined"`
 	TeammatesInvited    bool       `json:"teammates_invited"`
 	DefaultTeamSlug     string     `json:"default_team_slug"`
+	Deleted             bool       `json:"deleted"`
+	Restorable          bool       `json:"restorable"`
 }
 
 func NewUser(req *CreateUserRequest) *User {
@@ -114,12 +116,13 @@ func NewUserIdentityResponse(u *User) *UserIdentityResponse {
 		IsAdmin:             u.IsAdmin,
 		AvatarUrl:           u.AvatarUrl,
 		EmailConfirmed:      (u.EmailConfirmedAt != nil && *u.EmailConfirmedAt != time.Time{}) || u.EmailConfirmed,
-		DeletedAt:           u.DeletedAt,
 		TermsAccepted:       u.TermsAcceptedAt != nil && *u.TermsAcceptedAt != time.Time{},
 		OnboardingCompleted: u.OnboardingCompletedAt != nil && *u.OnboardingCompletedAt != time.Time{},
 		TeamCreatedOrJoined: u.TeamCreatedOrJoinedAt != nil && *u.TeamCreatedOrJoinedAt != time.Time{},
 		TeammatesInvited:    u.TeammatesInvitedAt != nil && *u.TeammatesInvitedAt != time.Time{},
 		DefaultTeamSlug:     u.DefaultTeamSlug,
+		Deleted:             u.DeletedAt != nil && *u.DeletedAt != time.Time{},
+		Restorable:          u.DeletedAt != nil && time.Since(*u.DeletedAt) < time.Hour*24*60,
 	}
 }
 

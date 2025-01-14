@@ -37,6 +37,7 @@ type Storage interface {
 	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
 	GetTeamMembersByTeamID(uuid.UUID) ([]*models.TeamMember, error)
 	GetTeamMembersByTeamIDAndRole(uuid.UUID, models.TeamRole) ([]*models.TeamMember, error)
+	GetTeamsByUserID(userID uuid.UUID) ([]*models.Team, error)
 	GetTeamByID(uuid.UUID) (*models.Team, error)
 	GetTeamByStripeCustomerID(string) (*models.Team, error)
 	CreateTeamSubscription(*models.TeamSubscription) error
@@ -51,6 +52,7 @@ type Storage interface {
 	CreateSession(*models.Session) error
 	GetSessionsByUserID(userID uuid.UUID) ([]*models.Session, error)
 	GetSessionByID(uuid.UUID) (*models.Session, error)
+	GetActiveSessionsByUserID(uuid.UUID) ([]*models.Session, error)
 	GetSessionByWorkosSessionID(string) (*models.Session, error)
 	UpdateSession(*models.Session) error
 	DeleteSessionByID(uuid.UUID) error
@@ -62,8 +64,13 @@ type PostgresStore struct {
 }
 
 func NewPostgresStore() (*PostgresStore, error) {
-	dsn := fmt.Sprintf("postgresql://%s:%s@%s:%s/%s", os.Getenv("POSTGRES_USER"), os.Getenv("POSTGRES_PASSWORD"), os.Getenv("POSTGRES_HOST"), os.Getenv("POSTGRES_PORT"), os.Getenv("POSTGRES_DB"))
-
+	dsn := fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s TimeZone=UTC",
+		os.Getenv("POSTGRES_HOST"),
+		os.Getenv("POSTGRES_USER"),
+		os.Getenv("POSTGRES_PASSWORD"),
+		os.Getenv("POSTGRES_DB"),
+		os.Getenv("POSTGRES_PORT"),
+	)
 	maxRetries := 5
 	for i := 0; i < maxRetries; i++ {
 		db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
@@ -268,6 +275,15 @@ func (s *PostgresStore) GetSessionsByUserID(userID uuid.UUID) ([]*models.Session
 	return sessions, nil
 }
 
+func (s *PostgresStore) GetActiveSessionsByUserID(userID uuid.UUID) ([]*models.Session, error) {
+	var sessions []*models.Session
+	result := s.db.Where("user_id = ?", userID).Where("revoked_at IS NULL").Find(&sessions)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return sessions, nil
+}
+
 func (s *PostgresStore) UpdateSession(session *models.Session) error {
 	return s.db.Model(session).Select("*").Updates(session).Error // explicitly tell gorm to update with zero values
 }
@@ -278,6 +294,28 @@ func (s *PostgresStore) DeleteSessionByID(id uuid.UUID) error {
 
 func (s *PostgresStore) DeleteSessionsByUserID(id uuid.UUID) error {
 	return s.db.Where("user_id = ?", id).Delete(&models.Session{}).Error
+}
+
+func (s *PostgresStore) GetTeamsByUserID(userID uuid.UUID) ([]*models.Team, error) {
+	var teams []*models.Team
+	var teamMembers []*models.TeamMember
+
+	// get all team members for this user
+	result := s.db.Where("user_id = ?", userID).Find(&teamMembers)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	// fetch team for each team member
+	for _, member := range teamMembers {
+		var team models.Team
+		result := s.db.First(&team, member.TeamID)
+		if result.Error == nil {
+			teams = append(teams, &team)
+		}
+	}
+
+	return teams, nil
 }
 
 func (s *PostgresStore) CreateTeam(team *models.Team) error {
