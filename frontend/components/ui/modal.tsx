@@ -2,6 +2,7 @@ import { Dialog, DialogPanel, DialogBackdrop } from '@headlessui/react';
 import { ArrowLeftIcon, Cross1Icon } from '@radix-ui/react-icons';
 import Button from '@/components/ui/button';
 import Spinner from './spinner';
+import { useEffect } from 'react';
 
 type Step = {
   children: React.ReactNode;
@@ -55,6 +56,21 @@ export default function Modal({
 
   const activeStep = steps?.[currentStep];
   const showContent = !steps ? children : activeStep?.children;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      if (handleSubmit && !isLoading && !activeStep?.disabled) {
+        activeStep?.handleSubmit?.() || handleSubmit();
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (open) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [open, handleSubmit, isLoading, activeStep]);
 
   return (
     <Dialog
