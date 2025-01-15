@@ -85,6 +85,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Post("/", makeHttpHandleFunc(s.handleCreateTeam))
 			r.Get("/{slug}", makeHttpHandleFunc(s.handleGetTeamBySlug))
 			r.Get("/{slug}/member", makeHttpHandleFunc(s.HandleGetTeamMember))
+			r.Get("/{slug}/members", makeHttpHandleFunc(s.handleGetTeamMembers))
 			r.Get("/{slug}/upsells", makeHttpHandleFunc(s.handleGetUpsells))
 
 			// invite links

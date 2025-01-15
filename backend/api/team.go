@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/workos/workos-go/v4/pkg/usermanagement"
 	"io"
 	"net/http"
 	"os"
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/workos/workos-go/v4/pkg/usermanagement"
 
 	cryptoRand "crypto/rand"
 
@@ -336,7 +337,41 @@ func (s *Server) HandleGetTeamMember(w http.ResponseWriter, r *http.Request) err
 
 	teamMemberData := models.NewTeamMemberResponse(teamMember)
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_member": teamMemberData}})
+}
 
+func (s *Server) handleGetTeamMembers(w http.ResponseWriter, r *http.Request) error {
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team not found",
+			Code:  "team_not_found",
+		})
+	}
+
+	teamMembers, err := s.store.GetTeamMembersByTeamID(team.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error",
+			Code:  "internal_server_error",
+		})
+	}
+
+	teamMemberResponse := []interface{}{}
+
+	for _, teamMember := range teamMembers {
+		teamMemberUser, _ := s.store.GetUserByID(teamMember.UserID)
+		teamMemberResponse = append(teamMemberResponse, map[string]interface{}{
+			"team_member": teamMember,
+			"user":        teamMemberUser,
+		})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_members": teamMemberResponse}})
 }
 
 func (s *Server) handleGetUpsells(w http.ResponseWriter, r *http.Request) error {

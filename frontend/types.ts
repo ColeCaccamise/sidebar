@@ -18,6 +18,12 @@ export type TeamMember = {
   team_role: string;
   status: string;
   onboarded: boolean;
+  joined_at: string;
+};
+
+export type TeamMemberResponse = {
+  team_member: TeamMember;
+  user: User;
 };
 
 export type Session = {

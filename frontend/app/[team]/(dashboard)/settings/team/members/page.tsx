@@ -1,3 +1,10 @@
+import TeamManagementPage from './team-management';
+
 export default function TeamMembersPage() {
-  return <div>Team members page coming soon!</div>;
+  return (
+    <>
+      <h1>Team Members</h1>
+      <TeamManagementPage />
+    </>
+  );
 }
