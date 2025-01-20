@@ -28,6 +28,7 @@ export default function JoinModal({
 
   const team = invite.data.team;
   const role = invite.data.invite.team_role;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
   return (
     <Modal open={true} showCancelButton={false} className="w-full max-w-md">
@@ -45,7 +46,7 @@ export default function JoinModal({
           ) : (
             <Link
               className="btn btn-brand flex w-full items-center gap-1 no-underline"
-              href={`/auth/login?next=/${team.slug}/join/${invite.data.invite.token}`}
+              href={`/auth/login?next=${appUrl}/${team.slug}/join/${invite.data.invite.token}?accept=true`}
             >
               Sign in to Join Team <ExternalLinkIcon className="h-4 w-4" />
             </Link>
