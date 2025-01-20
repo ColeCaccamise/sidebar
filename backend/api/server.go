@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"gorm.io/gorm"
 	"net/http"
 	"os"
 
@@ -13,6 +14,7 @@ import (
 type Server struct {
 	listenAddr string
 	store      storage.Storage
+	db         *gorm.DB
 }
 
 func NewServer(listenAddr string, store storage.Storage) *Server {

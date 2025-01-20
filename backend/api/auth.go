@@ -165,7 +165,15 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	code := r.URL.Query().Get("code")
 	appUrl := os.Getenv("APP_URL")
 	loginUrl := fmt.Sprintf("%s/auth/login?error=invalid_token", appUrl)
-
+	nextUrlCookie, _ := r.Cookie("next-url")
+	var nextUrl string
+	if nextUrlCookie != nil {
+		var err error
+		nextUrl, err = url.QueryUnescape(nextUrlCookie.Value)
+		if err != nil {
+			nextUrl = appUrl
+		}
+	}
 	if code == "" {
 		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
 		return nil
@@ -312,6 +320,20 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		redirectUrl := fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
 		http.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
+		return nil
+	}
+
+	if nextUrl != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "next-url",
+			Value:    "",
+			Path:     "/",
+			Expires:  time.Unix(0, 0),
+			Secure:   true,
+			SameSite: http.SameSiteLaxMode,
+		})
+
+		http.Redirect(w, r, nextUrl, http.StatusTemporaryRedirect)
 		return nil
 	}
 
@@ -524,6 +546,18 @@ func (s *Server) handleGetAuthorizationUrl(w http.ResponseWriter, r *http.Reques
 		if p == provider {
 			validProvider = true
 		}
+	}
+
+	nextUrl := r.URL.Query().Get("next")
+
+	if nextUrl != "" {
+		http.SetCookie(w, &http.Cookie{
+			Name:     "next-url",
+			Value:    nextUrl,
+			Path:     "/",
+			HttpOnly: false,
+			Expires:  time.Now().Add(1 * time.Hour),
+		})
 	}
 
 	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
@@ -1001,6 +1035,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	email := loginReq.Email
+	nextUrl := loginReq.NextUrl
 
 	if email == "" {
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "email is required", Code: "email_required"})
@@ -1031,8 +1066,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) error {
 	code := response.Code
 	email = response.Email
 
-	magicLink := fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("API_URL"), code, email)
-	fmt.Printf("Magic link: %s\n", magicLink)
+	var magicLink string
+
+	if nextUrl != "" {
+		magicLink = fmt.Sprintf("%s/auth/confirm?code=%s&email=%s&next=%s", os.Getenv("API_URL"), code, email, nextUrl)
+		fmt.Printf("Magic link: %s\n", magicLink)
+	} else {
+		magicLink = fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("API_URL"), code, email)
+		fmt.Printf("Magic link: %s\n", magicLink)
+	}
 
 	html := fmt.Sprintf("<div>Click this link to login to your dashboard: <a href='%s'>%s</a></div>", magicLink, magicLink)
 
@@ -1195,6 +1237,7 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 
 	email := r.URL.Query().Get("email")
 	code := r.URL.Query().Get("code")
+	nextUrl := r.URL.Query().Get("next")
 
 	response, err := usermanagement.AuthenticateWithMagicAuth(
 		context.Background(),
@@ -1206,6 +1249,19 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 	)
 
 	var redirectUrl string
+
+	// redirect if already authenticated
+	_, err = getUserSession(s, r)
+	if err == nil {
+		if nextUrl != "" {
+			redirectUrl = nextUrl
+		} else {
+			redirectUrl = os.Getenv("APP_URL")
+		}
+
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
+	}
 
 	if err != nil {
 		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
@@ -1270,7 +1326,12 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 		return nil
 	}
 
-	redirectUrl = os.Getenv("APP_URL")
+	if nextUrl != "" {
+		redirectUrl = nextUrl
+	} else {
+		redirectUrl = os.Getenv("APP_URL")
+	}
+
 	http.Redirect(w, r, redirectUrl, http.StatusFound)
 	return nil
 }

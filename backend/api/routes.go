@@ -76,6 +76,10 @@ func (s *Server) SetupRoutes() *chi.Mux {
 	})
 
 	// team routes
+	// join links
+	r.Get("/teams/{slug}/join/{token}", makeHttpHandleFunc(s.handleGetTeamInvite))  // after landing on invite link - get data for shared link and check validity
+	r.Post("/teams/{slug}/join/{token}", makeHttpHandleFunc(s.handleUseInviteLink)) // onboard a new team member from this link (checking its valid etc)
+
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.VerifyAuth)
 		//r.Use(s.VerifyUserNotDeleted)
@@ -89,7 +93,9 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Get("/{slug}/upsells", makeHttpHandleFunc(s.handleGetUpsells))
 
 			// invite links
-			r.Post("/{slug}/invite", makeHttpHandleFunc(s.handleSendTeamInvites))               // send an invite to one or many
+			r.Post("/{slug}/invite", makeHttpHandleFunc(s.handleSendTeamInvites)) // send an invite to one or many
+			r.Post("/{slug}/invite/{teamMemberId}/cancel", makeHttpHandleFunc(s.handleCancelTeamInvites))
+			r.Post("/{slug}/invite/{teamMemberId}/resend", makeHttpHandleFunc(s.handleResendTeamInvite))
 			r.Get("/{slug}/invite-link", makeHttpHandleFunc(s.handleGetTeamInviteLink))         // get the current invite link
 			r.Post("/{slug}/invite-link", makeHttpHandleFunc(s.handleRegenerateTeamInviteLink)) // regenerate the current invite link
 			// complete onboarding
@@ -117,11 +123,6 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			})
 		})
 	})
-
-	// unprotected team routes
-	// join links
-	r.Get("/teams/{slug}/join/{token}", makeHttpHandleFunc(s.handleGetTeamInvite)) // after landing on invite link - get data for shared link and check validity
-	r.Post("/team/{slug}/join/{token}", makeHttpHandleFunc(s.handleUseInviteLink)) // onboard a new team member from this link (checking its valid etc)
 
 	// TODO: secure these routes to application admins only
 	//r.Group(func(r chi.Router) {
