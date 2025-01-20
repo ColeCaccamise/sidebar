@@ -6,7 +6,7 @@ import axios from 'axios';
 import toast from '@/lib/toast';
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowRightIcon, DashboardIcon } from '@radix-ui/react-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
@@ -21,6 +21,8 @@ export default function SignupPage() {
   const [email, setEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const nextUrl = searchParams.get('next');
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -87,7 +89,7 @@ export default function SignupPage() {
         <div className="flex items-center gap-1">
           <p>Already have an account?</p>
           <Link
-            href="/auth/login"
+            href={`/auth/login${nextUrl ? `?next=${nextUrl}` : ''}`}
             className="flex items-center gap-1 no-underline"
           >
             Sign in <ArrowRightIcon className="h-4 w-4" />

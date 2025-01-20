@@ -115,7 +115,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-1">
           <p>Don&apos;t have an account?</p>
           <Link
-            href="/auth/signup"
+            href={`/auth/signup${nextUrl ? `?next=${nextUrl}` : ''}`}
             className="flex items-center gap-1 no-underline"
           >
             Get started <ArrowRightIcon className="h-4 w-4" />
@@ -158,7 +158,7 @@ export default function LoginPage() {
                 provider: 'google',
                 nextUrl: nextUrl || undefined,
               });
-              if (res.redirectUrl) {
+              if (res?.redirectUrl) {
                 router.push(res.redirectUrl);
               } else {
                 toast({
