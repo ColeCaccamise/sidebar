@@ -8,3 +8,4 @@ bin/
 pkg/mod/cache/lock
 .vscode
 node_modules/
+.vercel
