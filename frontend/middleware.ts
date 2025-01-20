@@ -23,7 +23,6 @@ export async function middleware(request: NextRequest) {
   }
 
   if (!apiUrl) {
-    console.error('NEXT_PUBLIC_API_URL is not defined');
     return NextResponse.next();
   }
 
@@ -64,7 +63,6 @@ export async function middleware(request: NextRequest) {
 
     if (refresh?.status != 200) {
       // handle failed refresh
-      console.log('FAILED REFRESH: ', pathname);
       if (
         !SIGNED_OUT_AUTH_ROUTES.includes(pathname) &&
         !AUTH_ROUTES.includes(pathname) &&
@@ -72,7 +70,6 @@ export async function middleware(request: NextRequest) {
       ) {
         return NextResponse.redirect(`${appUrl}/auth/login`);
       } else {
-        console.log('ALLOWED ROUTE: ', pathname);
         return NextResponse.next();
       }
     } else {
@@ -117,20 +114,6 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  // todo decide if we want WorkOS password auth
-  // verify email confirmed
-  // if (!emailConfirmed) {
-  //   if (pathname === `/auth/confirm` || pathname === '/auth/confirm-email') {
-  //     return NextResponse.next();
-  //   } else {
-  //     return NextResponse.redirect(`${appUrl}/auth/confirm-email`);
-  //   }
-  // }
-
-  // if (emailConfirmed && pathname === '/auth/confirm-email') {
-  //   return NextResponse.redirect(`${appUrl}`);
-  // }
-
   // verify terms accepted
   if (!termsAccepted) {
     if (pathname === `/onboarding/terms`) {
@@ -160,9 +143,9 @@ export async function middleware(request: NextRequest) {
     .then((res) => {
       return res?.data?.data?.team;
     })
-    .catch(() => null);
-
-  console.log('TEAM: ', team);
+    .catch((error) => {
+      return null;
+    });
 
   let teamMember = await axios
     .get(`${apiUrl}/teams/${teamSlug}/member`, {

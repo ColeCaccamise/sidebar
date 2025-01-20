@@ -23,6 +23,8 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
+  const nextUrl = searchParams.get('next');
+
   useEffect(() => {
     const error = searchParams.get('error');
     if (error === 'confirm-email-token-invalid') {
@@ -59,7 +61,7 @@ export default function LoginPage() {
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
-        { email },
+        { email, next_url: nextUrl },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -152,7 +154,10 @@ export default function LoginPage() {
             variant="unstyled"
             className="btn flex w-full border border-stroke-weak bg-fill"
             handleClick={async () => {
-              const res = await getOauthUrl({ provider: 'google' });
+              const res = await getOauthUrl({
+                provider: 'google',
+                nextUrl: nextUrl || undefined,
+              });
               if (res.redirectUrl) {
                 router.push(res.redirectUrl);
               } else {
@@ -172,7 +177,10 @@ export default function LoginPage() {
             variant="unstyled"
             className="btn flex w-full border border-stroke-weak bg-fill"
             handleClick={async () => {
-              const res = await getOauthUrl({ provider: 'github' });
+              const res = await getOauthUrl({
+                provider: 'github',
+                nextUrl: nextUrl || undefined,
+              });
               if (res.redirectUrl) {
                 router.push(res.redirectUrl);
               } else {

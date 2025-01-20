@@ -382,7 +382,7 @@ export default function OnboardingInvitePage() {
           <Button
             type="submit"
             disabled={!emails[0] || hasEmptyInputs() || inviteLoading}
-            className="w-full flex-1"
+            className="h-10 w-full"
           >
             {inviteLoading ? (
               <p className="flex items-center justify-center gap-2">
@@ -487,30 +487,13 @@ export default function OnboardingInvitePage() {
         title="Reset invite link?"
         showCloseButton={false}
         className="flex flex-col gap-4"
+        handleSubmit={refreshInviteLink}
+        submitText="Reset Link"
       >
         <p>
           This will expire the current invite link and generate a new one.
           Anyone with the old link won&apos;t be able to join anymore.
         </p>
-
-        <div className="flex gap-4">
-          <Button
-            className="btn-small btn-brand-secondary text-sm"
-            variant="unstyled"
-            type="button"
-            handleClick={() => setShowResetDialog(false)}
-          >
-            Cancel
-          </Button>
-          <Button
-            className="btn-small btn-brand text-sm"
-            variant="unstyled"
-            type="button"
-            handleClick={refreshInviteLink}
-          >
-            Reset Link
-          </Button>
-        </div>
       </Modal>
     </div>
   );

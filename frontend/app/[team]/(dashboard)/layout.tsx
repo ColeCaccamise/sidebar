@@ -1,47 +1,50 @@
-import TeamContainer from '@/app/[team]/(dashboard)/team-container';
-import { Suspense } from 'react';
-import { Team } from '@/types';
-import { cookies } from 'next/headers';
-import axios from 'axios';
+'use client';
 
-export default async function Layout({
+import TeamContainer from '@/app/[team]/(dashboard)/team-container';
+import { Suspense, useEffect } from 'react';
+import api from '@/lib/axios';
+import {
+  useQuery,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
+
+export default function Layout({
   children,
   params,
 }: {
   children: React.ReactNode;
   params: { team: string };
 }) {
-  const cookieStore = cookies();
-  const allCookies = cookieStore.getAll();
-  const cookieHeader = allCookies
-    .map((cookie) => `${cookie.name}=${cookie.value}`)
-    .join('; ');
-
-  const teamData = await axios
-    .get(`${process.env.NEXT_PUBLIC_API_URL}/teams/${params.team}`, {
-      headers: {
-        Cookie: cookieHeader,
-        'Content-Type': 'application/json',
+  const router = useRouter();
+  const queryClient = new QueryClient();
+  function TeamContent() {
+    const { data: team } = useQuery({
+      queryKey: ['team'],
+      queryFn: async () => {
+        const response = await api.get(`/teams/${params.team}`, {
+          withCredentials: true,
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        return response.data.data.team;
       },
-    })
-    .then((resp) => {
-      const team = resp.data.data.team;
-      return {
-        id: team.id,
-        name: team.name,
-      } as Team;
-    })
-    .catch(() => null);
+    });
 
-  if (!teamData) {
-    return <>{children}</>;
+    return (
+      <TeamContainer slug={params.team} team={team}>
+        {children}
+      </TeamContainer>
+    );
   }
 
   return (
     <Suspense>
-      <TeamContainer slug={params.team} team={teamData}>
-        {children}
-      </TeamContainer>
+      <QueryClientProvider client={queryClient}>
+        <TeamContent />
+      </QueryClientProvider>
     </Suspense>
   );
 }

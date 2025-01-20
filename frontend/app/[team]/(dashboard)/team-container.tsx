@@ -35,8 +35,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Team, Subscription, User, TeamMember } from '@/types';
 import Modal from '@/components/ui/modal';
+import {
+  useQuery,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/react-query';
+import { useTeamStore } from '@/state/team';
+import { useUserStore } from '@/state/user';
 
-export default function TeamContainer({
+function TeamContainerContent({
   slug,
   team,
   children,
@@ -49,29 +56,71 @@ export default function TeamContainer({
   const [switchTeamOpen, setSwitchTeamOpen] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
-  const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-  const [teamMember, setTeamMember] = useState<TeamMember | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [teams, setTeams] = useState<Team[]>([]);
+  const { setTeam, setIsLoading } = useTeamStore();
+  const { user, setUser } = useUserStore();
 
   useEffect(() => {
-    // fetch teams
-    async function fetchTeams() {
-      try {
-        const response = await api.get('/teams', {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        setTeams(response.data.data);
-      } catch (err) {
-        console.error(err);
-      }
-    }
-    fetchTeams();
-  }, []);
+    setTeam(team);
+    setIsLoading(false);
+  }, [team, setTeam, setIsLoading]);
+
+  const { data: teams = [] } = useQuery({
+    queryKey: ['teams'],
+    queryFn: async () => {
+      const response = await api.get('/teams', {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data.data;
+    },
+  });
+
+  const { data: subscription } = useQuery({
+    queryKey: ['subscription', slug],
+    queryFn: async () => {
+      const response = await api.get(`/teams/${slug}/billing/subscription`, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data.data.subscription;
+    },
+  });
+
+  const { data: userData } = useQuery({
+    queryKey: ['user'],
+    queryFn: async () => {
+      const response = await api.get('/auth/identity', {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      return response.data.data.user;
+    },
+  });
+
+  useEffect(() => {
+    setUser(userData);
+  }, [userData, setUser]);
+
+  const { data: teamMember } = useQuery({
+    queryKey: ['teamMember', slug],
+    queryFn: async () => {
+      setIsLoading(true);
+      const response = await api.get(`/teams/${slug}/member`, {
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      setIsLoading(false);
+      return response.data.data.team_member;
+    },
+  });
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -83,75 +132,6 @@ export default function TeamContainer({
     document.addEventListener('keydown', down);
     return () => document.removeEventListener('keydown', down);
   }, []);
-
-  useEffect(() => {
-    async function handleGetSubscription() {
-      setIsLoading(true);
-      await api
-        .get(`/teams/${slug}/billing/subscription`, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-        .then((res) => {
-          setSubscription(res?.data?.data?.subscription);
-        })
-        .catch((err) => {
-          console.error(err?.response?.data);
-          setSubscription(null);
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-    handleGetSubscription();
-
-    async function handleGetUser() {
-      setIsLoading(true);
-      await api
-        .get(`/auth/identity`, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-        .then((res) => {
-          setUser(res?.data?.data?.user);
-        })
-        .catch((err) => {
-          console.error(err?.response?.data);
-          setUser(null);
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-
-    handleGetUser();
-
-    async function handleGetTeamMember() {
-      setIsLoading(true);
-      await api
-        .get(`/teams/${slug}/member`, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        })
-        .then((res) => {
-          setTeamMember(res?.data?.data?.team_member);
-        })
-        .catch((err) => {
-          console.error(err?.response?.data);
-          setTeamMember(null);
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    }
-    handleGetTeamMember();
-  }, [slug]);
 
   // dashboard
   const menuItems = [
@@ -313,59 +293,34 @@ export default function TeamContainer({
     member: 'Member',
   };
 
-  if (isLoading) {
-    return null;
-  }
-
   return (
     <div className="flex h-screen max-h-screen w-full flex-grow justify-start overflow-auto">
       {!pathname.startsWith(`/${slug}/settings`) ? (
         <Sidebar
-          teamName={team?.name}
+          teamName={team?.name || 'Loading...'}
           menuItems={menuItems}
           sidebarItems={sidebarItems}
           secondarySidebarItems={secondarySidebarItems}
-          upsell={
-            subscription?.free_trial_duration_remaining || 0 > 0
-              ? {
-                  title: `${subscription?.free_trial_duration_remaining || 0} days left of your trial!`,
-                  description: 'Upgrade to continue using all features',
-                  buttonText: 'Upgrade plan',
-                  buttonLink: `/${slug}/settings/team/plans`,
-                  closeable: false,
-                }
-              : undefined
-          }
           dropdownContent={
-            <Link
-              href={`/${slug}/settings/account/profile`}
-              className="flex flex-col gap-2 no-underline hover:opacity-100"
-            >
+            <div className="flex flex-col gap-2">
               <span className="text-xs text-typography-weak">
                 {user?.email}
               </span>
               <div className="flex items-center gap-2">
-                {user?.avatar_url ? (
-                  <Image
-                    src={user?.avatar_url}
-                    alt="User avatar"
-                    width={32}
-                    height={32}
-                    className="rounded-full"
-                  />
-                ) : (
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-fill text-xs font-bold text-typography-strong">
-                    {user?.first_name?.charAt(0).toUpperCase() ||
-                      user?.email?.charAt(0).toUpperCase() ||
-                      teamMember?.team_role?.charAt(0).toUpperCase() ||
-                      'U'}
-                  </div>
-                )}
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-fill text-xs font-bold text-typography-strong">
+                  {!user && !team
+                    ? null
+                    : user?.first_name && user?.last_name
+                      ? `${user.first_name.charAt(0).toUpperCase()}${user.last_name.charAt(0).toUpperCase()}`
+                      : user?.email?.slice(0, 2).toUpperCase()}
+                </div>
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-typography-strong">
-                    {teamMember?.team_role
-                      ? roleMap[teamMember?.team_role as keyof typeof roleMap]
-                      : ''}
+                    {user?.first_name && user?.last_name
+                      ? `${user.first_name} ${user.last_name} (${roleMap[teamMember?.team_role as keyof typeof roleMap]})`
+                      : roleMap[
+                          teamMember?.team_role as keyof typeof roleMap
+                        ] || ''}
                   </span>
                   <span className="text-xs">
                     {subscription?.plan_type
@@ -375,7 +330,7 @@ export default function TeamContainer({
                   </span>
                 </div>
               </div>
-            </Link>
+            </div>
           }
         />
       ) : (
@@ -479,5 +434,19 @@ export default function TeamContainer({
         </div>
       </Modal>
     </div>
+  );
+}
+
+export default function TeamContainer(props: {
+  slug: string;
+  team: Team;
+  children: React.ReactNode;
+}) {
+  const queryClient = new QueryClient();
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TeamContainerContent {...props} />
+    </QueryClientProvider>
   );
 }

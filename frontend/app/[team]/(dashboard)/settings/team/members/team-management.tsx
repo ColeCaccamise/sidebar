@@ -11,7 +11,6 @@ import { useParams } from 'next/navigation';
 import {
   Table,
   TableBody,
-  TableCaption,
   TableCell,
   TableHead,
   TableHeader,
@@ -29,15 +28,31 @@ import Modal from '@/components/ui/modal';
 import Input from '@/components/ui/input';
 import { isValidEmail } from '@/lib/validation';
 import toast from '@/lib/toast';
+import { inviteMembers, cancelInvites, resendInvite } from './actions';
+import { getErrorMessage } from '@/messages';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import Spinner from '@/components/ui/spinner';
 
 function TeamManagement() {
+  const queryClient = useQueryClient();
   const { team: teamSlug } = useParams();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedMember, setSelectedMember] =
     useState<TeamMemberResponse | null>(null);
+  const [memberToCancel, setMemberToCancel] =
+    useState<TeamMemberResponse | null>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [isInviteMemberModalOpen, setIsInviteMemberModalOpen] = useState(false);
   const [isCancelInviteModalOpen, setIsCancelInviteModalOpen] = useState(false);
+  const [memberToResendInvite, setMemberToResendInvite] =
+    useState<TeamMemberResponse | null>(null);
+  const [isResendInviteModalOpen, setIsResendInviteModalOpen] = useState(false);
 
   const { data: team } = useQuery({
     queryKey: ['team'],
@@ -51,7 +66,11 @@ function TeamManagement() {
     },
   });
 
-  const { data: teamMembers } = useQuery({
+  const {
+    data: teamMembers,
+    refetch: refetchTeamMembers,
+    isLoading: isLoadingTeamMembers,
+  } = useQuery({
     queryKey: ['teamMembers'],
     queryFn: async () => {
       const {
@@ -60,11 +79,11 @@ function TeamManagement() {
         },
       } = await api.get(`/teams/${teamSlug}/members`);
 
+      console.log(team_members);
+
       return team_members;
     },
   });
-
-  console.log(teamMembers);
 
   const { data: user } = useQuery({
     queryKey: ['user'],
@@ -80,6 +99,39 @@ function TeamManagement() {
       return user;
     },
   });
+
+  const handleCancelInvite = async () => {
+    if (!memberToCancel) return;
+
+    const resp = await cancelInvites({
+      teamSlug: teamSlug as string,
+      teamMemberId: memberToCancel.team_member.id,
+    });
+
+    if (resp.success) {
+      toast({
+        message: 'Invite cancelled successfully',
+        mode: 'success',
+      });
+      queryClient.setQueryData(
+        ['teamMembers'],
+        (oldData: TeamMemberResponse[] | undefined) => {
+          if (!oldData) return [];
+          return oldData.filter(
+            (member) => member.team_member.id !== memberToCancel.team_member.id,
+          );
+        },
+      );
+    } else {
+      toast({
+        message: getErrorMessage(resp.code || ''),
+        mode: 'error',
+      });
+    }
+
+    setIsCancelInviteModalOpen(false);
+    setMemberToCancel(null);
+  };
 
   const teamMemberActions = [
     {
@@ -101,24 +153,29 @@ function TeamManagement() {
       id: 'resend-invite',
       label: 'Resend Invite',
       handleClick: () => {
-        toast({
-          message: 'Invite resent',
-          mode: 'success',
-        });
+        if (selectedMember) {
+          setMemberToResendInvite(selectedMember);
+          setIsResendInviteModalOpen(true);
+        }
       },
     },
     {
       id: 'cancel-invite',
       label: 'Cancel Invite',
       handleClick: () => {
-        setIsCancelInviteModalOpen(true);
+        if (selectedMember) {
+          setMemberToCancel(selectedMember);
+          setIsCancelInviteModalOpen(true);
+        }
       },
     },
   ];
 
   const otherOwnerExists = !teamMembers?.some(
     (member: TeamMemberResponse) =>
-      member.team_member.team_role === 'owner' && member.user?.id !== user?.id,
+      member.team_member.team_role === 'owner' &&
+      member.user?.id !== user?.id &&
+      member.team_member.status === 'active',
   );
 
   const currentUserActions = [
@@ -140,19 +197,75 @@ function TeamManagement() {
     }
   };
 
+  const handleInviteMemberSuccess = (newMembers: TeamMemberResponse[]) => {
+    queryClient.setQueryData(
+      ['teamMembers'],
+      (oldData: TeamMemberResponse[]) => {
+        console.log('Old data:', oldData);
+        console.log('New members:', newMembers);
+
+        if (!oldData) return newMembers;
+        const merged = [...oldData, ...newMembers];
+        console.log('Merged result:', merged);
+        return merged;
+      },
+    );
+  };
+
+  const getStatus = (member: TeamMemberResponse) => {
+    let statusText = '';
+    if (member.team_member.status === 'pending') {
+      statusText = 'Pending';
+    } else if (member.team_member.status === 'active') {
+      statusText = 'Active';
+    } else if (member.team_member.status === 'inactive') {
+      statusText = 'Inactive';
+    }
+
+    return (
+      <span
+        className={`rounded-md px-2 py-1 text-xs ${
+          member.team_member.status === 'pending'
+            ? 'bg-amber-800'
+            : member.team_member.status === 'active'
+              ? 'bg-green-800'
+              : 'bg-error'
+        } text-white`}
+      >
+        {statusText}
+      </span>
+    );
+  };
+
+  if (!teamMembers) {
+    return <Spinner />;
+  }
+
   return (
     <>
       <CancelInviteModal
         isOpen={isCancelInviteModalOpen}
-        onClose={() => setIsCancelInviteModalOpen(false)}
-        handleSubmit={() => {
-          console.log('cancel invite');
+        onClose={() => {
+          setIsCancelInviteModalOpen(false);
+          setMemberToCancel(null);
         }}
+        handleSubmit={handleCancelInvite}
+        memberToCancel={memberToCancel}
       />
       <InviteMemberModal
         isOpen={isInviteMemberModalOpen}
         onClose={() => setIsInviteMemberModalOpen(false)}
+        teamSlug={teamSlug as string}
+        onSuccess={handleInviteMemberSuccess}
       />
+      <ResendInviteModal
+        isOpen={isResendInviteModalOpen}
+        onClose={() => setIsResendInviteModalOpen(false)}
+        memberToResendInvite={memberToResendInvite}
+        teamSlug={teamSlug as string}
+      />
+      <h1>Team Members</h1>
+
       <div className="flex flex-col items-end gap-4">
         <Button
           variant="unstyled"
@@ -194,7 +307,7 @@ function TeamManagement() {
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-sm text-white">
                         {member.user?.first_name && member.user?.last_name
                           ? `${member.user.first_name[0]}${member.user.last_name[0]}`
-                          : member.user?.email[0].toUpperCase()}
+                          : member.team_member?.email[0].toUpperCase()}
                       </div>
                     )}
                     <div className="flex flex-col">
@@ -202,7 +315,9 @@ function TeamManagement() {
                         {member.user?.first_name} {member.user?.last_name}
                       </span>
                       <span className="text-sm text-typography-weak">
-                        {member.user?.email}
+                        {member.team_member.email ||
+                          member.user?.email ||
+                          'No email found'}
                       </span>
                     </div>
                   </div>
@@ -210,11 +325,7 @@ function TeamManagement() {
                 <TableCell>
                   {capitalize(member.team_member.team_role)}
                 </TableCell>
-                <TableCell>
-                  <span className="rounded-md bg-green-800 px-2 py-1 text-xs text-white">
-                    {capitalize(member.team_member.status)}
-                  </span>
-                </TableCell>
+                <TableCell>{getStatus(member)}</TableCell>
                 <TableCell>
                   {member.team_member.joined_at &&
                     new Date(member.team_member.joined_at).toLocaleDateString(
@@ -273,10 +384,12 @@ function CancelInviteModal({
   isOpen,
   onClose,
   handleSubmit,
+  memberToCancel,
 }: {
   isOpen: boolean;
   onClose: () => void;
   handleSubmit: () => void;
+  memberToCancel: TeamMemberResponse | null;
 }) {
   return (
     <Modal
@@ -292,8 +405,9 @@ function CancelInviteModal({
     >
       <div className="flex flex-col gap-4">
         <p>
-          Are you sure you want to cancel this invite? The invitee will not be
-          able to join your team.
+          Are you sure you want to cancel{' '}
+          <b> {memberToCancel?.team_member?.email}</b>'s invite? They will not
+          be able to join your team.
         </p>
       </div>
     </Modal>
@@ -303,19 +417,29 @@ function CancelInviteModal({
 function InviteMemberModal({
   isOpen,
   onClose,
+  teamSlug,
+  onSuccess,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  teamSlug: string;
+  onSuccess: (newMembers: TeamMemberResponse[]) => void;
 }) {
   const [emails, setEmails] = useState('');
   const [error, setError] = useState('');
+  const [role, setRole] = useState('member');
 
-  function handleSubmit() {
+  async function handleSubmit() {
     const emailsArray = emails.split(/[\s,]+/);
     const validEmails = emailsArray.filter((email) => email.trim().length > 0);
 
     if (validEmails.length === 0) {
       setError('Please enter at least one email address');
+      return;
+    }
+
+    if (!role) {
+      setError('Please select a role');
       return;
     }
 
@@ -328,15 +452,35 @@ function InviteMemberModal({
       return;
     }
 
-    console.log(validEmails);
-
     setError('');
     onClose();
 
-    toast({
-      message: 'Invites sent',
-      mode: 'success',
+    const resp = await inviteMembers({
+      teamSlug,
+      emails: validEmails,
+      role,
     });
+
+    if (resp.success) {
+      console.log('resp:', resp);
+      onSuccess(resp.data);
+
+      toast({
+        message: 'Invites sent.',
+        mode: 'success',
+      });
+    } else {
+      console.log('error:', resp);
+      toast({
+        message: getErrorMessage(resp.code || ''),
+        mode: 'error',
+      });
+    }
+
+    setEmails('');
+    setRole('member');
+    setError('');
+    onClose();
   }
 
   return (
@@ -344,9 +488,7 @@ function InviteMemberModal({
       open={isOpen}
       onClose={onClose}
       title="Invite to your team"
-      handleSubmit={() => {
-        handleSubmit();
-      }}
+      handleSubmit={handleSubmit}
       submitText="Send invites"
       className="w-full max-w-2xl"
     >
@@ -362,7 +504,68 @@ function InviteMemberModal({
           handleChange={(e) => setEmails(e.target.value)}
         />
         {error && <p className="text-error">{error}</p>}
+        <Select value={role} onValueChange={(value) => setRole(value)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Role" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="member">Member</SelectItem>
+            <SelectItem value="admin">Admin</SelectItem>
+            <SelectItem value="owner">Owner</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+    </Modal>
+  );
+}
+
+function ResendInviteModal({
+  isOpen,
+  onClose,
+  memberToResendInvite,
+  teamSlug,
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  memberToResendInvite: TeamMemberResponse | null;
+  teamSlug: string;
+}) {
+  async function handleSubmit() {
+    const resp = await resendInvite({
+      teamSlug,
+      teamMemberId: memberToResendInvite?.team_member?.id || '',
+    });
+
+    if (resp.success) {
+      toast({
+        message: 'Invite resent',
+        mode: 'success',
+      });
+      onClose();
+    } else {
+      console.log('error:', resp);
+      toast({
+        message: getErrorMessage(resp.code || ''),
+        mode: 'error',
+      });
+    }
+  }
+
+  return (
+    <Modal
+      open={isOpen}
+      onClose={onClose}
+      title="Resend Invite"
+      className="w-full max-w-lg"
+      handleSubmit={handleSubmit}
+      submitText="Resend Invite"
+      cancelText="Back"
+    >
+      <p>
+        Are you sure you want to send a new invite to{' '}
+        <b>{memberToResendInvite?.team_member?.email}</b>? This will cancel
+        their existing invite.
+      </p>
     </Modal>
   );
 }

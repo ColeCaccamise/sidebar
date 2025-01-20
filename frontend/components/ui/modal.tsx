@@ -72,18 +72,32 @@ export default function Modal({
     }
   }, [open, handleSubmit, isLoading, activeStep]);
 
+  // Function to handle backdrop clicks
+  const handleBackdropClick = (e: React.MouseEvent) => {
+    // Only close if clicking directly on the backdrop element
+    if (!canClose) return;
+
+    const target = e.target as HTMLElement;
+    const clickedOnBackdrop = target.getAttribute('data-backdrop') === 'true';
+
+    if (clickedOnBackdrop) {
+      handleClose();
+    }
+  };
+
   return (
-    <Dialog
-      open={open}
-      onClose={canClose ? () => handleClose() : () => {}}
-      className="relative z-50"
-    >
-      <DialogBackdrop
+    <Dialog open={open} onClose={() => {}} className="relative z-50">
+      <div
+        data-backdrop="true"
         className="fixed inset-0 bg-black/40"
-        onClick={canClose ? handleClose : () => {}}
+        onClick={handleBackdropClick}
       />
+
       <div className="fixed inset-0 flex w-screen items-center justify-center px-8">
         <DialogPanel
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
           className={`flex flex-col rounded-md border border-stroke-weak bg-background ${className}`}
         >
           {hint && hint}
@@ -109,10 +123,16 @@ export default function Modal({
             </div>
           ) : null}
 
-          <div className="p-6">{showContent}</div>
+          <div
+            className="p-6"
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            {showContent}
+          </div>
 
-          {(!steps && (showSubmitButton || showCancelButton)) ||
-          (steps && (!!handleSubmit || showCancelButton)) ? (
+          {(showCancelButton || (showSubmitButton && handleSubmit)) && (
             <div className="border-t border-stroke-weak p-4">
               <div className="flex justify-end gap-3">
                 {showCancelButton && (
@@ -141,7 +161,7 @@ export default function Modal({
                 )}
               </div>
             </div>
-          ) : null}
+          )}
         </DialogPanel>
       </div>
     </Dialog>

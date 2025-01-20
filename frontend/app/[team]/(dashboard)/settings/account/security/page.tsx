@@ -23,6 +23,7 @@ import Modal from '@/components/ui/modal';
 import { useState } from 'react';
 import Divider from '@/components/ui/divider';
 import { handleLogout, revokeAllSessions, revokeSession } from './actions';
+import Spinner from '@/components/ui/spinner';
 
 const queryClient = new QueryClient();
 
@@ -81,6 +82,10 @@ function SecurityPageContent() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
     null,
   );
+
+  if (!sessions) {
+    return <Spinner />;
+  }
 
   return (
     <>

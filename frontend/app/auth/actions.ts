@@ -1,11 +1,14 @@
 'use server';
 
 import axios from 'axios';
+import { cookies } from 'next/headers';
 
 export default async function getOauthUrl({
   provider,
+  nextUrl,
 }: {
   provider: 'google' | 'github';
+  nextUrl?: string;
 }): Promise<{
   success: boolean;
   redirectUrl?: string;
@@ -16,7 +19,23 @@ export default async function getOauthUrl({
     try {
       const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_URL}/auth/authorize/GoogleOAuth`,
+        {
+          params: {
+            next: nextUrl,
+          },
+        },
       );
+
+      // set cookies from response
+      const cookieHeader = res.headers['set-cookie'];
+      if (cookieHeader) {
+        cookieHeader.forEach((cookie) => {
+          const [name, ...rest] = cookie.split('=');
+          const value = rest.join('=').split(';')[0];
+          cookies().set(name, value);
+        });
+      }
+
       return {
         success: true,
         redirectUrl: res.data.data.redirect_url,
@@ -34,7 +53,23 @@ export default async function getOauthUrl({
     try {
       const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_URL}/auth/authorize/GitHubOAuth`,
+        {
+          params: {
+            next: nextUrl,
+          },
+        },
       );
+
+      // set cookies from response
+      const cookieHeader = res.headers['set-cookie'];
+      if (cookieHeader) {
+        cookieHeader.forEach((cookie) => {
+          const [name, ...rest] = cookie.split('=');
+          const value = rest.join('=').split(';')[0];
+          cookies().set(name, value);
+        });
+      }
+
       return {
         success: true,
         redirectUrl: res.data.data.redirect_url,
