@@ -19,6 +19,7 @@ export type TeamMember = {
   status: string;
   onboarded: boolean;
   joined_at: string;
+  email: string;
 };
 
 export type TeamMemberResponse = {
@@ -36,16 +37,17 @@ export type Session = {
   auth_method: string;
 };
 
-export type ApiResponse = {
+export type RawApiResponse = {
   message?: string;
-  code: ResponseCode;
-  error?: null | undefined;
+  data?: any;
+  code: ResponseCode | ErrorCode;
 };
 
-export type ApiError = {
+export type ApiResponse = {
+  success: boolean;
   message?: string;
-  error: string;
-  code: ErrorCode;
+  data?: any;
+  code?: ResponseCode | ErrorCode;
 };
 
 export type Subscription = {
