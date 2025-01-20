@@ -26,7 +26,6 @@ class ApiClient {
   // add auth token to request config
   private addAuthHeader(config: AxiosRequestConfig): AxiosRequestConfig {
     const token = this.getAuthToken();
-    console.log('auth token', token);
     if (token) {
       return {
         ...config,
