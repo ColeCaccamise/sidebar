@@ -11,7 +11,7 @@ export default function JoinModal({
   invite,
   isAuthenticated,
 }: {
-  invite: Invite;
+  invite?: Invite;
   isAuthenticated: boolean;
 }) {
   function getTeamRoleLanguage(role: string) {
@@ -26,8 +26,32 @@ export default function JoinModal({
     }
   }
 
-  const team = invite.data.team;
-  const role = invite.data.invite.team_role;
+  if (!invite) {
+    const backUrl = isAuthenticated ? '/' : '/auth/login';
+    const backText = isAuthenticated ? 'Back to dashboard' : 'Back to login';
+
+    return (
+      <Modal open={true} showCancelButton={false} className="w-full max-w-md">
+        <div className="flex flex-col gap-4">
+          <UsersIcon className="h-8 w-8" />
+          <h1 className="text-xl font-bold">Invalid Invite</h1>
+          <p>
+            This invite link is invalid or has expired. Please request a new
+            invite from your team admin.
+          </p>
+          <Link
+            className="btn btn-brand flex w-full items-center gap-1 no-underline"
+            href={backUrl}
+          >
+            {backText} <ExternalLinkIcon className="h-4 w-4" />
+          </Link>
+        </div>
+      </Modal>
+    );
+  }
+
+  const team = invite?.data.team;
+  const role = invite?.data.invite.team_role;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
 
   return (
