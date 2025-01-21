@@ -1,70 +1,26 @@
-'use client';
-
-import Button from '@/components/ui/button';
-import Input from '@/components/ui/input';
 import Logo from '@/components/ui/logo';
-import toast from '@/lib/toast';
-import { getErrorMessage, getResponseMessage } from '@/messages';
-import axios from 'axios';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import Spinner from '@/components/ui/spinner';
+import CreateTeamForm from './create-team-form';
+import api from '@/lib/api';
+import { ListInvitesResponse } from '@/types';
 
-export default function OnboardingTeamPage() {
-  const router = useRouter();
-  const [teamName, setTeamName] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-
-    if (teamName.length < 3) {
-      toast({
-        message: 'Team name must be at least 3 characters long',
-        mode: 'error',
-      });
-      return;
-    } else if (teamName.length > 32) {
-      toast({
-        message: 'Team name must be at most 32 characters long',
-        mode: 'error',
-      });
-      return;
+export default async function OnboardingTeamPage() {
+  async function listInvites() {
+    try {
+      const response = await api.get<ListInvitesResponse>('/users/invites');
+      console.log(response.data);
+      return response.data.data.invites;
+    } catch (err) {
+      console.error(err);
+      return [];
     }
-
-    setLoading(true);
-
-    await axios
-      .post(
-        `${process.env.NEXT_PUBLIC_API_URL}/teams`,
-        {
-          name: teamName,
-        },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          withCredentials: true,
-        },
-      )
-      .then((res) => {
-        toast({
-          message: getResponseMessage(res.data.code),
-          mode: 'success',
-        });
-
-        router.push(`/${res.data.data.slug}/onboarding/invite`);
-      })
-      .catch((err) => {
-        toast({
-          message: getErrorMessage(err.response.data.code),
-          mode: 'error',
-        });
-      })
-      .finally(() => {
-        setLoading(false);
-      });
   }
+
+  const invites = await listInvites();
+  const latestInvite = invites?.sort(
+    (a, b) =>
+      new Date(b.data.invite.created_at).getTime() -
+      new Date(a.data.invite.created_at).getTime(),
+  )[0];
 
   return (
     <div className="flex flex-col gap-8">
@@ -76,30 +32,9 @@ export default function OnboardingTeamPage() {
         </p>
       </div>
 
-      <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-        <Input
-          label="Team name"
-          placeholder='E.g. "Your company"'
-          value={teamName}
-          handleChange={(e) => setTeamName(e.target.value)}
-          type="text"
-        />
+      <p>You have {invites?.length || 0} invites</p>
 
-        <Button
-          type="submit"
-          disabled={!teamName || loading}
-          className="w-full"
-        >
-          {loading ? (
-            <p className="flex items-center gap-2">
-              <Spinner variant="dark" />
-              <span className="text-background">Creating...</span>
-            </p>
-          ) : (
-            'Continue'
-          )}
-        </Button>
-      </form>
+      <CreateTeamForm />
     </div>
   );
 }
