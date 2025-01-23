@@ -2,14 +2,16 @@ package api
 
 import (
 	"context"
+
 	"github.com/colecaccamise/go-backend/util"
 
 	//"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/workos/workos-go/v4/pkg/usermanagement"
 	"os"
 	"time"
+
+	"github.com/workos/workos-go/v4/pkg/usermanagement"
 
 	//"io"
 	"net/http"
@@ -400,6 +402,69 @@ func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error
 			"redirect_url": redirectUrl,
 		}})
 	}
+}
+
+// list pending (valid) team invites for the logged in user
+func (s *Server) handleListInvites(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	}
+
+	user := userSession.User
+
+	teamInvites, err := s.store.GetTeamInvitesByEmail(user.Email)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
+
+	var invites []models.TeamInviteResponse
+	for _, teamInvite := range teamInvites {
+		if util.TeamInviteValid(*teamInvite) {
+			team, err := s.store.GetTeamByID(teamInvite.TeamID)
+			if err != nil {
+				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+			}
+
+			invites = append(invites, models.TeamInviteResponse{
+				ID:        teamInvite.ID,
+				CreatedAt: teamInvite.CreatedAt,
+				ExpiresAt: teamInvite.ExpiresAt,
+				Email:     teamInvite.Email,
+				Token:     teamInvite.Token,
+				State:     teamInvite.State,
+				TeamRole:  teamInvite.TeamRole,
+				TeamSlug:  team.Slug,
+				TeamName:  team.Name,
+			})
+		}
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Data: map[string]interface{}{
+			"invites": invites,
+		},
+	})
+}
+
+func (s *Server) handleListTeamMembers(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	}
+
+	user := userSession.User
+
+	teamMembers, err := s.store.GetTeamMembersByUserID(user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error", Code: "internal_server_error"})
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Data: map[string]interface{}{
+			"members": teamMembers,
+		},
+	})
 }
 
 //func (s *Server) handleRestoreUser(w http.ResponseWriter, r *http.Request) error {

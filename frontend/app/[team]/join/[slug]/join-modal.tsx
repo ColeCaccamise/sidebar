@@ -2,31 +2,29 @@
 
 import Button from '@/components/ui/button';
 import Modal from '@/components/ui/modal';
-import { Invite } from '@/types';
 import Link from 'next/link';
 import { UsersIcon } from 'lucide-react';
 import { ExternalLinkIcon } from '@radix-ui/react-icons';
+import { getTeamRoleLanguage } from '@/lib/team';
 
 export default function JoinModal({
-  invite,
+  data,
   isAuthenticated,
 }: {
-  invite?: Invite;
+  data?: {
+    team: {
+      name: string;
+      slug: string;
+    };
+    invite: {
+      token: string;
+      team_role: string;
+    };
+    user_exists: boolean;
+  } | null;
   isAuthenticated: boolean;
 }) {
-  function getTeamRoleLanguage(role: string) {
-    if (role === 'member') {
-      return 'a member';
-    } else if (role === 'admin') {
-      return 'an admin';
-    } else if (role === 'owner') {
-      return 'an owner';
-    } else {
-      return null;
-    }
-  }
-
-  if (!invite) {
+  if (!data) {
     const backUrl = isAuthenticated ? '/' : '/auth/login';
     const backText = isAuthenticated ? 'Back to dashboard' : 'Back to login';
 
@@ -50,9 +48,16 @@ export default function JoinModal({
     );
   }
 
-  const team = invite?.data.team;
-  const role = invite?.data.invite.team_role;
+  const invite = data.invite;
+  const team = data.team;
+  console.log('invite 54 join modal: ', data);
+  const role = invite.team_role;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  const userExists = data.user_exists;
+  const authText = userExists ? 'Sign in to Join Team' : 'Sign up to Join Team';
+  const authUrl = userExists
+    ? `/auth/login?redirect=${appUrl}/${team.slug}/join/${invite.token}?accept=true`
+    : `/auth/signup?redirect=${appUrl}/${team.slug}/join/${invite.token}?accept=true`;
 
   return (
     <Modal open={true} showCancelButton={false} className="w-full max-w-md">
@@ -60,7 +65,7 @@ export default function JoinModal({
         <UsersIcon className="h-8 w-8" />
         <h1 className="text-xl font-bold">Join {team.name}</h1>
         <p>
-          You've been invited to join as {getTeamRoleLanguage(role)} of the
+          You&apos;ve been invited to join as {getTeamRoleLanguage(role)} of the
           team.
         </p>
 
@@ -70,9 +75,9 @@ export default function JoinModal({
           ) : (
             <Link
               className="btn btn-brand flex w-full items-center gap-1 no-underline"
-              href={`/auth/login?next=${appUrl}/${team.slug}/join/${invite.data.invite.token}?accept=true`}
+              href={authUrl}
             >
-              Sign in to Join Team <ExternalLinkIcon className="h-4 w-4" />
+              {authText} <ExternalLinkIcon className="h-4 w-4" />
             </Link>
           )}
           <p className="text-sm">

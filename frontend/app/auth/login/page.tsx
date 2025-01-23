@@ -5,7 +5,7 @@ import Input from '@/components/ui/input';
 import axios from 'axios';
 import toast from '@/lib/toast';
 import Link from 'next/link';
-import { ApiError } from '@/types';
+import { RawApiResponse } from '@/types';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -23,7 +23,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
 
-  const nextUrl = searchParams.get('next');
+  const redirectUrl = searchParams.get('redirect');
 
   useEffect(() => {
     const error = searchParams.get('error');
@@ -61,7 +61,7 @@ export default function LoginPage() {
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
-        { email, next_url: nextUrl },
+        { email, redirect: redirectUrl },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -75,7 +75,7 @@ export default function LoginPage() {
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
-        const apiError = error.response.data as ApiError;
+        const apiError = error.response.data as RawApiResponse;
         toast({
           message: getErrorMessage(apiError.code),
           mode: 'error',
@@ -115,7 +115,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-1">
           <p>Don&apos;t have an account?</p>
           <Link
-            href={`/auth/signup${nextUrl ? `?next=${nextUrl}` : ''}`}
+            href={`/auth/signup${redirectUrl ? `?redirect=${redirectUrl}` : ''}`}
             className="flex items-center gap-1 no-underline"
           >
             Get started <ArrowRightIcon className="h-4 w-4" />
@@ -156,7 +156,7 @@ export default function LoginPage() {
             handleClick={async () => {
               const res = await getOauthUrl({
                 provider: 'google',
-                nextUrl: nextUrl || undefined,
+                redirectUrl: redirectUrl || undefined,
               });
               if (res?.redirectUrl) {
                 router.push(res.redirectUrl);
@@ -179,7 +179,7 @@ export default function LoginPage() {
             handleClick={async () => {
               const res = await getOauthUrl({
                 provider: 'github',
-                nextUrl: nextUrl || undefined,
+                redirectUrl: redirectUrl || undefined,
               });
               if (res.redirectUrl) {
                 router.push(res.redirectUrl);

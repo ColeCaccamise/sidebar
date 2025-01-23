@@ -1,4 +1,4 @@
-import { Invite, TeamMember } from '@/types';
+import { Invite } from '@/types';
 import api from '@/lib/api';
 import JoinModal from './join-modal';
 import { redirect } from 'next/navigation';
@@ -10,11 +10,25 @@ export default async function JoinPage({
   params: { team: string; slug: string };
   searchParams: { accept?: string };
 }) {
-  async function fetchInvite(): Promise<Invite | null> {
+  async function fetchInvite(): Promise<{
+    data: {
+      active: boolean;
+      team: {
+        name: string;
+        slug: string;
+      };
+      invite: {
+        token: string;
+        team_role: string;
+      };
+      user_exists: boolean;
+    };
+  } | null> {
     const response = await api
       .get(`/teams/${params.team}/join/${params.slug}`)
       .then((res) => {
-        return res.data as Invite;
+        console.log('29 res invite: ', res.data);
+        return res.data;
       })
       .catch((err) => {
         if (err.response?.data) {
@@ -25,7 +39,17 @@ export default async function JoinPage({
         return null;
       });
 
-    return response;
+    return response as {
+      team: {
+        name: string;
+        slug: string;
+      };
+      invite: {
+        token: string;
+        team_role: string;
+      };
+      user_exists: boolean;
+    } | null;
   }
 
   async function verifyAuth() {
@@ -35,7 +59,6 @@ export default async function JoinPage({
         return true;
       })
       .catch((err) => {
-        console.error('auth verification failed:', err.message);
         return false;
       });
     return response;
@@ -45,10 +68,15 @@ export default async function JoinPage({
     const response = await api
       .get(`/teams/${params.team}/member`)
       .then((res) => {
-        return true;
+        console.log(res.data);
+        console.log(70);
+        if (res.data.data.team_member.status === 'active') {
+          return true;
+        } else {
+          return false;
+        }
       })
       .catch((err) => {
-        console.error('team member fetch failed:', err.message);
         return false;
       });
     return response;
@@ -58,18 +86,31 @@ export default async function JoinPage({
   const isAuthenticated = await verifyAuth();
   const invite = await fetchInvite();
 
+  if (invite?.data.active) {
+    console.log('already a member');
+    redirect(`/${params.team}`);
+  }
+
   if (alreadyMember) {
+    console.log('already a member');
     redirect(`/${params.team}`);
   }
 
   // auto-accept invite if accept param is present
   if (searchParams.accept && invite && isAuthenticated) {
     console.log('auto accepting invite');
+    try {
+      await api.post(`/teams/${params.team}/join/${params.slug}/accept`);
+      redirect(`/${params.team}/onboarding/welcome`);
+    } catch (err) {
+      console.error('error auto-accepting invite:', err);
+    }
   }
 
-  if (invite) {
-    return <JoinModal invite={invite} isAuthenticated={isAuthenticated} />;
-  } else {
-    return <div>Invite invalid or expired</div>;
-  }
+  return (
+    <JoinModal
+      data={invite ? invite.data : undefined}
+      isAuthenticated={isAuthenticated}
+    />
+  );
 }

@@ -5,10 +5,10 @@ import { cookies } from 'next/headers';
 
 export default async function getOauthUrl({
   provider,
-  nextUrl,
+  redirectUrl,
 }: {
   provider: 'google' | 'github';
-  nextUrl?: string;
+  redirectUrl?: string;
 }): Promise<{
   success: boolean;
   redirectUrl?: string;
@@ -21,7 +21,7 @@ export default async function getOauthUrl({
         `${process.env.NEXT_PUBLIC_API_URL}/auth/authorize/GoogleOAuth`,
         {
           params: {
-            next: nextUrl,
+            redirect: redirectUrl,
           },
         },
       );
@@ -55,7 +55,7 @@ export default async function getOauthUrl({
         `${process.env.NEXT_PUBLIC_API_URL}/auth/authorize/GitHubOAuth`,
         {
           params: {
-            next: nextUrl,
+            redirect: redirectUrl,
           },
         },
       );

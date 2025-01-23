@@ -41,6 +41,7 @@ export type RawApiResponse = {
   message?: string;
   data?: any;
   code: ResponseCode | ErrorCode;
+  error?: ErrorCode | null;
 };
 
 export type ApiResponse = {
@@ -122,14 +123,27 @@ export type Customer = {
 
 export type Invite = {
   data: {
-    invite: {
-      team_role: string;
-      token: string;
-    };
-    team: {
-      name: string;
-      slug: string;
-    };
+    invite: TeamInvite;
+    team: Team;
+  };
+};
+
+export type TeamInvite = {
+  id: string;
+  team_id: string;
+  team_role: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  state: string;
+  team_name: string;
+  team_slug: string;
+  slug: string;
+};
+
+export type ListInvitesResponse = {
+  data: {
+    invites: TeamInvite[];
   };
 };
 

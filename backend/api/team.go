@@ -364,7 +364,7 @@ func (s *Server) handleGetTeamMembers(w http.ResponseWriter, r *http.Request) er
 	var teamMemberResponse []interface{}
 
 	for _, teamMember := range teamMembers {
-		teamMemberUser, _ := s.store.GetUserByID(teamMember.UserID)
+		teamMemberUser, _ := s.store.GetUserByID(*teamMember.UserID)
 		if teamMember.Status != "revoked" {
 			teamMemberResponse = append(teamMemberResponse, map[string]interface{}{
 				"team_member": teamMember,
@@ -405,6 +405,7 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 
 	now := time.Now()
 
+	// handle skip onboarding case
 	if sendInvitesReq.SkipOnboarding {
 		user.TeammatesInvitedAt = &now
 
@@ -548,7 +549,7 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 		memberUser, _ := s.store.GetUserByEmail(email)
 
 		if memberUser != nil {
-			teamMember.UserID = memberUser.ID
+			teamMember.UserID = &memberUser.ID
 		}
 
 		// store team member in DB
@@ -580,7 +581,9 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 			Email:          email,
 			Token:          token,
 			State:          models.TeamInviteStatus(state),
-			TeamMemberID:   teamMember.ID,
+			TeamMemberID:   &teamMember.ID,
+			MaxUses:        1,
+			InviteType:     models.TeamInviteTypeSingle,
 		}
 		err = s.store.CreateTeamInvite(teamInvite)
 		if err != nil {
@@ -601,6 +604,8 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 
 		// send invite
 		inviteLink := fmt.Sprintf("%s/%s/join/%s", os.Getenv("APP_URL"), team.Slug, token)
+
+		fmt.Printf("invite link: %s\n", inviteLink)
 
 		emailBody := fmt.Sprintf("You've been invited to join %s on %s. Click <a href=\"%s\">here</a> to accept the invite.", team.Name, os.Getenv("APP_NAME"), inviteLink)
 
@@ -786,9 +791,9 @@ func (s *Server) handleResendTeamInvite(w http.ResponseWriter, r *http.Request) 
 		},
 	)
 
-	fmt.Printf("error sending invite email %s %s\n", email, inviteErr)
-
 	if inviteErr != nil {
+		fmt.Printf("error sending invite email %s %s\n", email, inviteErr)
+
 		return WriteJSON(w, http.StatusInternalServerError, Error{
 			Error: "internal server error",
 			Code:  "internal_server_error",
@@ -808,7 +813,8 @@ func (s *Server) handleResendTeamInvite(w http.ResponseWriter, r *http.Request) 
 		Email:          email,
 		Token:          token,
 		State:          models.TeamInviteStatus(state),
-		TeamMemberID:   teamMember.ID,
+		TeamMemberID:   &teamMember.ID,
+		MaxUses:        1,
 	}
 	err = s.store.CreateTeamInvite(teamInvite)
 	if err != nil {
@@ -820,6 +826,8 @@ func (s *Server) handleResendTeamInvite(w http.ResponseWriter, r *http.Request) 
 
 	// send invite
 	inviteLink := fmt.Sprintf("%s/%s/join/%s", os.Getenv("APP_URL"), team.Slug, token)
+
+	fmt.Printf("invite link: %s\n", inviteLink)
 
 	emailBody := fmt.Sprintf("You've been invited to join %s on %s. Click <a href=\"%s\">here</a> to accept the invite.", team.Name, os.Getenv("APP_NAME"), inviteLink)
 
@@ -837,7 +845,7 @@ func (s *Server) handleResendTeamInvite(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleGetTeamInvite(w http.ResponseWriter, r *http.Request) error {
 	slug := chi.URLParam(r, "slug")
 	if !util.IsValidSlug(slug) {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
 	}
 
 	token := chi.URLParam(r, "token")
@@ -887,8 +895,14 @@ func (s *Server) handleGetTeamInvite(w http.ResponseWriter, r *http.Request) err
 	if user != nil {
 		// check if they're already on this team
 		teamMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
-		if teamMember != nil {
-			return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"redirect_url": fmt.Sprintf("%s/%s", os.Getenv("APP_URL"), team.Slug)}})
+		if teamMember != nil && teamMember.Status == models.TeamMemberStatusActive {
+			return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{
+				"redirect_url": fmt.Sprintf("%s/%s", os.Getenv("APP_URL"), team.Slug),
+				"invite":       nil,
+				"team":         nil,
+				"user_exists":  true,
+				"active":       true,
+			}})
 		}
 	}
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{
@@ -900,8 +914,234 @@ func (s *Server) handleGetTeamInvite(w http.ResponseWriter, r *http.Request) err
 			"token":     teamInvite.Token,
 			"team_role": teamInvite.TeamRole,
 		},
+		"user_exists": user != nil,
+		"active":      teamInvite.TeamRole == "active",
 	}})
 
+}
+
+func (s *Server) handleAcceptTeamInvite(w http.ResponseWriter, r *http.Request) error {
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	// todo if invite already accepted idempotency
+
+	token := chi.URLParam(r, "token")
+
+	teamInvite, err := s.store.GetTeamInviteBySlugAndToken(slug, token)
+	if err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	if teamInvite.CanceledAt != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	if teamInvite.UsedTimes > teamInvite.MaxUses {
+		teamInvite.State = models.Expired
+		_ = s.store.UpdateTeamInvite(teamInvite)
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	if teamInvite.ExpiresAt != nil && time.Now().After(*teamInvite.ExpiresAt) {
+		teamInvite.State = models.Expired
+		_ = s.store.UpdateTeamInvite(teamInvite)
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "invite link is invalid or expired.",
+			Code:  "invalid_invite_link",
+		})
+	}
+
+	if teamInvite.TeamMemberID != nil {
+		teamMember, err := s.store.GetTeamMemberByID(*teamInvite.TeamMemberID)
+		if err != nil {
+			fmt.Printf("team member not found for id %s\n", *teamInvite.TeamMemberID)
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+			})
+		}
+
+		response, err := util.AcceptWorkosInvite(teamInvite.WorkosInviteID)
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{
+				Error: "invite is invalid or expired",
+				Code:  "invalid_invite_link",
+			})
+		}
+
+		if teamMember.UserID == nil {
+			user, err := s.store.GetUserByEmail(teamInvite.Email)
+			if err != nil {
+				fmt.Printf("user not found for email %s\n", teamInvite.Email)
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+				})
+			}
+			teamMember.UserID = &user.ID
+			err = s.store.UpdateTeamMember(teamMember)
+			if err != nil {
+				fmt.Printf("team member not found for id %s\n", *teamInvite.TeamMemberID)
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+				})
+			}
+		}
+
+		if response.State == "accepted" {
+			teamMember.Status = models.TeamMemberStatusActive
+			err = s.store.UpdateTeamMember(teamMember)
+			if err != nil {
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+				})
+			}
+
+			teamInvite.State = models.Accepted
+			err = s.store.UpdateTeamInvite(teamInvite)
+			if err != nil {
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+				})
+			}
+		}
+	} else {
+		userSession, err := getUserSession(s, r)
+		if err != nil {
+			return WriteJSON(w, http.StatusUnauthorized, Error{
+				Error: "unauthorized",
+				Code:  "unauthorized",
+			})
+		}
+
+		user := userSession.User
+
+		now := time.Now()
+
+		response, err := util.AcceptWorkosInvite(teamInvite.WorkosInviteID)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+			})
+		}
+
+		teamMember := &models.TeamMember{
+			TeamID:   teamInvite.TeamID,
+			UserID:   &user.ID,
+			JoinedAt: &now,
+			Email:    user.Email,
+			Status:   models.TeamMemberStatusActive,
+		}
+
+		if response.State == "accepted" {
+			teamMember.Status = models.TeamMemberStatusActive
+			err = s.store.UpdateTeamMember(teamMember)
+			if err != nil {
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+				})
+			}
+
+			teamInvite.State = models.Accepted
+			err = s.store.UpdateTeamInvite(teamInvite)
+			if err != nil {
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+				})
+			}
+		}
+
+		err = s.store.CreateTeamMember(teamMember)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+			})
+		}
+	}
+
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{
+			Error: "unauthorized",
+			Code:  "unauthorized",
+		})
+	}
+
+	user := userSession.User
+	now := time.Now()
+	teamID := teamInvite.TeamID
+
+	if user.DefaultTeamSlug == "" {
+		user.DefaultTeamID = &teamID
+
+		team, teamErr := s.store.GetTeamByID(teamID)
+		if teamErr != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+			})
+		}
+
+		user.DefaultTeamSlug = team.Slug
+		user.TeamCreatedOrJoinedAt = &now
+		err = s.store.UpdateUser(user)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+			})
+		}
+	}
+
+	if user.TeamCreatedOrJoinedAt == nil {
+		user.DefaultTeamID = &teamID
+
+		team, teamErr := s.store.GetTeamByID(teamID)
+		if teamErr != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+			})
+		}
+
+		user.TeamCreatedOrJoinedAt = &now
+
+		user.DefaultTeamSlug = team.Slug
+		err = s.store.UpdateUser(user)
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+			})
+		}
+	}
+
+	redirectUrl := fmt.Sprintf("%s/%s/onboarding/welcome", os.Getenv("WORKOS_API_KEY"), slug)
+
+	return WriteJSON(w, http.StatusOK, Response{
+		Data: map[string]interface{}{
+			"redirect_url": redirectUrl,
+		},
+	})
 }
 
 func (s *Server) handleGetTeamInviteLink(w http.ResponseWriter, r *http.Request) error {
@@ -1044,7 +1284,7 @@ func (s *Server) handleVerifyInviteLink(w http.ResponseWriter, r *http.Request) 
 
 	invite, err := s.store.GetTeamInviteBySlugAndToken(slug, token)
 	if err != nil {
-		return WriteJSON(w, http.StatusInternalServerError, Error{
+		return WriteJSON(w, http.StatusForbidden, Error{
 			Error: "invite link expired",
 			Code:  "invite_link_expired",
 			Data: map[string]interface{}{
@@ -1192,7 +1432,7 @@ func (s *Server) handleUseInviteLink(w http.ResponseWriter, r *http.Request) err
 	if user != nil {
 		// todo validate if user has permission to join team
 
-		teamMember.UserID = user.ID
+		teamMember.UserID = &user.ID
 
 		now := time.Now()
 		user.TeammatesInvitedAt = &now
@@ -1215,7 +1455,7 @@ func (s *Server) handleUseInviteLink(w http.ResponseWriter, r *http.Request) err
 	return WriteJSON(w, http.StatusOK, Response{
 		Message: "success",
 		Data: map[string]interface{}{
-			"redirect_url": fmt.Sprintf("%s/auth/login?next=/%s/onboarding/welcome", os.Getenv("APP_URL"), slug),
+			"redirect_url": fmt.Sprintf("%s/auth/login?redirect=/%s/onboarding/welcome", os.Getenv("APP_URL"), slug),
 		},
 	})
 }

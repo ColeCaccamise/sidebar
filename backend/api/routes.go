@@ -91,12 +91,12 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Get("/{slug}/member", makeHttpHandleFunc(s.HandleGetTeamMember))
 			r.Get("/{slug}/members", makeHttpHandleFunc(s.handleGetTeamMembers))
 			r.Get("/{slug}/upsells", makeHttpHandleFunc(s.handleGetUpsells))
-
 			// invite links
 			r.Post("/{slug}/invite", makeHttpHandleFunc(s.handleSendTeamInvites)) // send an invite to one or many
 			r.Post("/{slug}/invite/{teamMemberId}/cancel", makeHttpHandleFunc(s.handleCancelTeamInvites))
 			r.Post("/{slug}/invite/{teamMemberId}/resend", makeHttpHandleFunc(s.handleResendTeamInvite))
-			r.Get("/{slug}/invite-link", makeHttpHandleFunc(s.handleGetTeamInviteLink))         // get the current invite link
+			r.Get("/{slug}/invite-link", makeHttpHandleFunc(s.handleGetTeamInviteLink)) // get the current invite link
+			r.Post("/{slug}/join/{token}/accept", makeHttpHandleFunc(s.handleAcceptTeamInvite))
 			r.Post("/{slug}/invite-link", makeHttpHandleFunc(s.handleRegenerateTeamInviteLink)) // regenerate the current invite link
 			// complete onboarding
 			r.Post("/{slug}/onboarding", makeHttpHandleFunc(s.handleCompleteOnboarding))
@@ -149,6 +149,8 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Post("/delete", makeHttpHandleFunc(s.handleDeleteAccount))
 			r.Post("/restore", makeHttpHandleFunc(s.handleRestoreAccount))
 			r.Post("/accept-terms", makeHttpHandleFunc(s.handleAcceptTerms))
+			r.Get("/invites", makeHttpHandleFunc(s.handleListInvites)) // todo list all outstanding a user has -> to be used to auto accept them (either show them during onboarding or in dashbaord as a notification)
+			r.Get("/members", makeHttpHandleFunc(s.handleListTeamMembers))
 			//r.Patch("/email", makeHttpHandleFunc(s.handleUpdateUserEmail))
 			//r.Post("/resend-email", makeHttpHandleFunc(s.handleResendUpdateEmail))
 			//r.Patch("/avatar", makeHttpHandleFunc(s.handleUploadAvatar))

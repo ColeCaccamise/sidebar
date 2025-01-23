@@ -75,6 +75,8 @@ type User struct {
 	TeamCreatedOrJoinedAt   *time.Time `gorm:"default:null" json:"team_created_or_joined_at"`
 	TeammatesInvitedAt      *time.Time `gorm:"default:null" json:"teammates_invited_at"` // accepted or declined at
 	DefaultTeamSlug         string     `gorm:"default:null" json:"default_team_slug"`
+	DefaultTeamID           *uuid.UUID `gorm:"default:null" json:"default_team_id"`
+	PendingTeamID           *uuid.UUID `gorm:"default:null" json:"pending_team_id"` // current team user is joining
 	TokenRefreshedAt        *time.Time `gorm:"default:null" json:"token_refreshed_at"`
 	DeletedReason           string     `gorm:"default:null" json:"deleted_reason"`
 	DeletedOtherReason      string     `gorm:"default:null" json:"deleted_other_reason"`

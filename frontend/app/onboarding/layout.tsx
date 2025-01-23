@@ -53,19 +53,21 @@ function OnboardingLayoutContent({ children }: { children: React.ReactNode }) {
     <>
       {children}
 
-      {teams?.length > 0 && (
-        <div className="fixed left-8 top-8">
-          <Button
-            className="transition-effect flex items-center gap-1 hover:opacity-90"
-            variant="unstyled"
-            type="submit"
-            handleClick={() => router.push(`/${user?.default_team_slug}`)}
-          >
-            <ChevronLeftIcon className="h-4 w-4" />
-            Back to dashboard
-          </Button>
-        </div>
-      )}
+      {teams?.length > 0 &&
+        user?.default_team_slug &&
+        user?.onboarding_completed && (
+          <div className="fixed left-8 top-8">
+            <Button
+              className="transition-effect flex items-center gap-1 hover:opacity-90"
+              variant="unstyled"
+              type="submit"
+              handleClick={() => router.push(`/${user?.default_team_slug}`)}
+            >
+              <ChevronLeftIcon className="h-4 w-4" />
+              Back to dashboard
+            </Button>
+          </div>
+        )}
 
       <div className="fixed right-8 top-8">
         <Button

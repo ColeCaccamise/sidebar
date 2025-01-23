@@ -1033,7 +1033,7 @@ func (s *Server) handleStripeWebhook(w http.ResponseWriter, r *http.Request) err
 
 			for _, member := range teamOwners {
 				err = s.store.CreatePrompt(&models.Prompt{
-					UserID:      member.UserID,
+					UserID:      *member.UserID,
 					TeamID:      team.ID,
 					Type:        models.PromptTypeUpsell,
 					Title:       "Add Payment Method",

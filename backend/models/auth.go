@@ -16,8 +16,8 @@ type SignupRequest struct {
 }
 
 type LoginRequest struct {
-	Email   string `json:"email"`
-	NextUrl string `json:"next_url"`
+	Email    string `json:"email"`
+	Redirect string `json:"redirect"`
 }
 
 type ConfirmEmailTokenRequest struct {

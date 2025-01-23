@@ -58,7 +58,7 @@ type TeamMemberResponse struct {
 func NewTeamMemberResponse(t *TeamMember) *TeamMemberResponse {
 	return &TeamMemberResponse{
 		ID:        t.ID,
-		UserID:    t.UserID,
+		UserID:    *t.UserID,
 		TeamID:    t.TeamID,
 		TeamRole:  t.TeamRole,
 		Status:    t.Status,
@@ -134,7 +134,7 @@ type TeamInvite struct {
 	ExpiresAt      *time.Time       `gorm:"default:null" json:"expires_at"`
 	WorkosInviteID string           `gorm:"default:null" json:"workos_invite_id"`
 	TeamID         uuid.UUID        `gorm:"type:uuid;not null" json:"team_id"`
-	TeamMemberID   uuid.UUID        `gorm:"type:uuid;default:null" json:"team_member_id"`
+	TeamMemberID   *uuid.UUID       `gorm:"type:uuid;default:null" json:"team_member_id"`
 	Email          string           `gorm:"default:null" json:"email"`
 	Token          string           `gorm:"not null" json:"slug"`
 	InviteType     TeamInviteType   `gorm:"not null" json:"invite_type"`
@@ -145,6 +145,20 @@ type TeamInvite struct {
 	InviterUserID  uuid.UUID        `gorm:"type:uuid;default:null" json:"inviter_user_id"`
 	UsedTimes      int              `gorm:"default:null" json:"used_times"`
 	MaxUses        int              `gorm:"default:null" json:"max_uses"`
+}
+
+type TeamInviteResponse struct {
+	ID         uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
+	CreatedAt  time.Time        `gorm:"autoCreateTime" json:"created_at"`
+	UpdatedAt  time.Time        `gorm:"autoUpdateTime" json:"updated_at"`
+	ExpiresAt  *time.Time       `gorm:"default:null" json:"expires_at"`
+	Email      string           `gorm:"default:null" json:"email"`
+	Token      string           `gorm:"not null" json:"slug"`
+	InviteType TeamInviteType   `gorm:"not null" json:"invite_type"`
+	State      TeamInviteStatus `gorm:"default:null" json:"state"`
+	TeamRole   TeamRole         `gorm:"default: member" json:"team_role"`
+	TeamSlug   string           `gorm:"default:null" json:"team_slug"`
+	TeamName   string           `gorm:"default:null" json:"team_name"`
 }
 
 type GenerateTeamInviteRequest struct {
@@ -173,7 +187,7 @@ type TeamMember struct {
 	LeftAt                *time.Time       `gorm:"default:null" json:"left_at"`
 	InviterUserID         uuid.UUID        `gorm:"type:uuid;default:null" json:"inviter_user_id"`
 	TeamID                uuid.UUID        `gorm:"type:uuid;not null" json:"team_id"`
-	UserID                uuid.UUID        `gorm:"type:uuid;not null" json:"user_id"`
+	UserID                *uuid.UUID       `gorm:"type:uuid;not null" json:"user_id"`
 	TeamRole              TeamRole         `gorm:"default:member" json:"team_role"`
 	Status                TeamMemberStatus `gorm:"default:null" json:"status"`
 	OnboardedAt           *time.Time       `gorm:"default:null" json:"onboarded_at"`
@@ -194,7 +208,7 @@ func NewTeamMember(req *CreateTeamMemberRequest) *TeamMember {
 		JoinedAt:      req.JoinedAt,
 		InviterUserID: req.InviterUserID,
 		TeamID:        req.TeamID,
-		UserID:        req.UserID,
+		UserID:        &req.UserID,
 		TeamRole:      req.TeamRole,
 		Email:         req.Email,
 	}
@@ -205,7 +219,7 @@ func NewTeamInvite(req *CreateTeamInviteRequest) *TeamInvite {
 		TeamID:       req.TeamID,
 		Email:        req.Email,
 		TeamRole:     req.TeamRole,
-		TeamMemberID: req.TeamMemberID,
+		TeamMemberID: &req.TeamMemberID,
 	}
 }
 

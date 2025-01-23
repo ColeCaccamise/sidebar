@@ -32,14 +32,18 @@ type Storage interface {
 	GetTeamInviteBySlugAndToken(string, string) (*models.TeamInvite, error)
 	GetTeamInviteBySlugAndEmail(string, string) (*models.TeamInvite, error)
 	GetTeamInvitesByTeamMemberID(teamMemberID uuid.UUID) ([]*models.TeamInvite, error)
+	GetTeamInvitesByEmail(string) ([]*models.TeamInvite, error)
 	UpdateTeamInvite(*models.TeamInvite) error
 	GetTeamInviteByID(uuid.UUID) (*models.TeamInvite, error)
+	GetTeamByWorkosOrgID(string) (*models.Team, error)
 	CreateTeamInvite(*models.TeamInvite) error
 	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
 	GetTeamMemberByID(uuid.UUID) (*models.TeamMember, error)
+	GetTeamMemberByEmail(string) (*models.TeamMember, error)
 	GetTeamMembersByTeamID(uuid.UUID) ([]*models.TeamMember, error)
 	GetTeamMembersByTeamIDAndRole(uuid.UUID, models.TeamRole) ([]*models.TeamMember, error)
 	GetTeamsByUserID(userID uuid.UUID) ([]*models.Team, error)
+	GetTeamMembersByUserID(uuid.UUID) ([]*models.TeamMember, error)
 	GetTeamByID(uuid.UUID) (*models.Team, error)
 	GetTeamByStripeCustomerID(string) (*models.Team, error)
 	CreateTeamSubscription(*models.TeamSubscription) error
@@ -201,7 +205,7 @@ func (s *PostgresStore) GetUserByWorkosUserID(id string) (*models.User, error) {
 	result := s.db.Where("workos_user_id = ?", id).First(&user)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("user not found with email %s", id)
+			return nil, fmt.Errorf("user not found with workos user id %s", id)
 		}
 		return nil, result.Error
 	}
@@ -395,6 +399,15 @@ func (s *PostgresStore) GetTeamInvitesByTeamMemberID(teamMemberID uuid.UUID) ([]
 	return teamInvites, nil
 }
 
+func (s *PostgresStore) GetTeamInvitesByEmail(email string) ([]*models.TeamInvite, error) {
+	var teamInvites []*models.TeamInvite
+	result := s.db.Where("email = ?", email).Find(&teamInvites)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return teamInvites, nil
+}
+
 func (s *PostgresStore) GetTeamInviteBySlugAndToken(teamSlug string, token string) (*models.TeamInvite, error) {
 	// First find the team by slug
 	var team models.Team
@@ -472,6 +485,30 @@ func (s *PostgresStore) GetTeamMemberByID(id uuid.UUID) (*models.TeamMember, err
 	return &teamMember, nil
 }
 
+func (s *PostgresStore) GetTeamMemberByEmail(email string) (*models.TeamMember, error) {
+	var teamMember models.TeamMember
+	result := s.db.Where("email = ?", email).First(&teamMember)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team member not found with email %s", email)
+		}
+		return nil, result.Error
+	}
+	return &teamMember, nil
+}
+
+func (s *PostgresStore) GetTeamByWorkosOrgID(orgID string) (*models.Team, error) {
+	var team models.Team
+	result := s.db.Where("workos_org_id = ?", orgID).First(&team)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team not found with orgId %s", orgID)
+		}
+		return nil, result.Error
+	}
+	return &team, nil
+}
+
 func (s *PostgresStore) GetTeamMemberByTeamIDAndUserID(teamID uuid.UUID, userID uuid.UUID) (*models.TeamMember, error) {
 	var teamMember models.TeamMember
 	result := s.db.Where("team_id = ? AND user_id = ?", teamID, userID).First(&teamMember)
@@ -502,6 +539,18 @@ func (s *PostgresStore) GetTeamMembersByTeamIDAndRole(teamID uuid.UUID, teamRole
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("team members not found with team id %s", teamID)
+		}
+		return nil, result.Error
+	}
+	return teamMembers, nil
+}
+
+func (s *PostgresStore) GetTeamMembersByUserID(userID uuid.UUID) ([]*models.TeamMember, error) {
+	var teamMembers []*models.TeamMember
+	result := s.db.Where("user_id = ?", userID).Find(&teamMembers)
+	if result.Error != nil {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("team members not found with user id %s", userID)
 		}
 		return nil, result.Error
 	}
