@@ -3,11 +3,11 @@ package util
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/colecaccamise/go-backend/models"
-	"io"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/colecaccamise/go-backend/models"
 )
 
 type WorkosInviteResponse struct {
@@ -51,14 +51,8 @@ func AcceptWorkosInvite(inviteId string) (response *WorkosInviteResponse, err er
 		}
 	}()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read jwks response: %v", err)
-	}
-
 	// check response status
 	if resp.StatusCode != http.StatusOK {
-		fmt.Println(string(body))
 		return nil, fmt.Errorf("invitation accept failed with status code %d", resp.StatusCode)
 	}
 
@@ -66,12 +60,8 @@ func AcceptWorkosInvite(inviteId string) (response *WorkosInviteResponse, err er
 		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-	var inviteResponse WorkosInviteResponse
-	if err = json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %v", err)
-	}
 
-	return &inviteResponse, nil
+	return response, nil
 }
 
 func TeamInviteValid(teamInvite models.TeamInvite) (response bool) {

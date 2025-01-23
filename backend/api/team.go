@@ -1015,7 +1015,7 @@ func (s *Server) handleAcceptTeamInvite(w http.ResponseWriter, r *http.Request) 
 		}
 
 		response, acceptErr := util.AcceptWorkosInvite(teamInvite.WorkosInviteID)
-		if acceptErr != nil {
+		if acceptErr != nil || response == nil {
 			return WriteJSON(w, http.StatusBadRequest, Error{
 				Error: "invite is invalid or expired",
 				Code:  "invalid_invite_link",
@@ -1087,7 +1087,6 @@ func (s *Server) handleAcceptTeamInvite(w http.ResponseWriter, r *http.Request) 
 			UserID:   &user.ID,
 			JoinedAt: &now,
 			Email:    user.Email,
-			Status:   models.TeamMemberStatusActive,
 		}
 
 		if response.State == "accepted" {
