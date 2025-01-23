@@ -41,7 +41,7 @@ export default function SignupPage() {
     await api
       .post(
         '/auth/signup',
-        { email },
+        { email, redirect: redirectUrl || undefined },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -148,7 +148,10 @@ export default function SignupPage() {
             variant="unstyled"
             className="btn flex w-full border border-stroke-weak bg-fill"
             handleClick={async () => {
-              const res = await getOauthUrl({ provider: 'github' });
+              const res = await getOauthUrl({
+                provider: 'github',
+                redirectUrl: redirectUrl || undefined,
+              });
               if (res.redirectUrl) {
                 router.push(res.redirectUrl);
               } else {
@@ -173,61 +176,5 @@ export default function SignupPage() {
         <Link href="/legal/privacy">Privacy Policy</Link>.
       </p>
     </>
-  );
-
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <span className="py-4">
-          <DashboardIcon className="h-8 w-8" />
-        </span>
-        <h1>Create a new Dashboard account</h1>
-        <p>Free for 14 days &mdash; no credit card required.</p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Button
-          variant="unstyled"
-          className="btn flex w-full border border-stroke-weak bg-fill"
-          disabled={true}
-        >
-          <span className="mr-2">
-            <FontAwesomeIcon icon={faGoogle} />
-          </span>
-          Sign up with Google
-        </Button>
-      </div>
-
-      <span className="text-center">OR</span>
-
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        <Input
-          value={email}
-          handleChange={(e) => setEmail(e.target.value)}
-          label="Work email address"
-          type="email"
-          name="email"
-          placeholder="name@company.com"
-          required
-        />
-
-        <Button className="w-full" type="submit" disabled={isLoading || !email}>
-          {isLoading ? (
-            <div className="flex items-center justify-center gap-2">
-              <Spinner variant="dark" />
-              <span className="text-background">Signing up...</span>
-            </div>
-          ) : (
-            'Sign up with email'
-          )}
-        </Button>
-
-        <div className="text-center">
-          <Link className="no-underline" href="/auth/login">
-            or login instead
-          </Link>
-        </div>
-      </form>
-    </div>
   );
 }
