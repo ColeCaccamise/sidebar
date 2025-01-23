@@ -468,11 +468,19 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 
 	var alreadyInvited []string
 	for _, email := range emails {
-		existingInvite, existingInviteError := s.store.GetTeamInviteBySlugAndEmail(slug, email)
-		if existingInvite != nil && existingInviteError == nil && existingInvite.State != "canceled" && existingInvite.State != "expired" {
-			alreadyInvited = append(alreadyInvited, email)
+		// find all invites for user
+		existingInvites, _ := s.store.GetTeamInvitesBySlugAndEmail(slug, email)
+		if existingInvites != nil {
+			for _, invite := range existingInvites {
+				inviteValid := invite.State == "pending"
+				if inviteValid {
+					alreadyInvited = append(alreadyInvited, email)
+					break
+				}
+			}
 		}
 	}
+
 	if len(alreadyInvited) > 0 {
 		return WriteJSON(w, http.StatusBadRequest, Error{
 			Error: "email(s) already invited",
@@ -501,7 +509,7 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 		existingUser, _ := s.store.GetUserByEmail(email)
 		if existingUser != nil {
 			existingTeamMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, existingUser.ID)
-			if existingTeamMember != nil {
+			if existingTeamMember != nil && existingTeamMember.Status == "active" {
 				existingMembers = append(existingMembers, email)
 			}
 		}
@@ -522,6 +530,7 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 	}
 
 	// iterate over each member and construct invite
+	var invitedEmails []string
 	for _, email := range emails {
 		response, inviteErr := usermanagement.SendInvitation(
 			context.Background(),
@@ -534,38 +543,64 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 			},
 		)
 
-		fmt.Printf("error sending invite email %s %s\n", email, inviteErr)
-
-		// create team member record
-		teamMember := models.NewTeamMember(&models.CreateTeamMemberRequest{
-			TeamID:        team.ID,
-			Email:         email,
-			InviterUserID: user.ID,
-			TeamRole:      role,
-		})
-
-		teamMember.Status = "pending"
-
-		memberUser, _ := s.store.GetUserByEmail(email)
-
-		if memberUser != nil {
-			teamMember.UserID = &memberUser.ID
-		}
-
-		// store team member in DB
-		err := s.store.CreateTeamMember(teamMember)
-		if err != nil {
-			return WriteJSON(w, http.StatusInternalServerError, Error{
-				Error: "internal server error",
-				Code:  "internal_server_error",
-			})
-		}
-
 		if inviteErr != nil {
+			fmt.Printf("error sending invite email %s %s\n", email, inviteErr)
+
 			return WriteJSON(w, http.StatusInternalServerError, Error{
 				Error: "internal server error",
 				Code:  "internal_server_error",
 			})
+		}
+
+		// check if a non-active member exists with their email
+		var teamMember *models.TeamMember
+		var memberUser *models.User
+		inactiveMember, _ := s.store.GetTeamMemberByEmail(email)
+		if inactiveMember != nil {
+			teamMember = inactiveMember
+			teamMember.Status = "pending"
+			memberUser, _ = s.store.GetUserByEmail(email)
+
+			if memberUser != nil {
+				teamMember.UserID = &memberUser.ID
+			}
+
+			err = s.store.UpdateTeamMember(teamMember)
+			if err != nil {
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+					Data:  map[string]interface{}{"invites": invites},
+				})
+			}
+		} else {
+			// create team member record
+			teamMember = models.NewTeamMember(&models.CreateTeamMemberRequest{
+				TeamID:        team.ID,
+				Email:         email,
+				InviterUserID: user.ID,
+				TeamRole:      role,
+			})
+
+			teamMember.Status = "pending"
+
+			memberUser, _ = s.store.GetUserByEmail(email)
+
+			if memberUser != nil {
+				teamMember.UserID = &memberUser.ID
+			}
+
+			// store team member in DB
+			err = s.store.CreateTeamMember(teamMember)
+			if err != nil {
+				fmt.Printf("error creating team member (%s): %s\n", email, err)
+
+				return WriteJSON(w, http.StatusInternalServerError, Error{
+					Error: "internal server error",
+					Code:  "internal_server_error",
+					Data:  map[string]interface{}{"invites": invites},
+				})
+			}
 		}
 
 		token := response.Token
@@ -590,6 +625,25 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 			return WriteJSON(w, http.StatusInternalServerError, Error{
 				Error: "internal server error",
 				Code:  "internal_server_error",
+				Data:  map[string]interface{}{"invites": invites},
+			})
+		}
+
+		// send invite
+		inviteLink := fmt.Sprintf("%s/%s/join/%s", os.Getenv("APP_URL"), team.Slug, token)
+
+		fmt.Printf("invite link: %s\n", inviteLink)
+
+		emailBody := fmt.Sprintf("You've been invited to join %s on %s. Click <a href=\"%s\">here</a> to accept the invite.", team.Name, os.Getenv("APP_NAME"), inviteLink)
+
+		err = util.SendEmail(email, "You've been invited to join a team", emailBody)
+		if err != nil {
+			fmt.Printf("error sending email: %s\n", err)
+
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error",
+				Code:  "internal_server_error",
+				Data:  map[string]interface{}{"invited_members": invitedEmails},
 			})
 		}
 
@@ -601,15 +655,12 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 			TeamMember: teamMember,
 			User:       memberUser,
 		})
+	}
 
-		// send invite
-		inviteLink := fmt.Sprintf("%s/%s/join/%s", os.Getenv("APP_URL"), team.Slug, token)
+	if user.TeammatesInvitedAt == nil {
+		user.TeammatesInvitedAt = &now
 
-		fmt.Printf("invite link: %s\n", inviteLink)
-
-		emailBody := fmt.Sprintf("You've been invited to join %s on %s. Click <a href=\"%s\">here</a> to accept the invite.", team.Name, os.Getenv("APP_NAME"), inviteLink)
-
-		err = util.SendEmail(email, "You've been invited to join a team", emailBody)
+		err = s.store.UpdateUser(user)
 		if err != nil {
 			return WriteJSON(w, http.StatusInternalServerError, Error{
 				Error: "internal server error",
@@ -618,17 +669,7 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 		}
 	}
 
-	user.TeammatesInvitedAt = &now
-
-	err = s.store.UpdateUser(user)
-	if err != nil {
-		return WriteJSON(w, http.StatusInternalServerError, Error{
-			Error: "internal server error",
-			Code:  "internal_server_error",
-		})
-	}
-
-	return WriteJSON(w, http.StatusOK, Response{Message: "invites sent", Code: "invites_sent", Data: invites})
+	return WriteJSON(w, http.StatusOK, Response{Message: "invites sent", Code: "invites_sent", Data: map[string]interface{}{"invites": invites}})
 }
 
 func (s *Server) handleCancelTeamInvites(w http.ResponseWriter, r *http.Request) error {
@@ -671,7 +712,7 @@ func (s *Server) handleCancelTeamInvites(w http.ResponseWriter, r *http.Request)
 
 			usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
 
-			_, err := usermanagement.RevokeInvitation(
+			_, err = usermanagement.RevokeInvitation(
 				context.Background(),
 				usermanagement.RevokeInvitationOpts{
 					Invitation: teamInvite.WorkosInviteID,
@@ -964,8 +1005,8 @@ func (s *Server) handleAcceptTeamInvite(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if teamInvite.TeamMemberID != nil {
-		teamMember, err := s.store.GetTeamMemberByID(*teamInvite.TeamMemberID)
-		if err != nil {
+		teamMember, teamMemberErr := s.store.GetTeamMemberByID(*teamInvite.TeamMemberID)
+		if teamMemberErr != nil {
 			fmt.Printf("team member not found for id %s\n", *teamInvite.TeamMemberID)
 			return WriteJSON(w, http.StatusInternalServerError, Error{
 				Error: "internal server error",
@@ -973,8 +1014,8 @@ func (s *Server) handleAcceptTeamInvite(w http.ResponseWriter, r *http.Request) 
 			})
 		}
 
-		response, err := util.AcceptWorkosInvite(teamInvite.WorkosInviteID)
-		if err != nil {
+		response, acceptErr := util.AcceptWorkosInvite(teamInvite.WorkosInviteID)
+		if acceptErr != nil {
 			return WriteJSON(w, http.StatusBadRequest, Error{
 				Error: "invite is invalid or expired",
 				Code:  "invalid_invite_link",
@@ -982,8 +1023,8 @@ func (s *Server) handleAcceptTeamInvite(w http.ResponseWriter, r *http.Request) 
 		}
 
 		if teamMember.UserID == nil {
-			user, err := s.store.GetUserByEmail(teamInvite.Email)
-			if err != nil {
+			user, userErr := s.store.GetUserByEmail(teamInvite.Email)
+			if userErr != nil {
 				fmt.Printf("user not found for email %s\n", teamInvite.Email)
 				return WriteJSON(w, http.StatusInternalServerError, Error{
 					Error: "internal server error",

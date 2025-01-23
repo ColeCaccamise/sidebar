@@ -89,7 +89,7 @@ const (
 type TeamMemberStatus string
 
 const (
-	TeamMemberStatusInvited TeamMemberStatus = "pending"
+	TeamMemberStatusPending TeamMemberStatus = "pending"
 	TeamMemberStatusActive  TeamMemberStatus = "active"
 	TeamMemberStatusLeft    TeamMemberStatus = "left"
 	TeamMemberStatusRevoked TeamMemberStatus = "revoked"

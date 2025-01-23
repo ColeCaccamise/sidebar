@@ -755,6 +755,7 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	email := signupReq.Email
+	redirect := signupReq.Redirect
 
 	if email == "" {
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: "email is required", Code: "email_required"})
@@ -825,7 +826,14 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) error {
 	code := response.Code
 	email = response.Email
 
-	magicLink := fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("API_URL"), code, email)
+	var magicLink string
+
+	if redirect != "" {
+		magicLink = fmt.Sprintf("%s/auth/confirm?code=%s&email=%s&redirect=%s", os.Getenv("API_URL"), code, email, redirect)
+	} else {
+		magicLink = fmt.Sprintf("%s/auth/confirm?code=%s&email=%s", os.Getenv("API_URL"), code, email)
+	}
+
 	fmt.Printf("Magic link: %s\n", magicLink)
 
 	html := fmt.Sprintf("<div>Click this link to login to your dashboard: <a href='%s'>%s</a></div>", magicLink, magicLink)

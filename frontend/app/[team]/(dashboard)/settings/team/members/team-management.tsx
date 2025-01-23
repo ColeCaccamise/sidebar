@@ -198,6 +198,7 @@ function TeamManagement() {
   };
 
   const handleInviteMemberSuccess = (newMembers: TeamMemberResponse[]) => {
+    console.log('New members:', newMembers);
     queryClient.setQueryData(
       ['teamMembers'],
       (oldData: TeamMemberResponse[]) => {
@@ -461,9 +462,9 @@ function InviteMemberModal({
       role,
     });
 
-    if (resp.success) {
+    if (resp?.success) {
       console.log('resp:', resp);
-      onSuccess(resp.data);
+      onSuccess(resp.data.invites);
 
       toast({
         message: 'Invites sent.',

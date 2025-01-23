@@ -12,7 +12,8 @@ type AuthToken struct {
 }
 
 type SignupRequest struct {
-	Email string `json:"email"`
+	Email    string `json:"email"`
+	Redirect string `json:"redirect"`
 }
 
 type LoginRequest struct {
