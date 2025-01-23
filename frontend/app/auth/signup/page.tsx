@@ -89,7 +89,7 @@ export default function SignupPage() {
         <div className="flex items-center gap-1">
           <p>Already have an account?</p>
           <Link
-            href={`/auth/login${redirectUrl ? `?redirectUrl=${redirectUrl}` : ''}`}
+            href={`/auth/login${redirectUrl ? `?redirect=${redirectUrl}` : ''}`}
             className="flex items-center gap-1 no-underline"
           >
             Sign in <ArrowRightIcon className="h-4 w-4" />
