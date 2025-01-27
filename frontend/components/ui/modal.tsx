@@ -1,4 +1,6 @@
-import { Dialog, DialogPanel, DialogBackdrop } from '@headlessui/react';
+'use client';
+
+import { Dialog, DialogPanel } from '@headlessui/react';
 import { ArrowLeftIcon, Cross1Icon } from '@radix-ui/react-icons';
 import Button from '@/components/ui/button';
 import Spinner from './spinner';
