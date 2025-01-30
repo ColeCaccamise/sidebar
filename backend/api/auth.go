@@ -1,16 +1,18 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/go-chi/chi"
 	"github.com/ip2location/ip2location-go/v9"
@@ -24,26 +26,6 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/exp/rand"
 )
-
-//func (s *Server) VerifyUserNotDeleted(next http.Handler) http.Handler {
-//	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-//		user, _, _, err := getUserIdentity(s, r)
-//		if err != nil {
-//			_ = WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
-//			return
-//		}
-//
-//		if user.DeletedAt != nil {
-//			_ = WriteJSON(w, http.StatusForbidden, Error{
-//				Error: "This action cannot be completed because your account has been deleted",
-//				Code:  "user_deleted",
-//			})
-//			return
-//		}
-//
-//		next.ServeHTTP(w, r)
-//	})
-//}
 
 func (s *Server) VerifySecurityVersion(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -160,6 +142,99 @@ func (s *Server) handleVerifyEmail(w http.ResponseWriter, r *http.Request) error
 	return nil
 }
 
+type AuthenticateWithCodeResponse struct {
+	User struct {
+		Object            string    `json:"object"`
+		Id                string    `json:"id"`
+		Email             string    `json:"email"`
+		FirstName         string    `json:"first_name"`
+		LastName          string    `json:"last_name"`
+		EmailVerified     bool      `json:"email_verified"`
+		ProfilePictureUrl string    `json:"profile_picture_url"`
+		CreatedAt         time.Time `json:"created_at"`
+		UpdatedAt         time.Time `json:"updated_at"`
+	} `json:"user"`
+	OrgID        string `json:"organization_id"`
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	Impersonator struct {
+		Email  string `json:"email"`
+		Reason string `json:"reason"`
+	} `json:"impersonator"`
+	AuthenticationMethod models.AuthMethod `json:"authentication_method"`
+}
+
+type AuthenticateWithCodeError struct {
+	Code                       string `json:"code"`
+	Message                    string `json:"message"`
+	PendingAuthenticationToken string `json:"pending_authentication_token"`
+	Organizations              []struct {
+		Id   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"organizations"`
+	User struct {
+		Object            string    `json:"object"`
+		Id                string    `json:"id"`
+		Email             string    `json:"email"`
+		FirstName         string    `json:"first_name"`
+		LastName          string    `json:"last_name"`
+		EmailVerified     bool      `json:"email_verified"`
+		ProfilePictureUrl string    `json:"profile_picture_url"`
+		CreatedAt         time.Time `json:"created_at"`
+		UpdatedAt         time.Time `json:"updated_at"`
+	} `json:"user"`
+}
+
+type authenticateWithCodeOpts struct {
+	ClientID     string
+	ClientSecret string
+	Code         string
+	GrantType    string
+	Email        string
+}
+
+func handleAuthenticateWithCode(opts *authenticateWithCodeOpts) (response *AuthenticateWithCodeResponse, err *AuthenticateWithCodeError) {
+	httpClient := util.NewHTTPClient()
+	authResponse, authErr := httpClient.Post("https://api.workos.com/user_management/authenticate", map[string]string{
+		"client_id":     opts.ClientID,
+		"client_secret": opts.ClientSecret,
+		"grant_type":    opts.GrantType,
+		"code":          opts.Code,
+		"email":         opts.Email,
+	}, map[string]string{
+		"Content-Type": "Content-Type: application/json",
+	})
+
+	if authErr != nil {
+		body := io.NopCloser(bytes.NewReader([]byte(authErr.Error())))
+		var authErrResp AuthenticateWithCodeError
+		if err := util.DecodeBody(body, &authErrResp); err != nil {
+			return nil, &AuthenticateWithCodeError{
+				Code:    "request_error",
+				Message: authErr.Error(),
+			}
+		}
+		return nil, &authErrResp
+	}
+
+	if authResponse != nil {
+		body := io.NopCloser(bytes.NewReader(authResponse.RawBody))
+		var authResp AuthenticateWithCodeResponse
+		if err := util.DecodeBody(body, &authResp); err != nil {
+			return nil, &AuthenticateWithCodeError{
+				Code:    "decode_error",
+				Message: err.Error(),
+			}
+		}
+		return &authResp, nil
+	}
+
+	return nil, &AuthenticateWithCodeError{
+		Code:    "unknown_error",
+		Message: "No response received",
+	}
+}
+
 // authenticate a user using OAuth/SSO
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	code := r.URL.Query().Get("code")
@@ -179,24 +254,52 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 		return nil
 	}
 
-	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
-
-	response, err := usermanagement.AuthenticateWithCode(
-		context.Background(),
-		usermanagement.AuthenticateWithCodeOpts{
-			ClientID: os.Getenv("WORKOS_CLIENT_ID"),
-			Code:     code,
-		},
-	)
+	httpClient := util.NewHTTPClient()
+	var authResponse *AuthenticateWithCodeResponse
+	var authWithCodeErr *AuthenticateWithCodeError
+	response, err := httpClient.Post("https://api.workos.com/user_management/authenticate", map[string]string{
+		"client_id":     os.Getenv("WORKOS_CLIENT_ID"),
+		"client_secret": os.Getenv("WORKOS_API_KEY"),
+		"grant_type":    "authorization_code",
+		"code":          code,
+	}, map[string]string{
+		"Content-Type": "Content-Type: application/json",
+	})
 
 	if err != nil {
+		if response != nil {
+			body := io.NopCloser(bytes.NewReader(response.RawBody))
 
-		// if 403 -- a verification email shouldve been sent -- redirect to login page with message to check email
-		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+			err = util.DecodeBody(body, &authWithCodeErr)
+			fmt.Printf("err: %+v\n", err)
+
+			// todo check if the error has to do with organization selection - if so, display list of orgs and use pending auth token from the error
+			if authWithCodeErr.Code == "organization_selection_required" {
+				pendingAuthToken := authWithCodeErr.PendingAuthenticationToken
+				orgs := authWithCodeErr.Organizations
+				orgsData, orgsErr := json.Marshal(orgs)
+				if orgsErr != nil {
+					http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+					return nil
+				}
+
+				selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s", appUrl, url.QueryEscape(pendingAuthToken), url.QueryEscape(string(orgsData)))
+
+				http.Redirect(w, r, selectTeamUrl, http.StatusTemporaryRedirect)
+				return nil
+			}
+		} else {
+			http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+			return nil
+		}
 	}
 
-	accessToken := response.AccessToken
-	refreshToken := response.RefreshToken
+	readCloser := util.BytesToReadCloser(response.RawBody)
+
+	err = util.DecodeBody(readCloser, &authResponse)
+
+	accessToken := authResponse.AccessToken
+	refreshToken := authResponse.RefreshToken
 
 	// get email for user
 	decoded, err := util.ParseJWT(accessToken)
@@ -237,9 +340,9 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 
 		// create an auth method record
 		var authMethod models.AuthMethod
-		if response.AuthenticationMethod == "GoogleOAuth" {
+		if authResponse.AuthenticationMethod == "GoogleOAuth" {
 			authMethod = models.AuthMethodGoogle
-		} else if response.AuthenticationMethod == "GitHubOAuth" {
+		} else if authResponse.AuthenticationMethod == "GitHubOAuth" {
 			authMethod = models.AuthMethodGitHub
 		}
 
@@ -261,9 +364,9 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 
 	// add a new auth method for user (if it doesn't already exist)
 	var authMethod models.AuthMethod
-	if response.AuthenticationMethod == "GoogleOAuth" {
+	if authResponse.AuthenticationMethod == "GoogleOAuth" {
 		authMethod = models.AuthMethodGoogle
-	} else if response.AuthenticationMethod == "GitHubOAuth" {
+	} else if authResponse.AuthenticationMethod == "GitHubOAuth" {
 		authMethod = models.AuthMethodGitHub
 	}
 
@@ -342,44 +445,6 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	http.Redirect(w, r, redirectUrl, http.StatusTemporaryRedirect)
 	return nil
 }
-
-//func (s *Server) handleIdentityV1(w http.ResponseWriter, r *http.Request) error {
-//	// Read in auth token
-//	authToken, err := r.Cookie("auth-token")
-//
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
-//	}
-//
-//	// Parse auth token
-//	userId, tokenType, sessionId, err := util.ParseJWT(authToken.Value)
-//	if err != nil || tokenType != "auth" || userId == "" || sessionId == "" {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
-//	}
-//
-//	_, err = s.store.GetSessionByID(uuid.MustParse(sessionId))
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "session expired.", Code: "session_expired"})
-//	}
-//
-//	// If valid, return user
-//	userData, err := s.store.GetUserByID(uuid.MustParse(userId))
-//	if err != nil {
-//		http.SetCookie(w, &http.Cookie{
-//			Name:     "auth-token",
-//			Value:    "",
-//			Path:     "/",
-//			Expires:  time.Unix(0, 0),
-//			Secure:   true,
-//			SameSite: http.SameSiteLaxMode,
-//		})
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
-//	}
-//
-//	userIdentity := models.NewUserIdentityResponse(userData)
-//
-//	return WriteJSON(w, http.StatusOK, userIdentity)
-//}
 
 func (s *Server) handleVerify(w http.ResponseWriter, r *http.Request) error {
 	authToken, err := r.Cookie("auth-token")
@@ -520,6 +585,9 @@ func (s *Server) handleRevokeSessions(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) error {
+	// user
+	// currently logged in team data
+	// team member data
 	userSession, err := getUserSession(s, r)
 
 	if err != nil {
@@ -528,12 +596,23 @@ func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) error {
 
 	user := userSession.User
 
-	identityResponse := models.NewUserIdentityResponse(user)
+	userIdentity := models.NewUserIdentityResponse(user)
+
+	decoded, _ := util.ParseJWT(userSession.AuthToken)
+	orgId := decoded.OrganizationID
+
+	team, _ := s.store.GetTeamByWorkosOrgID(orgId)
+	teamResponse := models.NewTeamResponse(team, "")
+
+	teamMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	teamMemberResponse := models.NewTeamMemberResponse(teamMember)
 
 	return WriteJSON(w, http.StatusOK, Response{
 		Data: map[string]interface{}{
-			"user":  identityResponse,
-			"valid": true,
+			"user":        userIdentity,
+			"team":        teamResponse,
+			"team_member": teamMemberResponse,
+			"valid":       true,
 		},
 	})
 }
@@ -1261,20 +1340,38 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 	code := r.URL.Query().Get("code")
 	redirect := r.URL.Query().Get("redirect")
 	var redirectUrl string
+	appUrl := os.Getenv("APP_URL")
+	loginUrl := fmt.Sprintf("%s/auth/login", appUrl)
 
-	response, err := usermanagement.AuthenticateWithMagicAuth(
-		context.Background(),
-		usermanagement.AuthenticateWithMagicAuthOpts{
-			ClientID: os.Getenv("WORKOS_CLIENT_ID"),
-			Email:    email,
-			Code:     code,
-		},
-	)
+	response, err := handleAuthenticateWithCode(&authenticateWithCodeOpts{
+		ClientID:     os.Getenv("WORKOS_CLIENT_ID"),
+		ClientSecret: os.Getenv("WORKOS_API_KEY"),
+		Code:         code,
+		GrantType:    "urn:workos:oauth:grant-type:magic-auth:code",
+		Email:        email,
+	})
+
 	if err != nil {
-		fmt.Printf("Failed to authenticate with Magic Auth: %v\n", err)
-		redirectUrl := fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
-		http.Redirect(w, r, redirectUrl, http.StatusFound)
-		return nil
+		if err.Code == "organization_selection_required" {
+			token := err.PendingAuthenticationToken
+			orgs := err.Organizations
+
+			orgsData, orgsErr := json.Marshal(orgs)
+			if orgsErr != nil {
+				http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+				return nil
+			}
+
+			selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s", appUrl, url.QueryEscape(token), url.QueryEscape(string(orgsData)))
+
+			http.Redirect(w, r, selectTeamUrl, http.StatusFound)
+			return nil
+		} else {
+			fmt.Printf("Failed to authenticate with Magic Auth: %v\n", err)
+			redirectUrl := fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+			http.Redirect(w, r, redirectUrl, http.StatusFound)
+			return nil
+		}
 	}
 
 	// redirect if already authenticated
@@ -1293,9 +1390,39 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 	accessToken := response.AccessToken
 	refreshToken := response.RefreshToken
 
+	// create session
+	sessionErr := s.createSession(w, r, &createSessionOpts{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		Email:        email,
+		AuthMethod:   models.AuthMethodEmail,
+	})
+
+	if sessionErr != nil {
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
+	}
+
+	if redirect != "" {
+		redirectUrl = redirect
+	}
+
+	http.Redirect(w, r, redirectUrl, http.StatusFound)
+	return nil
+}
+
+type createSessionOpts struct {
+	AccessToken  string
+	RefreshToken string
+	Email        string
+	AuthMethod   models.AuthMethod
+}
+
+func (s *Server) createSession(w http.ResponseWriter, r *http.Request, opts *createSessionOpts) error {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "auth-token",
-		Value:    accessToken,
+		Value:    opts.AccessToken,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
@@ -1305,7 +1432,7 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 
 	http.SetCookie(w, &http.Cookie{
 		Name:     "refresh-token",
-		Value:    refreshToken,
+		Value:    opts.RefreshToken,
 		Path:     "/",
 		HttpOnly: true,
 		Secure:   true,
@@ -1313,33 +1440,23 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 		SameSite: http.SameSiteLaxMode,
 	})
 
-	// create session
-	decoded, err := util.ParseJWT(accessToken)
+	decoded, err := util.ParseJWT(opts.AccessToken)
 	if err != nil {
-		fmt.Printf("Failed to parse JWT: %v\n", err)
-		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
-		http.Redirect(w, r, redirectUrl, http.StatusFound)
-		return nil
+		return err
 	}
 
 	var user *models.User
 	user, err = s.store.GetUserByWorkosUserID(decoded.WorkosUserID)
 	if err != nil || user == nil {
-		user, err = s.store.GetUserByEmail(email)
+		user, err = s.store.GetUserByEmail(opts.Email)
 		if err == nil {
 			user.WorkosUserID = decoded.WorkosUserID
 			err = s.store.UpdateUser(user)
 			if err != nil {
-				fmt.Printf("Failed to update user: %v\n", err)
-				redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
-				http.Redirect(w, r, redirectUrl, http.StatusFound)
-				return nil
+				return err
 			}
 		} else {
-			fmt.Printf("Failed to get user: %v\n", err)
-			redirectUrl = fmt.Sprintf("%s/auth/login?error=not_found", os.Getenv("APP_URL"))
-			http.Redirect(w, r, redirectUrl, http.StatusFound)
-			return nil
+			return err
 		}
 	}
 
@@ -1353,22 +1470,14 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 		IPAddress:        getClientIP(r),
 		LastLocation:     getClientLocation(r),
 		LastSeenAt:       &now,
-		AuthMethod:       models.AuthMethodEmail,
+		AuthMethod:       opts.AuthMethod,
 	}
 
 	err = s.store.CreateSession(&session)
 	if err != nil {
-		fmt.Printf("Failed to create session: %v\n", err)
-		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
-		http.Redirect(w, r, redirectUrl, http.StatusFound)
-		return nil
+		return err
 	}
 
-	if redirect != "" {
-		redirectUrl = redirect
-	}
-
-	http.Redirect(w, r, redirectUrl, http.StatusFound)
 	return nil
 }
 
@@ -1947,8 +2056,9 @@ func getClientLocation(r *http.Request) string {
 }
 
 type UserSessionResponse struct {
-	User    *models.User    `json:"user"`
-	Session *models.Session `json:"session"`
+	User      *models.User    `json:"user"`
+	Session   *models.Session `json:"session"`
+	AuthToken string          `json:"auth_token"`
 }
 
 func getUserSession(s *Server, r *http.Request) (UserSessionResponse, error) {
@@ -1973,7 +2083,8 @@ func getUserSession(s *Server, r *http.Request) (UserSessionResponse, error) {
 	}
 
 	return UserSessionResponse{
-		User:    user,
-		Session: session,
+		User:      user,
+		Session:   session,
+		AuthToken: authToken.Value,
 	}, nil
 }
