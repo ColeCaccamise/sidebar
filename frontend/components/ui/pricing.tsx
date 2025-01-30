@@ -220,6 +220,24 @@ export default function Pricing({
       });
   }
 
+  async function handleRefreshSubscription() {
+    await api
+      .post(
+        `/teams/${teamSlug}/billing/subscription/refresh`,
+        {},
+        { withCredentials: true },
+      )
+      .then((res) => {
+        router.push(res.data.data.redirect_url);
+      })
+      .catch((err) => {
+        toast({
+          message: getErrorMessage(err.response?.data?.code),
+          mode: 'error',
+        });
+      });
+  }
+
   const planMappings = {
     basic_monthly: 'basic',
     basic_annually: 'basic',
@@ -321,7 +339,7 @@ export default function Pricing({
             </div>
           </>
         ) : (
-          <div>
+          <div className="flex flex-col gap-2">
             <h1 className="text-xl font-bold">Select a plan</h1>
             {variant === 'onboarding' && (
               <p className="text-sm">
@@ -430,7 +448,7 @@ export default function Pricing({
           </div>
         )}
 
-        <div className="w-full">
+        <div className="flex w-full justify-between">
           <p className="text-sm">
             For questions about billing,{' '}
             <Link
@@ -440,6 +458,16 @@ export default function Pricing({
               please contact us
             </Link>
             .
+          </p>
+          <p className="flex items-center gap-1">
+            Having problems?{' '}
+            <Button
+              variant="unstyled"
+              className="text-typography-strong"
+              handleClick={handleRefreshSubscription}
+            >
+              Refresh your subscription
+            </Button>
           </p>
         </div>
       </div>

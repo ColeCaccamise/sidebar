@@ -181,7 +181,8 @@ export default function LoginPage() {
                 provider: 'github',
                 redirectUrl: redirectUrl || undefined,
               });
-              if (res.redirectUrl) {
+              console.log(res);
+              if (res?.redirectUrl) {
                 router.push(res.redirectUrl);
               } else {
                 toast({

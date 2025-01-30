@@ -6,6 +6,7 @@ db/
 bin/
 *.pem
 pkg/mod/cache/lock
-.vscode
+.vscode/
 node_modules/
-.vercel
+.vercel/
+vendor/

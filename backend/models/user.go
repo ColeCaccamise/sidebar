@@ -127,5 +127,3 @@ func NewUserIdentityResponse(u *User) *UserIdentityResponse {
 		Restorable:          u.DeletedAt != nil && time.Since(*u.DeletedAt) < time.Hour*24*60,
 	}
 }
-
-func ValidateUser(u *User) bool { return true }

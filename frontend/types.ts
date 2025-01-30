@@ -9,6 +9,17 @@ export type User = {
   is_admin?: boolean;
   avatar_url?: string;
   deleted_at?: string | null;
+  terms_accepted?: boolean;
+  team_created_or_joined?: boolean;
+  default_team_slug?: string;
+  deleted?: boolean;
+};
+
+export type Identity = {
+  user: User;
+  team: Team;
+  team_member: TeamMember;
+  valid: boolean;
 };
 
 export type TeamMember = {
@@ -87,6 +98,12 @@ export type Team = {
   id: string;
   name: string;
   slug: string;
+  subscription_tier_chosen: boolean;
+};
+
+export type SelectTeamOptions = {
+  name: string;
+  id: string;
 };
 
 export type TeamPaymentMethod = {

@@ -3,17 +3,8 @@
 import Sidebar from '@/components/ui/sidebar';
 import api from '@/lib/axios';
 import { useEffect, useState } from 'react';
-import {
-  CommandDialog,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-  CommandShortcut,
-} from '@/components/ui/command-menu';
 import { useRouter } from 'next/navigation';
-import { logout } from './actions';
+import { logout, switchTeam } from './actions';
 import {
   PanelsTopLeft,
   UsersIcon,
@@ -32,9 +23,7 @@ import {
 } from '@radix-ui/react-icons';
 import { usePathname } from 'next/navigation';
 import Link from 'next/link';
-import Image from 'next/image';
-import { Team, Subscription, User, TeamMember } from '@/types';
-import Modal from '@/components/ui/modal';
+import { Team } from '@/types';
 import {
   useQuery,
   QueryClient,
@@ -42,6 +31,8 @@ import {
 } from '@tanstack/react-query';
 import { useTeamStore } from '@/state/team';
 import { useUserStore } from '@/state/user';
+import SwitchTeamModal from './switch-team-modal';
+import CommandMenu from '@/components/command-menu';
 
 function TeamContainerContent({
   slug,
@@ -355,84 +346,15 @@ function TeamContainerContent({
         {children}
       </div>
 
-      <CommandDialog open={open} onOpenChange={setOpen}>
-        <CommandInput placeholder="Type a command or search..." />
-        <CommandList>
-          <CommandEmpty>No results found.</CommandEmpty>
-          <CommandGroup heading="Suggestions">
-            <CommandItem>
-              Calendar <CommandShortcut>⌘K</CommandShortcut>
-            </CommandItem>
-            <CommandItem>Search</CommandItem>
-            <CommandItem>Settings</CommandItem>
-          </CommandGroup>
+      <CommandMenu open={open} setOpen={setOpen} />
 
-          <CommandGroup heading="Billing">
-            <CommandItem>Upgrade plan</CommandItem>
-            <CommandItem>Billing</CommandItem>
-            <CommandItem>Help and support</CommandItem>
-          </CommandGroup>
-        </CommandList>
-      </CommandDialog>
-
-      <Modal
+      <SwitchTeamModal
         open={switchTeamOpen}
         setOpen={setSwitchTeamOpen}
-        title="Switch team"
-        className="w-full max-w-lg"
-      >
-        <div className="flex w-full flex-col gap-4">
-          <p className="text-sm text-typography-weak">
-            Select a team to switch to
-          </p>
-          <div className="grid gap-4">
-            {teams?.map((team: Team) => (
-              <button
-                key={team.id}
-                onClick={() => {
-                  router.push(`/${team.slug}`);
-                  setSwitchTeamOpen(false);
-                }}
-                className="flex items-center justify-between rounded-lg border border-stroke-weak bg-background p-4 text-left hover:bg-fill"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-weak bg-fill">
-                    <span className="text-sm font-medium">
-                      {team.name.charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div>
-                    <p className="font-medium">{team.name}</p>
-                    <p className="text-xs text-typography-weak">
-                      {process.env.NEXT_PUBLIC_APP_URL}/{team.slug}
-                    </p>
-                  </div>
-                </div>
-              </button>
-            ))}
-
-            <button
-              onClick={() => {
-                router.push('/onboarding/team');
-                setSwitchTeamOpen(false);
-              }}
-              className="flex items-center justify-between rounded-lg border border-stroke-weak bg-background p-4 text-left hover:bg-fill"
-            >
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-stroke-weak bg-fill">
-                  <span className="text-sm font-medium">+</span>
-                </div>
-                <div>
-                  <p className="font-medium">Create or join a new team</p>
-                  <p className="text-xs text-typography-weak">
-                    Start fresh with a new team
-                  </p>
-                </div>
-              </div>
-            </button>
-          </div>
-        </div>
-      </Modal>
+        teams={teams}
+        team={team}
+        switchTeam={switchTeam}
+      />
     </div>
   );
 }

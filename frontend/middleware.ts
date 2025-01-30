@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import axios from 'axios';
 import { cookies } from 'next/headers';
+import { parseJwt } from './lib/jwt';
+import api from './lib/api';
+import { Identity, Team, TeamMember, TeamMemberResponse, User } from './types';
 
 const SIGNED_OUT_AUTH_ROUTES = ['/auth/login', '/auth/signup'];
 const AUTH_ROUTES = [
@@ -9,7 +12,7 @@ const AUTH_ROUTES = [
   '/auth/change-password',
   '/auth/confirm',
 ];
-const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms'];
+const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms', '/select-team'];
 
 export async function middleware(request: NextRequest) {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
@@ -17,7 +20,7 @@ export async function middleware(request: NextRequest) {
   const cookieStore = cookies();
   const pathname = request.nextUrl.pathname;
 
-  // Allow access to team join routes
+  // allow access to team join routes
   if (pathname.match(/^\/[^\/]+\/join\/[^\/]+$/)) {
     return NextResponse.next();
   }
@@ -28,24 +31,26 @@ export async function middleware(request: NextRequest) {
 
   // get user data
   let isLoggedIn = false;
+  let user: User | null = null;
+  let team: Team | null = null;
+  let teamMember: TeamMember | null = null;
 
-  const user = await axios
-    .get(`${apiUrl}/auth/identity`, {
+  const identity = await axios
+    .get<{ data: Identity }>(`${apiUrl}/auth/identity`, {
       headers: {
         Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
       },
       withCredentials: true,
     })
     .then((res) => {
-      isLoggedIn = true;
-      return res?.data?.data?.user;
+      return res?.data?.data;
     })
     .catch(() => null);
 
-  if (!user) {
+  if (!identity?.valid) {
     // attempt to refresh
     const refresh = await axios
-      .get(`${apiUrl}/auth/refresh`, {
+      .get<{ data: Identity }>(`${apiUrl}/auth/refresh`, {
         headers: {
           Cookie: `refresh-token=${cookieStore.get('refresh-token')?.value}`,
           'Content-Type': 'application/json',
@@ -54,7 +59,6 @@ export async function middleware(request: NextRequest) {
       })
       .then(async (res) => {
         isLoggedIn = true;
-
         return res;
       })
       .catch((err) => {
@@ -88,236 +92,82 @@ export async function middleware(request: NextRequest) {
       }
       return response;
     }
+  } else {
+    isLoggedIn = true;
+    user = identity.user;
+    team = identity.team;
+    teamMember = identity.team_member;
   }
 
   // redirect logged in users to root path
   if (isLoggedIn && SIGNED_OUT_AUTH_ROUTES.includes(pathname)) {
-    return NextResponse.redirect(new URL('/', request.url));
+    return NextResponse.redirect(new URL(`/${team.slug}`, request.url));
   }
 
-  // user onboarding routes
-  const emailConfirmed = user?.email_confirmed;
-  const onboarded = user?.onboarding_completed;
+  // check onboarding status
   const termsAccepted = user?.terms_accepted;
   const teamCreatedOrJoined = user?.team_created_or_joined;
-  const teammatesInvited = user?.teammates_invited;
   const deleted = user?.deleted;
-  let teamSlug = user?.default_team_slug;
-  let dashboardUrl = `${appUrl}/${teamSlug}`;
 
   // redirect to deleted page if user has been deleted
   if (deleted) {
-    if (pathname === `/deleted`) {
+    if (pathname === '/deleted') {
       return NextResponse.next();
-    } else {
-      return NextResponse.redirect(`${appUrl}/deleted`);
     }
+    return NextResponse.redirect(`${appUrl}/deleted`);
   }
 
   // verify terms accepted
   if (!termsAccepted) {
-    if (pathname === `/onboarding/terms`) {
+    if (pathname === '/onboarding/terms') {
       return NextResponse.next();
-    } else {
-      return NextResponse.redirect(`${appUrl}/onboarding/terms`);
     }
+    return NextResponse.redirect(`${appUrl}/onboarding/terms`);
   }
 
   // verify team created or joined
   if (!teamCreatedOrJoined) {
-    if (pathname === `/onboarding/team`) {
+    if (pathname === '/onboarding/team') {
       return NextResponse.next();
-    } else {
-      return NextResponse.redirect(`${appUrl}/onboarding/team`);
     }
+    return NextResponse.redirect(`${appUrl}/onboarding/team`);
   }
 
-  // get default team
-  let team = await axios
-    .get(`${apiUrl}/teams/${teamSlug}`, {
-      headers: {
-        Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
-      },
-      withCredentials: true,
-    })
-    .then((res) => {
-      return res?.data?.data?.team;
-    })
-    .catch((error) => {
-      return null;
-    });
-
-  let teamMember = await axios
-    .get(`${apiUrl}/teams/${teamSlug}/member`, {
-      headers: {
-        Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
-      },
-      withCredentials: true,
-    })
-    .then((res) => {
-      return res?.data?.data?.team_member;
-    })
-    .catch(() => null);
-
-  let teamRole: string = teamMember?.team_role;
-  let isOwner = teamRole === 'owner';
-  let isAdmin = isOwner || teamRole === 'admin';
+  // verify onboarding complete
   const subscriptionTierChosen = team?.subscription_tier_chosen;
-  const actionRequiredUrl = `${appUrl}/${teamSlug}/onboarding/action-required`; // url for non-owner team members waiting for owner to finish onboarding
+  const teamMemberOnboarded = teamMember?.onboarded;
+  const isOwner = teamMember?.team_role === 'owner';
 
-  // verify team has a plan chosen
-  if (!subscriptionTierChosen) {
-    if (isOwner) {
-      if (pathname === `/${teamSlug}/onboarding/plans`) {
-        return NextResponse.next();
-      } else {
-        return NextResponse.redirect(`${appUrl}/${teamSlug}/onboarding/plans`);
-      }
-    } else {
-      if (pathname === `/${teamSlug}/onboarding/action-required`) {
-        return NextResponse.next();
-      } else {
-        return NextResponse.redirect(actionRequiredUrl);
-      }
-    }
-  }
-
-  // verify teammates were invited
-  if (!teammatesInvited) {
-    if (pathname === `/${teamSlug}/onboarding/invite`) {
+  // verify subscription status
+  if (subscriptionTierChosen && pathname === `/${team.slug}/onboarding/plans`) {
+    if (pathname === `/${team.slug}`) {
       return NextResponse.next();
-    } else {
-      return NextResponse.redirect(
-        `${appUrl}/${user?.default_team_slug}/onboarding/invite`,
-      );
     }
+    return NextResponse.redirect(`${appUrl}/${team.slug}`);
   }
 
-  // verify team member is onboarded
-  let teamMemberOnboarded = teamMember?.onboarded;
-  if (!teamMemberOnboarded) {
-    if (pathname === `/${teamSlug}/onboarding/welcome`) {
-      return NextResponse.next();
-    } else {
-      return NextResponse.redirect(
-        `${appUrl}/${user?.default_team_slug}/onboarding/welcome`,
-      );
-    }
-  }
-
-  const pathParts = pathname.split('/')?.filter((p) => {
-    return p != '' && p != null;
-  });
-
-  // handle non-default team
-  const currentTeamSlug = pathParts[0];
-
-  if (currentTeamSlug != teamSlug) {
-    const currentTeam = await axios
-      .get(`${apiUrl}/teams/${currentTeamSlug}`, {
-        headers: {
-          Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
-        },
-        withCredentials: true,
-      })
-      .then((res) => {
-        return res?.data?.data?.team;
-      })
-      .catch(() => null);
-
-    if (currentTeam) {
-      teamSlug = currentTeamSlug;
-      team = currentTeam;
-      teamMember = await axios
-        .get(`${apiUrl}/teams/${currentTeamSlug}/member`, {
-          headers: {
-            Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
-          },
-          withCredentials: true,
-        })
-        .then((res) => {
-          return res?.data?.data?.team_member;
-        })
-        .catch(() => null);
-
-      teamRole = teamMember?.team_role;
-      isOwner = teamRole === 'owner';
-      isAdmin = isOwner || teamRole === 'admin';
-      dashboardUrl = `${appUrl}/${currentTeamSlug}`;
-      teamMemberOnboarded = teamMember?.onboarded;
-    }
-  }
-
-  // handle settings routes
-  const TEAM_OWNER_SETTINGS_ROUTES = [
-    `/${currentTeamSlug}/settings/team/plans`,
-    `/${currentTeamSlug}/settings/team/billing`,
-  ]; // in a team context e.g. /[team-slug]/settings/team/plans
-  const TEAM_ADMIN_SETTINGS_ROUTES = [
-    `/${currentTeamSlug}/settings/team/integrations`,
-    `/${currentTeamSlug}/settings/team`,
-  ];
-
-  // verify user has owner access
-  if (TEAM_OWNER_SETTINGS_ROUTES.includes(pathname)) {
-    if (!isOwner) {
-      if (
-        pathname === `/${teamSlug}/settings/account/profile?error=access_denied`
-      ) {
+  if (teamMember) {
+    // handle onboarding redirects
+    if (!subscriptionTierChosen && isOwner) {
+      if (pathname === `/${team.slug}/onboarding/plans`) {
         return NextResponse.next();
-      } else {
-        return NextResponse.redirect(
-          `${appUrl}/${teamSlug}/settings/account/profile?error=access_denied`,
-        );
       }
+      return NextResponse.redirect(`${appUrl}/${team.slug}/onboarding/plans`);
     }
-  }
 
-  // verify user has admin access
-  if (TEAM_ADMIN_SETTINGS_ROUTES.includes(pathname)) {
-    if (!isAdmin) {
-      if (
-        pathname === `/${teamSlug}/settings/account/profile?error=access_denied`
-      ) {
+    if (!teamMemberOnboarded) {
+      if (pathname === `/${team.slug}/onboarding/welcome`) {
         return NextResponse.next();
-      } else {
-        return NextResponse.redirect(
-          `${appUrl}/${teamSlug}/settings/account/profile?error=access_denied`,
-        );
       }
+      return NextResponse.redirect(`${appUrl}/${team.slug}/onboarding/welcome`);
     }
   }
 
-  const USER_ONBOARDING_ROUTES = ['/onboarding/terms'];
-  const TEAM_ONBOARDING_ROUTES = [
-    `/${currentTeamSlug}/onboarding/plans`,
-    `/${currentTeamSlug}/onboarding/invite`,
-    `/${currentTeamSlug}/onboarding/welcome`,
-  ];
-
-  // redirect to dashboard if already onboarded
-  if (onboarded && USER_ONBOARDING_ROUTES.includes(pathname)) {
-    if (pathname === `/${currentTeamSlug}`) {
-      return NextResponse.next();
-    } else {
-      return NextResponse.redirect(`${dashboardUrl}`);
-    }
+  // redirect root to default team
+  if (pathname === '/') {
+    return NextResponse.redirect(`${appUrl}/${team.slug}`);
   }
 
-  if (teamMemberOnboarded && TEAM_ONBOARDING_ROUTES.includes(pathname)) {
-    if (pathname === `/${currentTeamSlug}`) {
-      return NextResponse.next();
-    } else {
-      return NextResponse.redirect(`${dashboardUrl}`);
-    }
-  }
-
-  // redirect to default team slug when landing on root page
-  if (pathname === `/`) {
-    return NextResponse.redirect(`${appUrl}/${user?.default_team_slug}`);
-  }
-
-  // allow access to other routes
   return NextResponse.next();
 }
 

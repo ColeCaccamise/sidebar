@@ -3,7 +3,6 @@ package api
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/colecaccamise/go-backend/util"
 	"io/ioutil"
 	"log"
 	"math"
@@ -11,6 +10,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/colecaccamise/go-backend/util"
 
 	"github.com/colecaccamise/go-backend/models"
 	"github.com/go-chi/chi"
@@ -506,6 +507,154 @@ func (s *Server) handleUpdateSubscription(w http.ResponseWriter, r *http.Request
 
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]string{
 		"redirect_url": portalUrl,
+	}})
+}
+
+func (s *Server) handleRefreshSubscription(w http.ResponseWriter, r *http.Request) error {
+	stripe.Key = os.Getenv("STRIPE_API_KEY")
+
+	slug := chi.URLParam(r, "slug")
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	// get customer subscriptions from stripe
+	params := &stripe.SubscriptionListParams{
+		Customer: stripe.String(team.StripeCustomerID),
+	}
+	params.Limit = stripe.Int64(1)
+	result := subscription.List(params)
+	if result == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	hasSubscription := false
+	var currentSubscription *stripe.Subscription
+	for result.Next() {
+		currentSubscription = result.Subscription()
+		hasSubscription = true
+		break
+	}
+
+	if !hasSubscription {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "no active subscription found.", Code: "subscription_not_found"})
+	}
+
+	//find or create subscription by id
+	price := currentSubscription.Items.Data[0].Price
+	plan := currentSubscription.Items.Data[0].Plan
+	lookupKey := price.LookupKey
+	trialStart := time.Unix(int64(currentSubscription.TrialStart), 0)
+	trialEnd := time.Unix(int64(currentSubscription.TrialEnd), 0)
+	trialDuration := int(trialEnd.Sub(trialStart) / (24 * time.Hour))
+	var canceledAt *time.Time
+	var cancelAt *time.Time
+	if currentSubscription.CanceledAt > 0 {
+		cancelTime := time.Unix(int64(currentSubscription.CanceledAt), 0)
+		canceledAt = &cancelTime
+	}
+
+	if currentSubscription.CancelAt > 0 {
+		cancelTime := time.Unix(int64(currentSubscription.CanceledAt), 0)
+		cancelAt = &cancelTime
+	}
+
+	var planType string
+	var interval string
+	if lookupKey != "" {
+		// split lookup key by underscore and get first part
+		parts := strings.Split(lookupKey, "_")
+		if len(parts) > 0 {
+			// validate plan type
+			switch parts[0] {
+			case "basic", "pro", "premium":
+				planType = parts[0]
+				interval = parts[1]
+			}
+		}
+	}
+
+	teamSubscription, err := s.store.GetTeamSubscriptionByStripeID(currentSubscription.ID)
+	if err != nil {
+		teamSubscription = &models.TeamSubscription{
+			TeamID:               team.ID,
+			PlanType:             models.TeamSubscriptionPlan(planType),
+			StripePriceLookupKey: lookupKey,
+			StripePriceID:        price.ID,
+			StripeProductID:      plan.Product.ID,
+			StripeSubscriptionID: currentSubscription.ID,
+			FreeTrialEndsAt:      &trialEnd,
+			FreeTrialDuration:    trialDuration,
+			Interval:             models.TeamSubscriptionInterval(interval),
+			CanceledAt:           canceledAt,
+			CancelAt:             cancelAt,
+			Status:               models.TeamSubscriptionStatus(currentSubscription.Status),
+		}
+		subscriptionErr := s.store.CreateTeamSubscription(teamSubscription)
+
+		if subscriptionErr != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		team.ID = teamSubscription.ID
+		if team.SubscriptionTierChosenAt == nil {
+			now := time.Now()
+			team.SubscriptionTierChosenAt = &now
+		}
+
+		teamErr := s.store.UpdateTeam(team)
+		if teamErr != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+	} else {
+		updateData := &models.TeamSubscription{
+			TeamID:               team.ID,
+			PlanType:             models.TeamSubscriptionPlan(planType),
+			StripePriceLookupKey: lookupKey,
+			StripePriceID:        price.ID,
+			StripeProductID:      plan.Product.ID,
+			StripeSubscriptionID: currentSubscription.ID,
+			FreeTrialEndsAt:      &trialEnd,
+			FreeTrialDuration:    trialDuration,
+			Interval:             models.TeamSubscriptionInterval(interval),
+			CanceledAt:           canceledAt,
+			CancelAt:             cancelAt,
+			Status:               models.TeamSubscriptionStatus(currentSubscription.Status),
+		}
+
+		teamSubscription.TeamID = team.ID
+		teamSubscription.PlanType = models.TeamSubscriptionPlan(planType)
+		teamSubscription.StripePriceLookupKey = lookupKey
+		teamSubscription.StripePriceID = price.ID
+		teamSubscription.StripeProductID = plan.Product.ID
+		teamSubscription.StripeSubscriptionID = currentSubscription.ID
+		teamSubscription.FreeTrialEndsAt = updateData.FreeTrialEndsAt
+		teamSubscription.FreeTrialDuration = updateData.FreeTrialDuration
+		teamSubscription.Interval = updateData.Interval
+		teamSubscription.CanceledAt = updateData.CanceledAt
+		teamSubscription.CancelAt = updateData.CancelAt
+		teamSubscription.Status = updateData.Status
+		if team.SubscriptionTierChosenAt == nil {
+			now := time.Now()
+			team.SubscriptionTierChosenAt = &now
+		}
+
+		subscriptionErr := s.store.UpdateTeamSubscription(teamSubscription)
+		if subscriptionErr != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		team.SubscriptionID = teamSubscription.ID
+
+		teamErr := s.store.UpdateTeam(team)
+		if teamErr != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+	}
+
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{
+		"subscription": teamSubscription,
 	}})
 }
 

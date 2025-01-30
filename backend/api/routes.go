@@ -44,6 +44,10 @@ func (s *Server) SetupRoutes() *chi.Mux {
 		r.Get("/auth/refresh", makeHttpHandleFunc(s.handleRefreshToken))
 	})
 
+	r.Route("/ai", func(r chi.Router) {
+		r.Post("/chat", makeHttpHandleFunc(s.handleChat))
+	})
+
 	r.Group(func(r chi.Router) {
 		//r.Use(s.VerifyUserNotDeleted)
 		r.Use(s.VerifySecurityVersion)
@@ -79,6 +83,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 	// join links
 	r.Get("/teams/{slug}/join/{token}", makeHttpHandleFunc(s.handleGetTeamInvite))  // after landing on invite link - get data for shared link and check validity
 	r.Post("/teams/{slug}/join/{token}", makeHttpHandleFunc(s.handleUseInviteLink)) // onboard a new team member from this link (checking its valid etc)
+	r.Post("/teams/select", makeHttpHandleFunc(s.handleSelectTeam))
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.VerifyAuth)
@@ -91,6 +96,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Get("/{slug}/member", makeHttpHandleFunc(s.HandleGetTeamMember))
 			r.Get("/{slug}/members", makeHttpHandleFunc(s.handleGetTeamMembers))
 			r.Get("/{slug}/upsells", makeHttpHandleFunc(s.handleGetUpsells))
+			r.Get("/{slug}/switch", makeHttpHandleFunc(s.handleSwitchTeam))
 			// invite links
 			r.Post("/{slug}/invite", makeHttpHandleFunc(s.handleSendTeamInvites)) // send an invite to one or many
 			r.Post("/{slug}/invite/{teamMemberId}/cancel", makeHttpHandleFunc(s.handleCancelTeamInvites))
@@ -117,6 +123,7 @@ func (s *Server) SetupRoutes() *chi.Mux {
 				r.Route("/subscription", func(r chi.Router) {
 					r.Get("/", makeHttpHandleFunc(s.handleGetCurrentSubscription))
 					r.Patch("/", makeHttpHandleFunc(s.handleUpdateSubscription))
+					r.Post("/refresh", makeHttpHandleFunc(s.handleRefreshSubscription))
 					r.Post("/update", makeHttpHandleFunc(s.handleUpdateSubscription))
 					r.Patch("/interval", makeHttpHandleFunc(s.handleUpdateSubscriptionInterval))
 				})

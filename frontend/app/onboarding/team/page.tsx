@@ -3,7 +3,6 @@ import CreateTeamForm from './create-team-form';
 import api from '@/lib/api';
 import { TeamInvite, TeamMember } from '@/types';
 import { getTeamRoleLanguage } from '@/lib/team';
-import Button from '@/components/ui/button';
 import AcceptInviteForm from './accept-invite-form';
 
 export default async function OnboardingTeamPage() {

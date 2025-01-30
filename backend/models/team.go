@@ -13,7 +13,7 @@ type Team struct {
 	CreatedBy                uuid.UUID  `gorm:"type:uuid" json:"created_by"`
 	Name                     string     `gorm:"not null" json:"name"`
 	Slug                     string     `gorm:"not null" json:"slug"`
-	WorkosOrgID              string     `gorm:"" json:"workos_org_id"` // todo not null
+	WorkosOrgID              string     `gorm:"index" json:"workos_org_id"` // todo not null
 	DeletedAt                *time.Time `gorm:"default:null" json:"deleted_at"`
 	CurrentTeamInviteID      uuid.UUID  `gorm:"default:null" json:"team_invite"`
 	StripeOnboardedAt        *time.Time `gorm:"default:null" json:"stripe_onboarded_at"`
@@ -33,7 +33,10 @@ type TeamResponse struct {
 	Name                   string    `json:"name"`
 	Slug                   string    `json:"slug"`
 	InviteLink             string    `json:"invite_link"`
+	StripeOnboarded        bool      `json:"stripe_onboarded"`
 	SubscriptionTierChosen bool      `json:"subscription_tier_chosen"`
+	OnboardingCompleted    bool      `json:"onboarding_completed"`
+	Deleted                bool      `json:"deleted"`
 }
 
 func NewTeamResponse(t *Team, inviteLink string) *TeamResponse {
@@ -42,7 +45,10 @@ func NewTeamResponse(t *Team, inviteLink string) *TeamResponse {
 		Name:                   t.Name,
 		Slug:                   t.Slug,
 		InviteLink:             inviteLink,
+		StripeOnboarded:        t.StripeOnboardedAt != nil,
 		SubscriptionTierChosen: t.SubscriptionTierChosenAt != nil,
+		OnboardingCompleted:    t.OnboardingCompletedAt != nil,
+		Deleted:                t.DeletedAt != nil,
 	}
 }
 
@@ -136,7 +142,7 @@ type TeamInvite struct {
 	TeamID         uuid.UUID        `gorm:"type:uuid;not null" json:"team_id"`
 	TeamMemberID   *uuid.UUID       `gorm:"type:uuid;default:null" json:"team_member_id"`
 	Email          string           `gorm:"default:null" json:"email"`
-	Token          string           `gorm:"not null" json:"slug"`
+	Token          string           `gorm:"not null;index:,option:CONCURRENTLY" json:"slug"`
 	InviteType     TeamInviteType   `gorm:"not null" json:"invite_type"`
 	State          TeamInviteStatus `gorm:"default:null" json:"state"`
 	AcceptedAt     *time.Time       `gorm:"default:null" json:"accepted_at"`

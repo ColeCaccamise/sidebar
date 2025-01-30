@@ -9,6 +9,7 @@ import {
   QueryClientProvider,
 } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
+import { Team } from '@/types';
 
 export default function Layout({
   children,
@@ -20,18 +21,24 @@ export default function Layout({
   const router = useRouter();
   const queryClient = new QueryClient();
   function TeamContent() {
-    const { data: team } = useQuery({
-      queryKey: ['team'],
-      queryFn: async () => {
-        const response = await api.get(`/teams/${params.team}`, {
-          withCredentials: true,
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        return response.data.data.team;
-      },
-    });
+    // const { data: team } = useQuery({
+    //   queryKey: ['team'],
+    //   queryFn: async () => {
+    //     const response = await api.get(`/teams/${params.team}`, {
+    //       withCredentials: true,
+    //       headers: {
+    //         'Content-Type': 'application/json',
+    //       },
+    //     });
+    //     return response.data.data.team;
+    //   },
+    // });
+
+    const team: Team = {
+      id: '1',
+      slug: 'caccamise-1',
+      name: 'Caccamise',
+    };
 
     return (
       <TeamContainer slug={params.team} team={team}>

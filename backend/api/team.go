@@ -34,9 +34,26 @@ func (s *Server) handleListTeams(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	user := userSession.User
-	teams, err := s.store.GetTeamsByUserID(user.ID)
 
-	if err != nil {
+	// check for org_id query param
+	orgID := r.URL.Query().Get("org_id")
+
+	var teams []*models.Team
+	var teamsErr error
+	teams, teamsErr = s.store.GetTeamsByUserID(user.ID)
+
+	if orgID != "" {
+		// filter teams to only include those with matching org_id
+		var filteredTeams []*models.Team
+		for _, team := range teams {
+			if team.WorkosOrgID == orgID {
+				filteredTeams = append(filteredTeams, team)
+			}
+		}
+		teams = filteredTeams
+	}
+
+	if teamsErr != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error", Code: "internal_server_error"})
 	}
 
@@ -1498,6 +1515,143 @@ func (s *Server) handleUseInviteLink(w http.ResponseWriter, r *http.Request) err
 			"redirect_url": fmt.Sprintf("%s/auth/login?redirect=/%s/onboarding/welcome", os.Getenv("APP_URL"), slug),
 		},
 	})
+}
+
+func (s *Server) handleSelectTeam(w http.ResponseWriter, r *http.Request) error {
+	token := r.URL.Query().Get("token")
+	orgId := r.URL.Query().Get("org_id")
+	redirect := r.URL.Query().Get("redirect")
+	loginUrl := fmt.Sprintf("%s/auth/login", os.Getenv("APP_URL"))
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	response, err := usermanagement.AuthenticateWithOrganizationSelection(
+		context.Background(),
+		usermanagement.AuthenticateWithOrganizationSelectionOpts{
+			ClientID:                   os.Getenv("WORKOS_CLIENT_ID"),
+			PendingAuthenticationToken: token,
+			OrganizationID:             orgId,
+		},
+	)
+
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+
+		return nil
+	}
+
+	accessToken := response.AccessToken
+	refreshToken := response.RefreshToken
+	authMethod := models.AuthMethod(response.AuthenticationMethod)
+
+	// create session
+	fmt.Printf("auth method (%s)", authMethod)
+	err = s.createSession(w, r, &createSessionOpts{
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		Email:        response.User.Email,
+		AuthMethod:   authMethod,
+	})
+
+	var redirectUrl string
+	if err != nil {
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=invalid_magic_link", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
+	}
+
+	if redirect != "" {
+		redirectUrl = redirect
+	} else {
+		redirectUrl = os.Getenv("APP_URL")
+	}
+
+	// update default team slug
+	team, _ := s.store.GetTeamByWorkosOrgID(orgId)
+	slug := team.Slug
+	decoded, _ := util.ParseJWT(accessToken)
+	workosUserId := decoded.WorkosUserID
+	user, _ := s.store.GetUserByWorkosUserID(workosUserId)
+	user.DefaultTeamSlug = slug
+	_ = s.store.UpdateUser(user)
+
+	http.Redirect(w, r, redirectUrl, http.StatusFound)
+	return nil
+}
+
+func (s *Server) handleSwitchTeam(w http.ResponseWriter, r *http.Request) error {
+	slug := chi.URLParam(r, "slug")
+	loginUrl := fmt.Sprintf("%s/auth/login", os.Getenv("APP_URL"))
+	dashboardUrl := fmt.Sprintf("%s/%s", os.Getenv("APP_URL"), slug)
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusInternalServerError)
+		return nil
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+		return nil
+	}
+
+	refresh, err := r.Cookie("refresh-token")
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+		return nil
+	}
+
+	response, err := usermanagement.AuthenticateWithRefreshToken(
+		context.Background(),
+		usermanagement.AuthenticateWithRefreshTokenOpts{
+			ClientID:       os.Getenv("WORKOS_CLIENT_ID"),
+			RefreshToken:   refresh.Value,
+			OrganizationID: team.WorkosOrgID,
+		},
+	)
+
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+		return nil
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "auth-token",
+		Value:    response.AccessToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		MaxAge:   60 * 5,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "refresh-token",
+		Value:    response.RefreshToken,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   true,
+		MaxAge:   60 * 60 * 24 * 30,
+		SameSite: http.SameSiteLaxMode,
+	})
+
+	// update session
+	now := time.Now()
+	decoded, _ := util.ParseJWT(response.AccessToken)
+	session := userSession.Session
+	session.WorkosSessionID = decoded.SessionID
+	session.LastSeenAt = &now
+	err = s.store.UpdateSession(session)
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+		return nil
+	}
+
+	http.Redirect(w, r, dashboardUrl, http.StatusFound)
+	return nil
 }
 
 func generateInviteToken() (string, error) {
