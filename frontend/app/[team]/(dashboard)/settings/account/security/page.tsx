@@ -24,6 +24,8 @@ import { useState } from 'react';
 import Divider from '@/components/ui/divider';
 import { handleLogout, revokeAllSessions, revokeSession } from './actions';
 import Spinner from '@/components/ui/spinner';
+import RevokeSessionModal from './revoke-session-modal';
+import RevokeAllSessionsModal from './revoke-all-sessions-modal';
 
 const queryClient = new QueryClient();
 
@@ -73,6 +75,8 @@ function SecurityPageContent() {
     email: 'Email',
     google: 'Google',
     github: 'GitHub',
+    GoogleOAuth: 'Google',
+    GitHubOAuth: 'GitHub',
   };
 
   const [revokeModalOpen, setRevokeModalOpen] = useState(false);
@@ -89,64 +93,20 @@ function SecurityPageContent() {
 
   return (
     <>
-      <Modal
-        title="Revoke session?"
-        open={revokeModalOpen}
-        submitText="Revoke session"
-        showSubmitButton={true}
-        onClose={() => {
-          setSelectedSessionId(null);
-          setRevokeModalOpen(false);
-        }}
-        handleSubmit={async () => {
-          if (!selectedSessionId) return;
+      <RevokeSessionModal
+        revokeModalOpen={revokeModalOpen}
+        setRevokeModalOpen={setRevokeModalOpen}
+        selectedSessionId={selectedSessionId}
+        setSelectedSessionId={setSelectedSessionId}
+        revokeSession={revokeSession}
+      />
 
-          const res = await revokeSession(selectedSessionId);
-          if (!res.error) {
-            queryClient.setQueryData(['sessions'], (oldData: any) => ({
-              ...oldData,
-              sessions: oldData.sessions.filter(
-                (s: Session) => s.id !== selectedSessionId,
-              ),
-            }));
-            setSelectedSessionId(null);
-            setRevokeModalOpen(false);
-          } else {
-            console.error(res.code);
-          }
-        }}
-      >
-        <div className="flex flex-col gap-2">
-          <p>Are you sure you want to revoke access to this device?</p>
-        </div>
-      </Modal>
-
-      <Modal
-        title="Revoke all sessions?"
-        open={revokeAllModalOpen}
-        submitText="Revoke all sessions"
-        onClose={() => {
-          setRevokeAllModalOpen(false);
-        }}
-        handleSubmit={async () => {
-          const res = await revokeAllSessions();
-          if (!res.error) {
-            queryClient.setQueryData(['sessions'], (oldData: any) => ({
-              ...oldData,
-              sessions: oldData.sessions.filter(
-                (s: Session) => s.id === currentSessionId,
-              ),
-            }));
-            setRevokeAllModalOpen(false);
-          } else {
-            console.error(res.code);
-          }
-        }}
-      >
-        <div className="flex flex-col gap-2">
-          <p>Are you sure you want to revoke access to all devices?</p>
-        </div>
-      </Modal>
+      <RevokeAllSessionsModal
+        revokeAllModalOpen={revokeAllModalOpen}
+        setRevokeAllModalOpen={setRevokeAllModalOpen}
+        revokeAllSessions={revokeAllSessions}
+        currentSessionId={currentSessionId || ''}
+      />
 
       <Modal
         title="Log out?"
@@ -438,7 +398,7 @@ function SecurityPageContent() {
 
               <div className="flex justify-between">
                 <span className="text-typography-strong">Method</span>
-                {selectedSession.auth_method ? (
+                {selectedSession.auth_method.length > 0 ? (
                   <span className="text-typography-strong">
                     {
                       authMethodMapping[
