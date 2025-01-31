@@ -52,6 +52,7 @@ export default function Modal({
   isLoading?: boolean;
 }) {
   const handleClose = () => {
+    if (!canClose) return;
     onClose?.();
     setOpen?.(false);
   };
@@ -65,6 +66,9 @@ export default function Modal({
         activeStep?.handleSubmit?.() || handleSubmit();
       }
     }
+    if (e.key === 'Escape') {
+      handleClose();
+    }
   };
 
   useEffect(() => {
@@ -74,32 +78,12 @@ export default function Modal({
     }
   }, [open, handleSubmit, isLoading, activeStep]);
 
-  // Function to handle backdrop clicks
-  const handleBackdropClick = (e: React.MouseEvent) => {
-    // Only close if clicking directly on the backdrop element
-    if (!canClose) return;
-
-    const target = e.target as HTMLElement;
-    const clickedOnBackdrop = target.getAttribute('data-backdrop') === 'true';
-
-    if (clickedOnBackdrop) {
-      handleClose();
-    }
-  };
-
   return (
-    <Dialog open={open} onClose={() => {}} className="relative z-50">
-      <div
-        data-backdrop="true"
-        className="fixed inset-0 bg-black/40"
-        onClick={handleBackdropClick}
-      />
+    <Dialog open={open} onClose={handleClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
 
       <div className="fixed inset-0 flex w-screen items-center justify-center px-8">
         <DialogPanel
-          onClick={(e) => e.stopPropagation()}
-          onMouseDown={(e) => e.stopPropagation()}
-          onPointerDown={(e) => e.stopPropagation()}
           className={`flex flex-col rounded-md border border-stroke-weak bg-background ${className}`}
         >
           {hint && hint}
@@ -125,14 +109,7 @@ export default function Modal({
             </div>
           ) : null}
 
-          <div
-            className="p-6"
-            onClick={(e) => e.stopPropagation()}
-            onMouseDown={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {showContent}
-          </div>
+          <div className="p-6">{showContent}</div>
 
           {(showCancelButton || (showSubmitButton && handleSubmit)) && (
             <div className="border-t border-stroke-weak p-4">
