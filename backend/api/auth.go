@@ -248,6 +248,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 		if err != nil {
 			redirectUrl = appUrl
 		}
+	} else {
+		redirectUrl = appUrl
 	}
 	if code == "" {
 		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
@@ -601,7 +603,10 @@ func (s *Server) handleIdentity(w http.ResponseWriter, r *http.Request) error {
 	decoded, _ := util.ParseJWT(userSession.AuthToken)
 	orgId := decoded.OrganizationID
 
-	team, _ := s.store.GetTeamByWorkosOrgID(orgId)
+	team, err := s.store.GetTeamByWorkosOrgID(orgId)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+	}
 	teamResponse := models.NewTeamResponse(team, "")
 
 	teamMember, _ := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
