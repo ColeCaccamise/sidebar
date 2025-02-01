@@ -1480,7 +1480,7 @@ func (s *Server) handleUpdatePaymentMethod(w http.ResponseWriter, r *http.Reques
 
 	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
 	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{
+		return WriteJSON(w, http.StatusBadRequest, Error{
 			Error: "team member not found.",
 			Code:  "team_member_not_found",
 		})
