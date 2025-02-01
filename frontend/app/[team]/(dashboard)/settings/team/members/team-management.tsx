@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { useQuery } from '@tanstack/react-query';
 import api from '@/lib/axios';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import {
   Table,
   TableBody,
@@ -18,53 +18,48 @@ import {
 } from '@/components/ui/table';
 import Image from 'next/image';
 import Dropdown from '@/components/ui/dropdown';
-import { Pencil } from 'lucide-react';
-import { DotsHorizontalIcon, DotsVerticalIcon } from '@radix-ui/react-icons';
-import { TeamMember, TeamMemberResponse } from '@/types';
+import { DotsHorizontalIcon } from '@radix-ui/react-icons';
+import { TeamMemberResponse } from '@/types';
 import Button from '@/components/ui/button';
 import { useState } from 'react';
 import { capitalize } from '@/lib/sting';
 import Modal from '@/components/ui/modal';
-import Input from '@/components/ui/input';
-import { isValidEmail } from '@/lib/validation';
 import toast from '@/lib/toast';
 import {
-  inviteMembers,
   cancelInvites,
   resendInvite,
   removeMember,
+  leaveTeam,
 } from './actions';
 import { getErrorMessage } from '@/messages';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
-import UpdateNameModal from './update-name-modal';
-import UpdateRoleModal from './update-role-modal';
-import ConfirmRemoveModal from './confirm-remove-modal';
+import UpdateNameModal from './components/update-name-modal';
+import UpdateRoleModal from './components/update-role-modal';
+import ConfirmRemoveModal from './components/confirm-remove-modal';
+import LeaveTeamModal from './components/leave-team-modal';
+import CancelInviteModal from './components/cancel-invite-modal';
+import InviteMemberModal from './components/invite-modal';
+import ResendInviteModal from './components/resend-invite-modal';
 
 function TeamManagement() {
   const queryClient = useQueryClient();
   const { team: teamSlug } = useParams();
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [selectedMember, setSelectedMember] =
-    useState<TeamMemberResponse | null>(null);
-  const [memberToCancel, setMemberToCancel] =
-    useState<TeamMemberResponse | null>(null);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
-  const [isInviteMemberModalOpen, setIsInviteMemberModalOpen] = useState(false);
-  const [isCancelInviteModalOpen, setIsCancelInviteModalOpen] = useState(false);
-  const [memberToResendInvite, setMemberToResendInvite] =
-    useState<TeamMemberResponse | null>(null);
-  const [isResendInviteModalOpen, setIsResendInviteModalOpen] = useState(false);
-  const [isUpdateNameModalOpen, setIsUpdateNameModalOpen] = useState(false);
-  const [isUpdateRoleModalOpen, setIsUpdateRoleModalOpen] = useState(false);
-  const [isConfirmRemoveModalOpen, setIsConfirmRemoveModalOpen] =
-    useState(false);
+  const router = useRouter();
+
+  const [state, setState] = useState({
+    isDropdownOpen: false,
+    selectedMember: null as TeamMemberResponse | null,
+    memberToCancel: null as TeamMemberResponse | null,
+    dropdownPosition: { top: 0, left: 0 },
+    isInviteMemberModalOpen: false,
+    isCancelInviteModalOpen: false,
+    memberToResendInvite: null as TeamMemberResponse | null,
+    isResendInviteModalOpen: false,
+    isUpdateNameModalOpen: false,
+    isUpdateRoleModalOpen: false,
+    isConfirmRemoveModalOpen: false,
+    isLeaveTeamModalOpen: false,
+  });
 
   const { data: team } = useQuery({
     queryKey: ['team'],
@@ -113,11 +108,11 @@ function TeamManagement() {
   });
 
   const handleRemoveMember = async () => {
-    if (!selectedMember) return;
+    if (!state.selectedMember) return;
 
     const resp = await removeMember({
       teamSlug: teamSlug as string,
-      teamMemberId: selectedMember.team_member.id,
+      teamMemberId: state.selectedMember.team_member.id,
     });
 
     if (resp.success) {
@@ -130,7 +125,8 @@ function TeamManagement() {
         (oldData: TeamMemberResponse[] | undefined) => {
           if (!oldData) return [];
           return oldData.filter(
-            (member) => member.team_member.id !== selectedMember.team_member.id,
+            (member) =>
+              member.team_member.id !== state.selectedMember?.team_member.id,
           );
         },
       );
@@ -141,15 +137,18 @@ function TeamManagement() {
       });
     }
 
-    setIsConfirmRemoveModalOpen(false);
+    setState((prev) => ({
+      ...prev,
+      isConfirmRemoveModalOpen: false,
+    }));
   };
 
   const handleCancelInvite = async () => {
-    if (!memberToCancel) return;
+    if (!state.memberToCancel) return;
 
     const resp = await cancelInvites({
       teamSlug: teamSlug as string,
-      teamMemberId: memberToCancel.team_member.id,
+      teamMemberId: state.memberToCancel.team_member.id,
     });
 
     if (resp.success) {
@@ -162,7 +161,8 @@ function TeamManagement() {
         (oldData: TeamMemberResponse[] | undefined) => {
           if (!oldData) return [];
           return oldData.filter(
-            (member) => member.team_member.id !== memberToCancel.team_member.id,
+            (member) =>
+              member.team_member.id !== state.memberToCancel?.team_member.id,
           );
         },
       );
@@ -173,8 +173,11 @@ function TeamManagement() {
       });
     }
 
-    setIsCancelInviteModalOpen(false);
-    setMemberToCancel(null);
+    setState((prev) => ({
+      ...prev,
+      isCancelInviteModalOpen: false,
+      memberToCancel: null,
+    }));
   };
 
   const teamMemberActions = [
@@ -183,9 +186,11 @@ function TeamManagement() {
       label: 'Update Name',
       handleClick: () => {
         console.log('update name');
-        console.log(selectedMember);
-        setIsUpdateNameModalOpen(true);
-        setSelectedMember(selectedMember);
+        console.log(state.selectedMember);
+        setState((prev) => ({
+          ...prev,
+          isUpdateNameModalOpen: true,
+        }));
       },
     },
     {
@@ -193,9 +198,11 @@ function TeamManagement() {
       label: 'Update Role',
       handleClick: () => {
         console.log('update role');
-        console.log(selectedMember);
-        setIsUpdateRoleModalOpen(true);
-        setSelectedMember(selectedMember);
+        console.log(state.selectedMember);
+        setState((prev) => ({
+          ...prev,
+          isUpdateRoleModalOpen: true,
+        }));
       },
     },
     {
@@ -203,9 +210,11 @@ function TeamManagement() {
       label: 'Remove Member',
       handleClick: () => {
         console.log('remove member');
-        console.log(selectedMember);
-        setIsConfirmRemoveModalOpen(true);
-        setSelectedMember(selectedMember);
+        console.log(state.selectedMember);
+        setState((prev) => ({
+          ...prev,
+          isConfirmRemoveModalOpen: true,
+        }));
       },
     },
   ];
@@ -215,9 +224,12 @@ function TeamManagement() {
       id: 'resend-invite',
       label: 'Resend Invite',
       handleClick: () => {
-        if (selectedMember) {
-          setMemberToResendInvite(selectedMember);
-          setIsResendInviteModalOpen(true);
+        if (state.selectedMember) {
+          setState((prev) => ({
+            ...prev,
+            memberToResendInvite: state.selectedMember,
+            isResendInviteModalOpen: true,
+          }));
         }
       },
     },
@@ -225,9 +237,12 @@ function TeamManagement() {
       id: 'cancel-invite',
       label: 'Cancel Invite',
       handleClick: () => {
-        if (selectedMember) {
-          setMemberToCancel(selectedMember);
-          setIsCancelInviteModalOpen(true);
+        if (state.selectedMember) {
+          setState((prev) => ({
+            ...prev,
+            memberToCancel: state.selectedMember,
+            isCancelInviteModalOpen: true,
+          }));
         }
       },
     },
@@ -246,15 +261,21 @@ function TeamManagement() {
       label: otherOwnerExists ? 'Leave team (add another owner)' : 'Leave Team',
       // disable if the user is the only owner
       disabled: otherOwnerExists,
+      handleClick: () => {
+        setState((prev) => ({
+          ...prev,
+          isLeaveTeamModalOpen: true,
+        }));
+      },
     },
   ];
 
   const getMenuItems = () => {
-    if (selectedMember?.team_member.status === 'pending') {
+    if (state.selectedMember?.team_member.status === 'pending') {
       return pendingMemberActions;
-    } else if (selectedMember?.user?.id === user?.id) {
+    } else if (state.selectedMember?.user?.id === user?.id) {
       return currentUserActions;
-    } else if (selectedMember?.team_member.status === 'active') {
+    } else if (state.selectedMember?.team_member.status === 'active') {
       return teamMemberActions;
     }
   };
@@ -272,6 +293,108 @@ function TeamManagement() {
         console.log('Merged result:', merged);
         return merged;
       },
+    );
+  };
+
+  const handleLeaveTeam = async () => {
+    const resp = await leaveTeam({
+      teamSlug: teamSlug as string,
+    });
+
+    if (resp.success) {
+      toast({
+        message: 'You have left the team',
+        mode: 'success',
+      });
+
+      router.push('/');
+    } else {
+      toast({
+        message: getErrorMessage(resp.code || ''),
+        mode: 'error',
+      });
+    }
+  };
+
+  const ActionModals = () => {
+    return (
+      <>
+        <CancelInviteModal
+          isOpen={state.isCancelInviteModalOpen}
+          onClose={() => {
+            setState((prev) => ({
+              ...prev,
+              isCancelInviteModalOpen: false,
+              memberToCancel: null,
+            }));
+          }}
+          handleSubmit={handleCancelInvite}
+          memberToCancel={state.memberToCancel}
+        />
+
+        <InviteMemberModal
+          isOpen={state.isInviteMemberModalOpen}
+          onClose={() =>
+            setState((prev) => ({ ...prev, isInviteMemberModalOpen: false }))
+          }
+          teamSlug={teamSlug as string}
+          onSuccess={handleInviteMemberSuccess}
+        />
+
+        <ResendInviteModal
+          isOpen={state.isResendInviteModalOpen}
+          onClose={() =>
+            setState((prev) => ({ ...prev, isResendInviteModalOpen: false }))
+          }
+          memberToResendInvite={state.memberToResendInvite}
+          teamSlug={teamSlug as string}
+        />
+
+        <UpdateNameModal
+          isOpen={state.isUpdateNameModalOpen}
+          onClose={() => {
+            setState((prev) => ({
+              ...prev,
+              isUpdateNameModalOpen: false,
+              selectedMember: null,
+            }));
+          }}
+          user={state.selectedMember?.user || null}
+        />
+
+        <UpdateRoleModal
+          isOpen={state.isUpdateRoleModalOpen}
+          onClose={() => {
+            setState((prev) => ({
+              ...prev,
+              isUpdateRoleModalOpen: false,
+              selectedMember: null,
+            }));
+          }}
+          member={state.selectedMember}
+        />
+
+        <ConfirmRemoveModal
+          isOpen={state.isConfirmRemoveModalOpen}
+          onClose={() => {
+            setState((prev) => ({
+              ...prev,
+              isConfirmRemoveModalOpen: false,
+              selectedMember: null,
+            }));
+          }}
+          member={state.selectedMember}
+          handleSubmit={handleRemoveMember}
+        />
+
+        <LeaveTeamModal
+          isOpen={state.isLeaveTeamModalOpen}
+          onClose={() =>
+            setState((prev) => ({ ...prev, isLeaveTeamModalOpen: false }))
+          }
+          handleSubmit={handleLeaveTeam}
+        />
+      </>
     );
   };
 
@@ -306,60 +429,16 @@ function TeamManagement() {
 
   return (
     <>
-      <CancelInviteModal
-        isOpen={isCancelInviteModalOpen}
-        onClose={() => {
-          setIsCancelInviteModalOpen(false);
-          setMemberToCancel(null);
-        }}
-        handleSubmit={handleCancelInvite}
-        memberToCancel={memberToCancel}
-      />
-      <InviteMemberModal
-        isOpen={isInviteMemberModalOpen}
-        onClose={() => setIsInviteMemberModalOpen(false)}
-        teamSlug={teamSlug as string}
-        onSuccess={handleInviteMemberSuccess}
-      />
-      <ResendInviteModal
-        isOpen={isResendInviteModalOpen}
-        onClose={() => setIsResendInviteModalOpen(false)}
-        memberToResendInvite={memberToResendInvite}
-        teamSlug={teamSlug as string}
-      />
-      <UpdateNameModal
-        isOpen={isUpdateNameModalOpen}
-        onClose={() => {
-          setIsUpdateNameModalOpen(false);
-          setSelectedMember(null);
-        }}
-        user={selectedMember?.user || null}
-      />
-      <UpdateRoleModal
-        isOpen={isUpdateRoleModalOpen}
-        onClose={() => {
-          setIsUpdateRoleModalOpen(false);
-          setSelectedMember(null);
-        }}
-        member={selectedMember}
-      />
-
-      <ConfirmRemoveModal
-        isOpen={isConfirmRemoveModalOpen}
-        onClose={() => {
-          setIsConfirmRemoveModalOpen(false);
-          setSelectedMember(null);
-        }}
-        member={selectedMember}
-        handleSubmit={handleRemoveMember}
-      />
+      <ActionModals />
 
       <h1>Team Members</h1>
       <div className="flex flex-col items-end gap-4 pb-16">
         <Button
           variant="unstyled"
           className="btn bg-brand-secondary text-typography-strong"
-          handleClick={() => setIsInviteMemberModalOpen(true)}
+          handleClick={() =>
+            setState((prev) => ({ ...prev, isInviteMemberModalOpen: true }))
+          }
         >
           Invite member
         </Button>
@@ -377,8 +456,9 @@ function TeamManagement() {
               <TableRow
                 key={member.team_member.id}
                 selected={
-                  member.team_member.id === selectedMember?.team_member.id &&
-                  selectedMember !== null
+                  member.team_member.id ===
+                    state.selectedMember?.team_member.id &&
+                  state.selectedMember !== null
                 }
                 className="group"
               >
@@ -431,12 +511,15 @@ function TeamManagement() {
                     variant="unstyled"
                     handleClick={(e) => {
                       const rect = e.currentTarget.getBoundingClientRect();
-                      setDropdownPosition({
-                        top: rect.top + window.scrollY,
-                        left: rect.left + window.scrollX,
-                      });
-                      setIsDropdownOpen((prev) => !prev);
-                      setSelectedMember(member);
+                      setState((prev) => ({
+                        ...prev,
+                        dropdownPosition: {
+                          top: rect.top + window.scrollY,
+                          left: rect.left + window.scrollX,
+                        },
+                        isDropdownOpen: !prev.isDropdownOpen,
+                        selectedMember: member,
+                      }));
                     }}
                   >
                     <DotsHorizontalIcon className="h-4 w-4" />
@@ -451,211 +534,24 @@ function TeamManagement() {
       <div
         style={{
           position: 'absolute',
-          top: `${dropdownPosition.top}px`,
-          left: `${dropdownPosition.left}px`,
+          top: `${state.dropdownPosition.top}px`,
+          left: `${state.dropdownPosition.left}px`,
         }}
       >
         <Dropdown
           position="right"
-          open={isDropdownOpen}
+          open={state.isDropdownOpen}
           onClose={() => {
-            setIsDropdownOpen(false);
-            setSelectedMember(null);
+            setState((prev) => ({
+              ...prev,
+              isDropdownOpen: false,
+              selectedMember: null,
+            }));
           }}
           menuItems={getMenuItems()}
         ></Dropdown>
       </div>
     </>
-  );
-}
-
-function CancelInviteModal({
-  isOpen,
-  onClose,
-  handleSubmit,
-  memberToCancel,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  handleSubmit: () => void;
-  memberToCancel: TeamMemberResponse | null;
-}) {
-  return (
-    <Modal
-      open={isOpen}
-      onClose={onClose}
-      title="Cancel Invite"
-      className="w-full max-w-lg"
-      handleSubmit={() => {
-        handleSubmit();
-      }}
-      submitText="Cancel Invite"
-      cancelText="Back"
-    >
-      <div className="flex flex-col gap-4">
-        <p>
-          Are you sure you want to cancel{' '}
-          <b> {memberToCancel?.team_member?.email}</b>'s invite? They will not
-          be able to join your team.
-        </p>
-      </div>
-    </Modal>
-  );
-}
-
-function InviteMemberModal({
-  isOpen,
-  onClose,
-  teamSlug,
-  onSuccess,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  teamSlug: string;
-  onSuccess: (newMembers: TeamMemberResponse[]) => void;
-}) {
-  const [emails, setEmails] = useState('');
-  const [error, setError] = useState('');
-  const [role, setRole] = useState('member');
-
-  async function handleSubmit() {
-    const emailsArray = emails.split(/[\s,]+/);
-    const validEmails = emailsArray.filter((email) => email.trim().length > 0);
-
-    if (validEmails.length === 0) {
-      setError('Please enter at least one email address');
-      return;
-    }
-
-    if (!role) {
-      setError('Please select a role');
-      return;
-    }
-
-    const invalidEmails = validEmails.filter((email) => !isValidEmail(email));
-
-    if (invalidEmails.length > 0) {
-      setError(
-        `Invalid email${invalidEmails.length > 1 ? 's' : ''}: ${invalidEmails.join(', ')}`,
-      );
-      return;
-    }
-
-    setError('');
-    onClose();
-
-    const resp = await inviteMembers({
-      teamSlug,
-      emails: validEmails,
-      role,
-    });
-
-    if (resp?.success) {
-      console.log('resp:', resp);
-      onSuccess(resp.data.invites);
-
-      toast({
-        message: 'Invites sent.',
-        mode: 'success',
-      });
-    } else {
-      console.log('error:', resp);
-      toast({
-        message: getErrorMessage(resp.code || ''),
-        mode: 'error',
-      });
-    }
-
-    setEmails('');
-    setRole('member');
-    setError('');
-    onClose();
-  }
-
-  return (
-    <Modal
-      open={isOpen}
-      onClose={onClose}
-      title="Invite to your team"
-      handleSubmit={handleSubmit}
-      submitText="Send invites"
-      className="w-full max-w-2xl"
-    >
-      <div className="flex flex-col gap-4">
-        <p>
-          Enter email addresses, separated by commas or spaces, to invite team
-          members
-        </p>
-        <Input
-          variant="textarea"
-          placeholder="email1@company.com, email2@company.com, email3@company.com"
-          value={emails}
-          handleChange={(e) => setEmails(e.target.value)}
-        />
-        {error && <p className="text-error">{error}</p>}
-        <Select value={role} onValueChange={(value) => setRole(value)}>
-          <SelectTrigger className="w-[180px]">
-            <SelectValue placeholder="Role" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="member">Member</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-            <SelectItem value="owner">Owner</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-    </Modal>
-  );
-}
-
-function ResendInviteModal({
-  isOpen,
-  onClose,
-  memberToResendInvite,
-  teamSlug,
-}: {
-  isOpen: boolean;
-  onClose: () => void;
-  memberToResendInvite: TeamMemberResponse | null;
-  teamSlug: string;
-}) {
-  async function handleSubmit() {
-    const resp = await resendInvite({
-      teamSlug,
-      teamMemberId: memberToResendInvite?.team_member?.id || '',
-    });
-
-    if (resp.success) {
-      toast({
-        message: 'Invite resent',
-        mode: 'success',
-      });
-      onClose();
-    } else {
-      console.log('error:', resp);
-      toast({
-        message: getErrorMessage(resp.code || ''),
-        mode: 'error',
-      });
-    }
-  }
-
-  return (
-    <Modal
-      open={isOpen}
-      onClose={onClose}
-      title="Resend Invite"
-      className="w-full max-w-lg"
-      handleSubmit={handleSubmit}
-      submitText="Resend Invite"
-      cancelText="Back"
-    >
-      <p>
-        Are you sure you want to send a new invite to{' '}
-        <b>{memberToResendInvite?.team_member?.email}</b>? This will cancel
-        their existing invite.
-      </p>
-    </Modal>
   );
 }
 

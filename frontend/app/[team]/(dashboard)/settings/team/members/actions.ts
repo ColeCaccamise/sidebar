@@ -132,3 +132,23 @@ export async function updateRole({
     return handleApiError(error);
   }
 }
+
+export async function leaveTeam({
+  teamSlug,
+}: {
+  teamSlug: string;
+}): Promise<ApiResponse> {
+  try {
+    const {
+      data: { data, code },
+    } = await api.delete<RawApiResponse>(`/teams/${teamSlug}/leave`);
+
+    return {
+      success: true,
+      data,
+      code,
+    };
+  } catch (error: unknown) {
+    return handleApiError(error);
+  }
+}
