@@ -14,6 +14,18 @@ export default function SwitchTeamModal(props: {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
   const [selectedNewTeam, setSelectedNewTeam] = useState(false);
   const router = useRouter();
+
+  const handleSubmit = () => {
+    if (selectedTeam) {
+      props.switchTeam(selectedTeam.slug);
+      props.setOpen(false);
+    } else {
+      setSelectedNewTeam(true);
+      setSelectedTeam(null);
+      router.push('/onboarding/team');
+    }
+  };
+
   return (
     <Modal
       open={props.open}
@@ -87,11 +99,7 @@ export default function SwitchTeamModal(props: {
         </div>
 
         <Button
-          handleClick={() => {
-            setSelectedNewTeam(true);
-            setSelectedTeam(null);
-            router.push('/onboarding/team');
-          }}
+          handleClick={handleSubmit}
           disabled={!selectedTeam && !selectedNewTeam}
           className="w-full"
         >

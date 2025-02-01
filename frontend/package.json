@@ -43,7 +43,8 @@
     "sonner": "^1.7.1",
     "swr": "^2.3.0",
     "tailwind-merge": "^2.6.0",
-    "usehooks-ts": "^3.1.0"
+    "usehooks-ts": "^3.1.0",
+    "zustand": "^5.0.3"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
