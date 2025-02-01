@@ -9,30 +9,55 @@ import {
 } from '@/components/ui/select';
 import { useState } from 'react';
 import Button from '@/components/ui/button';
+import { updateRole } from '../actions';
+import toast from '@/lib/toast';
+import { getErrorMessage } from '@/messages';
 
-type Props = {
+interface Props {
   isOpen: boolean;
   onClose: () => void;
   member: TeamMemberResponse | null;
-};
+  teamSlug: string;
+  onSuccess?: (updatedMember: TeamMemberResponse) => void;
+}
 
-function ConfirmUpdateRoleModal({ isOpen, onClose, member }: Props) {
+interface ConfirmUpdateRoleModalProps extends Props {
+  newRole: string;
+  handleSubmit: () => Promise<void>;
+}
+
+const ConfirmUpdateRoleModal = ({
+  isOpen,
+  onClose,
+  member,
+  newRole,
+  handleSubmit,
+}: ConfirmUpdateRoleModalProps) => {
   return (
     <Modal
       open={isOpen}
       onClose={onClose}
       title="Confirm Update Role"
       className="w-full max-w-md"
+      handleSubmit={handleSubmit}
+      submitText="Update Role"
+      cancelText="Cancel"
     >
       <p>
-        Are you sure you want to update the role of {member?.user?.first_name}{' '}
-        {member?.user?.last_name} to {member?.team_member.team_role}?
+        Are you sure you want to update the role of {member?.team_member.email}{' '}
+        to <strong>{newRole}</strong>?
       </p>
     </Modal>
   );
-}
+};
 
-export default function UpdateRoleModal({ isOpen, onClose, member }: Props) {
+export default function UpdateRoleModal({
+  isOpen,
+  onClose,
+  member,
+  teamSlug,
+  onSuccess,
+}: Props) {
   const [values, setValues] = useState({
     initial: {
       role: member?.team_member.team_role || 'member',
@@ -56,25 +81,56 @@ export default function UpdateRoleModal({ isOpen, onClose, member }: Props) {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsConfirmModalOpen(true);
+  const handleSubmit = async () => {
+    const { success, data, code } = await updateRole({
+      teamSlug: teamSlug,
+      teamMemberId: member?.team_member.id,
+      role: values.current.role,
+    });
+
+    if (success) {
+      toast({
+        message: 'Role updated',
+        mode: 'success',
+      });
+
+      console.log('the data', data);
+      onSuccess?.(data);
+
+      onClose();
+    } else {
+      toast({
+        message: getErrorMessage(code || ''),
+        mode: 'error',
+      });
+    }
+
+    setIsConfirmModalOpen(false);
   };
 
   return (
     <>
-      <ConfirmUpdateRoleModal
-        isOpen={isConfirmModalOpen}
-        onClose={() => setIsConfirmModalOpen(false)}
-        member={member}
-      />
+      {isConfirmModalOpen && (
+        <ConfirmUpdateRoleModal
+          isOpen={isConfirmModalOpen}
+          onClose={() => setIsConfirmModalOpen(false)}
+          member={member}
+          newRole={values.current.role}
+          handleSubmit={handleSubmit}
+          teamSlug={teamSlug}
+        />
+      )}
       <Modal
         open={isOpen}
         onClose={onClose}
         title="Update Role"
         className="w-full max-w-lg"
       >
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <div className="flex flex-col gap-4">
+          <p>
+            Update team role for <strong>{member?.team_member.email}</strong>
+          </p>
+
           <Select value={values.current.role} onValueChange={handleChange}>
             <SelectTrigger>
               <SelectValue placeholder="Select role" />
@@ -88,12 +144,12 @@ export default function UpdateRoleModal({ isOpen, onClose, member }: Props) {
 
           <Button
             className="w-full"
-            type="submit"
             disabled={roleChanged || isLoading}
+            handleClick={() => setIsConfirmModalOpen(true)}
           >
             Update Role
           </Button>
-        </form>
+        </div>
       </Modal>
     </>
   );

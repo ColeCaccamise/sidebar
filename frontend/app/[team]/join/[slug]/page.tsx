@@ -27,7 +27,6 @@ export default async function JoinPage({
     const response = await api
       .get(`/teams/${params.team}/join/${params.slug}`)
       .then((res) => {
-        console.log('29 res invite: ', res.data);
         return res.data;
       })
       .catch((err) => {
@@ -40,16 +39,19 @@ export default async function JoinPage({
       });
 
     return response as {
-      team: {
-        name: string;
-        slug: string;
+      data: {
+        active: boolean;
+        team: {
+          name: string;
+          slug: string;
+        };
+        invite: {
+          token: string;
+          team_role: string;
+        };
+        user_exists: boolean;
       };
-      invite: {
-        token: string;
-        team_role: string;
-      };
-      user_exists: boolean;
-    } | null;
+    };
   }
 
   async function verifyAuth() {
@@ -68,8 +70,6 @@ export default async function JoinPage({
     const response = await api
       .get(`/teams/${params.team}/member`)
       .then((res) => {
-        console.log(res.data);
-        console.log(70);
         if (res.data.data.team_member.status === 'active') {
           return true;
         } else {

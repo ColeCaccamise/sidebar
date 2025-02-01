@@ -32,7 +32,6 @@ export default function Layout({
           })
           .then((res) => res.data.data.team)
           .catch(() => null);
-        console.log('response', response);
         return response;
       },
     });

@@ -43,6 +43,7 @@ type Storage interface {
 	GetTeamMemberByEmail(string) (*models.TeamMember, error)
 	GetTeamMembersByTeamID(uuid.UUID) ([]*models.TeamMember, error)
 	GetTeamMembersByTeamIDAndRole(uuid.UUID, models.TeamRole) ([]*models.TeamMember, error)
+	GetTeamMemberOwnersByTeamID(uuid.UUID) ([]*models.TeamMember, error)
 	GetTeamsByUserID(userID uuid.UUID) ([]*models.Team, error)
 	GetTeamMembersByUserID(uuid.UUID) ([]*models.TeamMember, error)
 	GetTeamByID(uuid.UUID) (*models.Team, error)
@@ -308,7 +309,7 @@ func (s *PostgresStore) GetTeamsByUserID(userID uuid.UUID) ([]*models.Team, erro
 	var teamMembers []*models.TeamMember
 
 	// get all team members for this user
-	result := s.db.Where("user_id = ?", userID).Find(&teamMembers)
+	result := s.db.Where("user_id = ? AND left_at IS NULL AND removed_at IS NULL", userID).Find(&teamMembers)
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -543,9 +544,28 @@ func (s *PostgresStore) GetTeamMemberByTeamIDAndUserID(teamID uuid.UUID, userID 
 	return &teamMember, nil
 }
 
+func (s *PostgresStore) GetTeamMemberOwnersByTeamID(teamID uuid.UUID) ([]*models.TeamMember, error) {
+	// validate team id
+	if teamID == uuid.Nil {
+		return nil, fmt.Errorf("invalid team id: cannot be nil")
+	}
+
+	var teamMembers []*models.TeamMember
+	result := s.db.Where("team_id = ? AND team_role = ? AND left_at IS NULL AND removed_at IS NULL", teamID, "owner").Find(&teamMembers)
+	if result.Error != nil {
+		return nil, fmt.Errorf("failed to query team members: %w", result.Error)
+	}
+
+	if len(teamMembers) == 0 {
+		return nil, fmt.Errorf("no team owners found for team id %s", teamID)
+	}
+
+	return teamMembers, nil
+}
+
 func (s *PostgresStore) GetTeamMembersByTeamID(teamID uuid.UUID) ([]*models.TeamMember, error) {
 	var teamMembers []*models.TeamMember
-	result := s.db.Where("team_id = ?", teamID).Find(&teamMembers)
+	result := s.db.Where("team_id = ? AND left_at IS NULL AND removed_at IS NULL", teamID).Find(&teamMembers)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("team members not found with team id %s", teamID)
@@ -557,7 +577,7 @@ func (s *PostgresStore) GetTeamMembersByTeamID(teamID uuid.UUID) ([]*models.Team
 
 func (s *PostgresStore) GetTeamMembersByTeamIDAndRole(teamID uuid.UUID, teamRole models.TeamRole) ([]*models.TeamMember, error) {
 	var teamMembers []*models.TeamMember
-	result := s.db.Where("team_id = ? AND team_role = ?", teamID, teamRole).Find(&teamMembers)
+	result := s.db.Where("team_id = ? AND team_role = ? AND left_at IS NULL AND removed_at IS NULL", teamID, teamRole).Find(&teamMembers)
 	if result.Error != nil {
 		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("team members not found with team id %s", teamID)

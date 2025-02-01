@@ -92,8 +92,8 @@ export async function removeMember({
   try {
     const {
       data: { data, code },
-    } = await api.delete<RawApiResponse>(
-      `/teams/${teamSlug}/members/${teamMemberId}`,
+    } = await api.post<RawApiResponse>(
+      `/teams/${teamSlug}/members/${teamMemberId}/remove`,
     );
 
     return {
@@ -112,23 +112,40 @@ export async function updateRole({
   role,
 }: {
   teamSlug: string;
-  teamMemberId: string;
+  teamMemberId: string | undefined;
   role: string;
 }): Promise<ApiResponse> {
+  console.log('updating role...');
+  console.log(teamMemberId);
+  console.log(role);
+
+  if (!teamMemberId) {
+    return {
+      success: false,
+      error: 'Please select a member',
+    };
+  }
+
+  if (!role) {
+    return {
+      success: false,
+      error: 'Please specify a role',
+    };
+  }
+
   try {
-    const {
-      data: { data, code },
-    } = await api.put<RawApiResponse>(
-      `/teams/${teamSlug}/members/${teamMemberId}/role`,
-      { role },
+    const response = await api.patch<RawApiResponse>(
+      `/teams/${teamSlug}/members/${teamMemberId}`,
+      { team_role: role },
     );
 
     return {
       success: true,
-      data,
-      code,
+      data: response.data.data,
+      code: response.data.code,
     };
   } catch (error: unknown) {
+    console.log('error updating role: ', error);
     return handleApiError(error);
   }
 }
@@ -141,7 +158,7 @@ export async function leaveTeam({
   try {
     const {
       data: { data, code },
-    } = await api.delete<RawApiResponse>(`/teams/${teamSlug}/leave`);
+    } = await api.post<RawApiResponse>(`/teams/${teamSlug}/leave`);
 
     return {
       success: true,

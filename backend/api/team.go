@@ -53,6 +53,20 @@ func (s *Server) handleListTeams(w http.ResponseWriter, r *http.Request) error {
 		teams = filteredTeams
 	}
 
+	var activeTeams []*models.Team
+	for _, team := range teams {
+		member, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+		if err != nil {
+			continue
+		}
+
+		if member.RemovedAt == nil {
+			activeTeams = append(activeTeams, team)
+		}
+	}
+
+	teams = activeTeams
+
 	if teamsErr != nil {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error", Code: "internal_server_error"})
 	}
@@ -376,13 +390,6 @@ func (s *Server) handleGetTeamBySlug(w http.ResponseWriter, r *http.Request) err
 		}
 	}
 
-	if team == nil {
-		return WriteJSON(w, http.StatusNotFound, Error{
-			Error: "team not found",
-			Code:  "team_not_found",
-		})
-	}
-
 	inviteID := team.CurrentTeamInviteID
 	invite, err := s.store.GetTeamInviteByID(inviteID)
 	if err != nil {
@@ -425,9 +432,9 @@ func (s *Server) HandleGetTeamMember(w http.ResponseWriter, r *http.Request) err
 
 	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
 	if err != nil {
-		return WriteJSON(w, http.StatusNotFound, Error{
-			Error: "you are not a member of this team.",
-			Code:  "team_member_not_found",
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "forbidden",
+			Code:  "forbidden",
 		})
 	}
 
@@ -435,10 +442,90 @@ func (s *Server) HandleGetTeamMember(w http.ResponseWriter, r *http.Request) err
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_member": teamMemberData}})
 }
 
+func (s *Server) handleLeaveTeam(w http.ResponseWriter, r *http.Request) error {
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "unauthorized.",
+			Code:  "unauthorized",
+		})
+	}
+	user := userSession.User
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "forbidden",
+			Code:  "forbidden",
+		})
+	}
+
+	// ensure theres another owner on the team
+	owners, err := s.store.GetTeamMemberOwnersByTeamID(team.ID)
+	if err != nil || len(owners) < 2 {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "there must be at least one other owner before you can leave the team.",
+			Code:  "no_team_owner",
+		})
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	invites, _ := s.store.GetTeamInvitesByTeamMemberID(teamMember.ID)
+	if len(invites) > 0 {
+		for _, invite := range invites {
+			invite.State = "canceled"
+			_ = s.store.UpdateTeamInvite(invite)
+
+			_, err := usermanagement.RevokeInvitation(
+				context.Background(),
+				usermanagement.RevokeInvitationOpts{
+					Invitation: invite.WorkosInviteID,
+				},
+			)
+
+			if err != nil {
+				fmt.Printf("workos error revoking invitation id (%s): %v\n", invite.WorkosInviteID, err)
+			}
+		}
+	}
+
+	now := time.Now()
+	teamMember.LeftAt = &now
+	teamMember.Status = models.TeamMemberStatusLeft
+	err = s.store.UpdateTeamMember(teamMember)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	_, err = usermanagement.DeactivateOrganizationMembership(
+		context.Background(),
+		usermanagement.DeactivateOrganizationMembershipOpts{
+			OrganizationMembership: teamMember.WorkosOrgMembershipID,
+		},
+	)
+	fmt.Printf("workos eror deactiving membership %v\n", teamMember.WorkosOrgMembershipID)
+
+	return WriteJSON(w, http.StatusNoContent, nil)
+}
+
 func (s *Server) handleGetTeamMembers(w http.ResponseWriter, r *http.Request) error {
 	slug := chi.URLParam(r, "slug")
 	if !util.IsValidSlug(slug) {
-		return WriteJSON(w, http.StatusBadRequest, Error{Error: "team not found.", Code: "team_not_found"})
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
 	}
 
 	team, err := s.store.GetTeamBySlug(slug)
@@ -473,17 +560,200 @@ func (s *Server) handleGetTeamMembers(w http.ResponseWriter, r *http.Request) er
 }
 
 func (s *Server) handleUpdateTeamMember(w http.ResponseWriter, r *http.Request) error {
-	return WriteJSON(w, http.StatusNotImplemented, Error{
-		Error: "not implemented",
-		Code:  "not_implemented",
-	})
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team not found.",
+			Code:  "team_not_found",
+		})
+	}
+	teamMemberID := uuid.MustParse(chi.URLParam(r, "id"))
+	var updateReq models.UpdateTeamMemberRequest
+	err := util.DecodeBody(r.Body, &updateReq)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "invalid request body",
+			Code:  "invalid_request",
+		})
+	}
+
+	teamRole := updateReq.TeamRole
+	if teamRole == "" {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "team role is required",
+			Code:  "team_role_required",
+		})
+	}
+
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{
+			Error: "unauthorized.",
+			Code:  "unauthorized",
+		})
+	}
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{
+			Error: "team not found.",
+			Code:  "team_not_found",
+		})
+	}
+
+	user := userSession.User
+	userTeamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "forbidden.",
+			Code:  "forbidden",
+		})
+	}
+
+	if userTeamMember.TeamRole == models.TeamRoleMember {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "forbidden.",
+			Code:  "forbidden",
+		})
+	}
+
+	canPerformAction := util.CheckRolePermission(userTeamMember.TeamRole, teamRole)
+	fmt.Println("canPerformAction", canPerformAction)
+
+	if !canPerformAction {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "forbidden.",
+			Code:  "forbidden",
+		})
+	}
+
+	teamMember, err := s.store.GetTeamMemberByID(teamMemberID)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "team member does not exist.",
+			Code:  "team_member_not_found",
+		})
+	}
+	teamMemberUser, err := s.store.GetUserByID(*teamMember.UserID)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error",
+			Code:  "internal_server_error",
+		})
+	}
+	userResponse := models.NewUserIdentityResponse(teamMemberUser)
+
+	currentRole := teamMember.TeamRole
+	if currentRole == teamRole {
+		// idempotent response
+		response := models.NewTeamMemberResponse(teamMember)
+		return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_member": response, "user": userResponse}})
+	}
+
+	teamMember.TeamRole = teamRole
+	err = s.store.UpdateTeamMember(teamMember)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error",
+			Code:  "internal_server_error",
+		})
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	_, err = usermanagement.UpdateOrganizationMembership(
+		context.Background(),
+		teamMember.WorkosOrgMembershipID,
+		usermanagement.UpdateOrganizationMembershipOpts{
+			RoleSlug: string(teamRole),
+		},
+	)
+	if err != nil {
+		fmt.Printf("workos error while updating role: %v\n", err)
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error",
+			Code:  "internal_server_error",
+		})
+	}
+
+	response := models.NewTeamMemberResponse(teamMember)
+	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_member": response, "user": userResponse}})
 }
 
 func (s *Server) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) error {
-	return WriteJSON(w, http.StatusNotImplemented, Error{
-		Error: "not implemented",
-		Code:  "not_implemented",
-	})
+	slug := chi.URLParam(r, "slug")
+	if !util.IsValidSlug(slug) {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+	teamMemberID := uuid.MustParse(chi.URLParam(r, "id"))
+
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "unauthorized.",
+			Code:  "unauthorized",
+		})
+	}
+	user := userSession.User
+
+	team, err := s.store.GetTeamBySlug(slug)
+	if err != nil {
+		return WriteJSON(w, http.StatusNotFound, Error{Error: "team not found.", Code: "team_not_found"})
+	}
+
+	userTeamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "forbidden",
+			Code:  "forbidden",
+		})
+	}
+
+	if userTeamMember.TeamRole == models.TeamRoleMember {
+		return WriteJSON(w, http.StatusForbidden, Error{
+			Error: "forbidden",
+			Code:  "forbidden",
+		})
+	}
+
+	teamMember, err := s.store.GetTeamMemberByID(teamMemberID)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{
+			Error: "team member does not exist.",
+			Code:  "team_member_not_found",
+		})
+	}
+
+	now := time.Now()
+	teamMember.LeftAt = &now
+	teamMember.Status = models.TeamMemberStatusLeft
+	err = s.store.UpdateTeamMember(teamMember)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error.",
+			Code:  "internal_server_error",
+		})
+	}
+
+	invites, _ := s.store.GetTeamInvitesByTeamMemberID(teamMemberID)
+	if len(invites) > 0 {
+		for _, invite := range invites {
+			invite.State = "canceled"
+			_ = s.store.UpdateTeamInvite(invite)
+		}
+	}
+
+	usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+	_, err = usermanagement.DeactivateOrganizationMembership(
+		context.Background(),
+		usermanagement.DeactivateOrganizationMembershipOpts{
+			OrganizationMembership: teamMember.WorkosOrgMembershipID,
+		},
+	)
+	fmt.Printf("workos eror deactiving membership %v\n", teamMember.WorkosOrgMembershipID)
+
+	return WriteJSON(w, http.StatusNoContent, nil)
 }
 
 func (s *Server) handleGetUpsells(w http.ResponseWriter, r *http.Request) error {
@@ -669,6 +939,9 @@ func (s *Server) handleSendTeamInvites(w http.ResponseWriter, r *http.Request) e
 		if inactiveMember != nil {
 			teamMember = inactiveMember
 			teamMember.Status = "pending"
+			teamMember.LeftAt = nil
+			teamMember.RemovedAt = nil
+			teamMember.RemovedBy = nil
 			memberUser, _ = s.store.GetUserByEmail(email)
 
 			if memberUser != nil {

@@ -19,6 +19,7 @@ export default function LeaveTeamModal({
       handleSubmit={handleSubmit}
       submitText="Leave Team"
       className="w-full max-w-lg"
+      destructive
     >
       <p>
         Are you sure you want to leave this team? This action is irreversible

@@ -60,7 +60,6 @@ func AcceptWorkosInvite(inviteId string) (response *WorkosInviteResponse, err er
 		return nil, fmt.Errorf("failed to decode response: %v", err)
 	}
 
-
 	return response, nil
 }
 
@@ -70,4 +69,16 @@ func TeamInviteValid(teamInvite models.TeamInvite) (response bool) {
 	} else {
 		return false
 	}
+}
+
+func CheckRolePermission(currentRole models.TeamRole, requiredRole models.TeamRole) bool {
+	// map roles to their hierarchy level
+	roleHierarchy := map[models.TeamRole]int{
+		models.TeamRole("owner"):  3,
+		models.TeamRole("admin"):  2,
+		models.TeamRole("member"): 1,
+	}
+
+	// check if current role has sufficient privileges
+	return roleHierarchy[currentRole] >= roleHierarchy[requiredRole]
 }

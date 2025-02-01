@@ -1,7 +1,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
+	"github.com/h2non/filetype"
+	"io"
 
 	"github.com/colecaccamise/go-backend/util"
 
@@ -491,155 +494,139 @@ func (s *Server) handleListTeamMembers(w http.ResponseWriter, r *http.Request) e
 //	return WriteJSON(w, http.StatusOK, Response{Message: "user restored", Code: "user_restored", Data: map[string]models.UserIdentityResponse{"user": *userData}})
 //}
 
-//func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) error {
-//	file, fileHeader, err := r.FormFile("avatar")
-//
-//	if err != nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//	}
-//
-//	if file == nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "file is required"})
-//	}
-//
-//	buf, err := io.ReadAll(file)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//	}
-//	fileType, err := filetype.MatchReader(bytes.NewReader(buf))
-//	if err != nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//	}
-//
-//	if fileType.MIME.Value != "image/jpeg" && fileType.MIME.Value != "image/png" {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "file must be a jpeg or png"})
-//	}
-//
-//	fmt.Println("file type:", fileType.MIME.Value)
-//
-//	if fileHeader.Size > 2000000 {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "file too large", Error: "file too large"})
-//	}
-//
-//	// delete existing avatar from S3
-//	user, _, _, err := getUserIdentity(s, r)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//	}
-//
-//	avatarUrl := user.AvatarUrl
-//	avatarThumbUrl := user.AvatarThumbnailUrl
-//
-//	if avatarUrl != "" {
-//		err = util.DeleteFileFromS3(avatarUrl)
-//
-//		if err != nil {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//		}
-//	}
-//
-//	if avatarThumbUrl != "" {
-//		err = util.DeleteFileFromS3(avatarThumbUrl)
-//
-//		if err != nil {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//		}
-//	}
-//
-//	// upload new avatar to s3
-//	filename, thumbFilename, err := util.UploadFileToS3(buf, true)
-//	if err != nil {
-//		return err
-//	}
-//
-//	cloudfrontUrl := fmt.Sprintf("%s/%s", os.Getenv("CLOUDFRONT_URL"), filename)
-//	thumbCloudfrontUrl := fmt.Sprintf("%s/%s", os.Getenv("CLOUDFRONT_URL"), thumbFilename)
-//
-//	authToken, err := r.Cookie("auth-token")
-//
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid or expired", Error: err.Error()})
-//	}
-//
-//	userId, authTokenType, _, err := util.ParseJWT(authToken.Value)
-//
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid or expired", Error: err.Error()})
-//	}
-//
-//	if authTokenType != "auth" {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Message: "token is invalid.", Error: "incorrect token type", Code: "invalid_token"})
-//	}
-//
-//	user, err = s.store.GetUserByID(uuid.MustParse(userId))
-//	if err != nil {
-//		return WriteJSON(w, http.StatusNotFound, Error{Message: "user not found", Error: err.Error()})
-//	}
-//
-//	user.AvatarUrl = cloudfrontUrl
-//	user.AvatarThumbnailUrl = thumbCloudfrontUrl
-//
-//	if err := s.store.UpdateUser(user); err != nil {
-//		return err
-//	}
-//
-//	return WriteJSON(w, http.StatusOK, map[string]any{"location": cloudfrontUrl, "file_type": fileType})
-//}
+func (s *Server) handleUploadAvatar(w http.ResponseWriter, r *http.Request) error {
+	file, fileHeader, err := r.FormFile("avatar")
 
-//func (s *Server) handleDeleteAvatar(w http.ResponseWriter, r *http.Request) error {
-//	user, _, _, err := getUserIdentity(s, r)
-//
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
-//	}
-//
-//	avatarUrl := user.AvatarUrl
-//
-//	avatarThumbUrl := user.AvatarThumbnailUrl
-//
-//	if avatarUrl == "" && avatarThumbUrl == "" {
-//		return WriteJSON(w, http.StatusNoContent, nil)
-//	}
-//
-//	if avatarThumbUrl == "" {
-//		err = util.DeleteFileFromS3(avatarUrl)
-//
-//		if err != nil {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//		}
-//	}
-//
-//	if avatarUrl == "" {
-//		err = util.DeleteFileFromS3(avatarThumbUrl)
-//
-//		if err != nil {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//		}
-//	}
-//
-//	if avatarUrl != "" && avatarThumbUrl != "" {
-//		err = util.DeleteFileFromS3(avatarUrl)
-//
-//		if err != nil {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//		}
-//
-//		err = util.DeleteFileFromS3(avatarThumbUrl)
-//
-//		if err != nil {
-//			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//		}
-//	}
-//
-//	user.AvatarUrl = ""
-//	user.AvatarThumbnailUrl = ""
-//
-//	if err := s.store.UpdateUser(user); err != nil {
-//		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
-//	}
-//
-//	return WriteJSON(w, http.StatusNoContent, nil)
-//}
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+	}
+
+	if file == nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: "file is required"})
+	}
+
+	buf, err := io.ReadAll(file)
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+	}
+	fileType, err := filetype.MatchReader(bytes.NewReader(buf))
+	if err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+	}
+
+	if fileType.MIME.Value != "image/jpeg" && fileType.MIME.Value != "image/png" {
+		return WriteJSON(w, http.StatusBadRequest, Error{Error: "file must be a jpeg or png", Code: "avatar_invalid_file_type"})
+	}
+
+	fmt.Println("file type:", fileType.MIME.Value)
+
+	if fileHeader.Size > 2000000 {
+		return WriteJSON(w, http.StatusBadRequest, Error{Message: "file too large", Error: "file too large", Code: "avatar_too_large"})
+	}
+
+	// delete existing avatar from S3
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{
+			Error: "unauthorized",
+			Code:  "unauthorized",
+		})
+	}
+
+	user := userSession.User
+
+	avatarUrl := user.AvatarUrl
+	avatarThumbUrl := user.AvatarThumbnailUrl
+
+	if avatarUrl != "" {
+		err = util.DeleteFileFromS3(avatarUrl)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		}
+	}
+
+	if avatarThumbUrl != "" {
+		err = util.DeleteFileFromS3(avatarThumbUrl)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		}
+	}
+
+	// upload new avatar to s3
+	filename, thumbFilename, err := util.UploadFileToS3(buf, true)
+	if err != nil {
+		return err
+	}
+
+	cloudfrontUrl := fmt.Sprintf("%s/%s", os.Getenv("CLOUDFRONT_URL"), filename)
+	thumbCloudfrontUrl := fmt.Sprintf("%s/%s", os.Getenv("CLOUDFRONT_URL"), thumbFilename)
+
+	user.AvatarUrl = cloudfrontUrl
+	user.AvatarThumbnailUrl = thumbCloudfrontUrl
+
+	if err := s.store.UpdateUser(user); err != nil {
+		return err
+	}
+
+	return WriteJSON(w, http.StatusOK, map[string]any{"location": cloudfrontUrl, "file_type": fileType})
+}
+
+func (s *Server) handleDeleteAvatar(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
+	}
+	user := userSession.User
+
+	avatarUrl := user.AvatarUrl
+
+	avatarThumbUrl := user.AvatarThumbnailUrl
+
+	if avatarUrl == "" && avatarThumbUrl == "" {
+		return WriteJSON(w, http.StatusNoContent, nil)
+	}
+
+	if avatarThumbUrl == "" {
+		err = util.DeleteFileFromS3(avatarUrl)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		}
+	}
+
+	if avatarUrl == "" {
+		err = util.DeleteFileFromS3(avatarThumbUrl)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		}
+	}
+
+	if avatarUrl != "" && avatarThumbUrl != "" {
+		err = util.DeleteFileFromS3(avatarUrl)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		}
+
+		err = util.DeleteFileFromS3(avatarThumbUrl)
+
+		if err != nil {
+			return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+		}
+	}
+
+	user.AvatarUrl = ""
+	user.AvatarThumbnailUrl = ""
+
+	if err := s.store.UpdateUser(user); err != nil {
+		return WriteJSON(w, http.StatusBadRequest, Error{Message: "invalid request", Error: err.Error()})
+	}
+
+	return WriteJSON(w, http.StatusNoContent, nil)
+}
 
 //func (s *Server) handleChangeUserPassword(w http.ResponseWriter, r *http.Request) error {
 //	user, _, _, err := getUserIdentity(s, r)

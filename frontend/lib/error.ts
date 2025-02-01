@@ -9,6 +9,6 @@ export function handleApiError(error: unknown): ApiResponse {
   return {
     success: false,
     code: 'internal_server_error',
-    message: 'An unexpected error occurred.',
+    error: 'An unexpected error occurred.',
   } as ApiResponse;
 }

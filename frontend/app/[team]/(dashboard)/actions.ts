@@ -1,6 +1,6 @@
 'use server';
 
-import api from '@/lib/axios';
+import api from '@/lib/api';
 import { parseJwt } from '@/lib/jwt';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';

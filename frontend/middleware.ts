@@ -35,7 +35,6 @@ export async function middleware(request: NextRequest) {
 
   // get user data
   let isLoggedIn = false;
-
   let user: User | null = null;
   let team: Team | null = null;
   let teamMember: TeamMember | null = null;
@@ -51,8 +50,6 @@ export async function middleware(request: NextRequest) {
       return res?.data?.data;
     })
     .catch(() => null);
-
-  console.log('identity called');
 
   if (!identity?.valid) {
     // attempt to refresh

@@ -3,9 +3,11 @@ const DEFAULT_ERROR_MESSAGE =
 const DEFAULT_RESPONSE_MESSAGE = 'Completed successfully.';
 
 export const errorCodes = {
+  unauthorized: 'You are not authorized to take this action.',
+  forbidden: 'You are not permitted to take this action.',
   email_taken: 'An account with this email already exists.',
   invalid_token: 'Token is invalid or expired.',
-  missing_token: 'Token is missing.',
+  missing_token: 'Something went wrong. Please try the request again.',
   email_unchanged: 'Email is unchanged.',
   invalid_password: 'Password is invalid.',
   invalid_credentials: 'Invalid credentials.',
@@ -48,6 +50,12 @@ export const errorCodes = {
   already_invited: 'One or more emails has already received an invite.',
   invalid_self_invite: 'You cannot invite yourself.',
   invite_expired: 'This invite has expired. Ask your team for a new one.',
+  team_role_required: 'Please select a team role.',
+  team_member_not_found: 'Team member not found.',
+  no_team_owner:
+    'You are the only owner of this team. Add another owner to leave the team.',
+  avatar_too_large: 'File is too large. Max file size is 2MB.',
+  avatar_invalid_file_type: 'Invalid file type. Please choose a valid image.',
   default: DEFAULT_ERROR_MESSAGE,
 } as const;
 

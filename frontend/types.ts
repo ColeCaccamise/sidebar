@@ -58,6 +58,7 @@ export type RawApiResponse = {
 export type ApiResponse = {
   success: boolean;
   message?: string;
+  error?: string;
   data?: any;
   code?: ResponseCode | ErrorCode;
 };

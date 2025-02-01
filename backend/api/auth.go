@@ -279,13 +279,42 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 			if authWithCodeErr.Code == "organization_selection_required" {
 				pendingAuthToken := authWithCodeErr.PendingAuthenticationToken
 				orgs := authWithCodeErr.Organizations
-				orgsData, orgsErr := json.Marshal(orgs)
-				if orgsErr != nil {
+
+				// get only active teams
+				user, err := s.store.GetUserByWorkosUserID(authWithCodeErr.User.Id)
+				if err != nil {
 					http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
 					return nil
 				}
 
-				selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s", appUrl, url.QueryEscape(pendingAuthToken), url.QueryEscape(string(orgsData)))
+				var activeOrgsData []models.SelectOrganizationResponse
+				for _, org := range orgs {
+					orgID := org.Id
+					team, err := s.store.GetTeamByWorkosOrgID(orgID)
+					if err != nil {
+						continue
+					}
+
+					teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
+					if err != nil {
+						continue
+					}
+
+					if teamMember.LeftAt != nil || teamMember.RemovedAt != nil {
+						continue
+					}
+
+					activeOrgsData = append(activeOrgsData, org)
+				}
+
+				activeOrgsJson, err := util.StructToJSON(activeOrgsData)
+				if err != nil {
+					fmt.Printf("err: %+v\n", err)
+					http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+					return nil
+				}
+
+				selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s", appUrl, url.QueryEscape(pendingAuthToken), url.QueryEscape(activeOrgsJson))
 
 				http.Redirect(w, r, selectTeamUrl, http.StatusTemporaryRedirect)
 				return nil

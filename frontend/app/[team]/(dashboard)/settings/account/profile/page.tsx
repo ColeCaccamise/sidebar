@@ -206,21 +206,29 @@ export default function AccountSettingsPage() {
           description="This will be your display name in the dashboard."
           note="Max 32 characters."
           onSettingSubmit={async () => {
-            await updateUser({
+            const { data, success } = await updateUser({
               user,
               firstName: userValues.firstName?.current,
               lastName: userValues.lastName?.current,
             });
 
+            if (!success) {
+              toast({
+                message: 'Something went wrong',
+                mode: 'error',
+              });
+              return;
+            }
+
             setUserValues((prev) => ({
               ...prev,
               firstName: {
-                initial: prev.firstName?.current || '',
-                current: prev.firstName?.current || '',
+                initial: data.first_name || '',
+                current: data.first_name || '',
               },
               lastName: {
-                initial: prev.lastName?.current || '',
-                current: prev.lastName?.current || '',
+                initial: data.last_name || '',
+                current: data.last_name || '',
               },
             }));
 
@@ -403,29 +411,35 @@ export default function AccountSettingsPage() {
           onSettingSubmit={async () => {
             const formData = new FormData();
             formData.append('avatar', avatar || '');
-            await uploadAvatar({ user, formData })
-              .then((res) => {
-                console.log(res);
-                toast({
-                  message: 'Avatar updated.',
-                  mode: 'success',
-                });
-                setUserValues((prev) => ({
-                  ...prev,
-                  avatar: {
-                    initial: res.location,
-                    current: res.location,
-                  },
-                }));
-              })
-              .catch((error) => {
-                console.error(error);
-                toast({
-                  message:
-                    'There was a problem updating your avatar. Please try again.',
-                  mode: 'error',
-                });
+            const { data, success, code } = await uploadAvatar({
+              user,
+              formData,
+            });
+
+            console.log(data, success, code);
+
+            if (!success) {
+              toast({
+                message: code
+                  ? getErrorMessage(code)
+                  : 'There was a problem updating your avatar.',
+                mode: 'error',
               });
+              return;
+            }
+
+            setUserValues((prev) => ({
+              ...prev,
+              avatar: {
+                initial: data?.location,
+                current: data?.location,
+              },
+            }));
+
+            toast({
+              message: 'Avatar updated.',
+              mode: 'success',
+            });
           }}
           disabled={
             !avatar || userValues.avatar?.initial === userValues.avatar?.current
@@ -527,9 +541,9 @@ export default function AccountSettingsPage() {
                 children: (
                   <p>
                     This action will result in the immediate loss of access to
-                    Asana and the permanent removal of your account data across
-                    all workspaces or organizations you are associated with.
-                    There will be no option for recovery.
+                    the Dashboard and the permanent removal of your account data
+                    across all workspaces or organizations you are associated
+                    with. There will be no option for recovery.
                   </p>
                 ),
                 handleSubmit: () => {

@@ -1,10 +1,11 @@
 'use server';
 
-import { ApiError, ApiResponse, User } from '@/types';
+import { ApiResponse, User } from '@/types';
 
 import axios from 'axios';
 import { cookies } from 'next/headers';
 import { parseNextCookie } from '@/lib/cookie';
+import api from '@/lib/api';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -19,25 +20,28 @@ export async function updateUser({
   lastName?: string;
   email?: string;
 }) {
-  if (!user) return;
+  if (!user) {
+    return { success: false };
+  }
 
-  await axios
-    .patch(
-      `${apiUrl}/users`,
-      {
-        first_name: firstName,
-        last_name: lastName,
-        email,
-      },
-      {
-        headers: {
-          Cookie: `auth-token=${cookies().get('auth-token')?.value}`,
-        },
-      },
-    )
-    .catch(() => {
-      return null;
+  try {
+    const response = await api.patch(`${apiUrl}/users`, {
+      first_name: firstName,
+      last_name: lastName,
+      email,
     });
+
+    console.log('response', response);
+
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (error) {
+    return {
+      success: false,
+    };
+  }
 }
 
 export async function updateUserEmail({
@@ -95,7 +99,7 @@ export async function verifyPassword({
   password,
 }: {
   password: string;
-}): Promise<ApiResponse | ApiError> {
+}): Promise<ApiResponse> {
   return await axios
     .post(
       `${apiUrl}/auth/verify-password`,
@@ -130,21 +134,40 @@ export async function uploadAvatar({
 }: {
   user: User | null;
   formData: FormData;
-}) {
-  if (!user || !formData) return;
+}): Promise<ApiResponse> {
+  if (!user || !formData) {
+    return {
+      success: false,
+      error: 'Missing required data',
+      code: 'invalid_request',
+    };
+  }
 
-  const response = await axios
-    .patch(`${apiUrl}/users/avatar`, formData, {
-      headers: { Cookie: `auth-token=${cookies().get('auth-token')?.value}` },
-    })
-    .then((res) => {
-      return res.data;
-    })
-    .catch(() => {
-      return null;
+  try {
+    const response = await api.patch('/users/avatar', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
     });
 
-  return response;
+    return {
+      success: true,
+      data: response.data,
+    };
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.data) {
+      return {
+        success: false,
+        error: err.response.data.message,
+        code: err.response.data.code,
+      };
+    }
+
+    return {
+      success: false,
+      error: 'There was a problem updating your avatar.',
+    };
+  }
 }
 
 export async function deleteAvatar() {
@@ -254,10 +277,11 @@ export async function deleteAccount({
   email: string;
   reason: string;
   otherReason: string;
-}): Promise<ApiResponse | ApiError> {
+}): Promise<ApiResponse> {
   if (!email || !reason || (reason === 'other' && !otherReason)) {
     console.log('Please fill in all fields');
     return {
+      success: false,
       error: 'Please fill in all fields',
       code: 'invalid_request',
     };

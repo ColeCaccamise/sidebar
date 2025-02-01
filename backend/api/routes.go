@@ -137,6 +137,10 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Post("/accept-terms", makeHttpHandleFunc(s.handleAcceptTerms))
 			r.Get("/invites", makeHttpHandleFunc(s.handleListInvites))
 			r.Get("/members", makeHttpHandleFunc(s.handleListTeamMembers))
+			r.Route("/avatar", func(r chi.Router) {
+				r.Patch("/", makeHttpHandleFunc(s.handleUploadAvatar))
+				r.Delete("/", makeHttpHandleFunc(s.handleDeleteAvatar))
+			})
 		})
 	})
 

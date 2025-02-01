@@ -28,6 +28,11 @@ type Team struct {
 	OnboardingCompletedAt    *time.Time `gorm:"default:null" json:"onboarding_completed_at"`
 }
 
+type SelectOrganizationResponse struct {
+	Id   string `json:"id"`
+	Name string `json:"name"`
+}
+
 type TeamResponse struct {
 	ID                     uuid.UUID `json:"id"`
 	Name                   string    `json:"name"`
@@ -59,6 +64,7 @@ type TeamMemberResponse struct {
 	TeamRole  TeamRole         `json:"team_role"`
 	Status    TeamMemberStatus `json:"status"`
 	Onboarded bool             `json:"onboarded"`
+	JoinedAt  *time.Time       `json:"joined_at"`
 }
 
 func NewTeamMemberResponse(t *TeamMember) *TeamMemberResponse {
@@ -69,6 +75,7 @@ func NewTeamMemberResponse(t *TeamMember) *TeamMemberResponse {
 		TeamRole:  t.TeamRole,
 		Status:    t.Status,
 		Onboarded: t.OnboardedAt != nil,
+		JoinedAt:  t.JoinedAt,
 	}
 }
 
@@ -192,7 +199,8 @@ type TeamMember struct {
 	JoinedAt              *time.Time       `gorm:"default:null" json:"joined_at"`
 	LeftAt                *time.Time       `gorm:"default:null" json:"left_at"`
 	RemovedAt             *time.Time       `gorm:"default:null" json:"removed_at"`
-	InviterUserID         uuid.UUID        `gorm:"type:uuid;default:null" json:"inviter_user_id"`
+	RemovedBy             *uuid.UUID       `gorm:"default:null" json:"removed_by"`
+	InviterUserID         *uuid.UUID       `gorm:"type:uuid;default:null" json:"inviter_user_id"`
 	TeamID                uuid.UUID        `gorm:"type:uuid;not null" json:"team_id"`
 	UserID                *uuid.UUID       `gorm:"type:uuid;not null" json:"user_id"`
 	TeamRole              TeamRole         `gorm:"default:member" json:"team_role"`
@@ -213,12 +221,16 @@ type CreateTeamMemberRequest struct {
 func NewTeamMember(req *CreateTeamMemberRequest) *TeamMember {
 	return &TeamMember{
 		JoinedAt:      req.JoinedAt,
-		InviterUserID: req.InviterUserID,
+		InviterUserID: &req.InviterUserID,
 		TeamID:        req.TeamID,
 		UserID:        &req.UserID,
 		TeamRole:      req.TeamRole,
 		Email:         req.Email,
 	}
+}
+
+type UpdateTeamMemberRequest struct {
+	TeamRole TeamRole `json:"team_role"`
 }
 
 func NewTeamInvite(req *CreateTeamInviteRequest) *TeamInvite {

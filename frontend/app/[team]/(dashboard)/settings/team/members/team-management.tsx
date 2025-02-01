@@ -23,23 +23,17 @@ import { TeamMemberResponse } from '@/types';
 import Button from '@/components/ui/button';
 import { useState } from 'react';
 import { capitalize } from '@/lib/sting';
-import Modal from '@/components/ui/modal';
 import toast from '@/lib/toast';
-import {
-  cancelInvites,
-  resendInvite,
-  removeMember,
-  leaveTeam,
-} from './actions';
+import { cancelInvites, removeMember, leaveTeam } from './actions';
 import { getErrorMessage } from '@/messages';
 import Spinner from '@/components/ui/spinner';
-import UpdateNameModal from './components/update-name-modal';
 import UpdateRoleModal from './components/update-role-modal';
 import ConfirmRemoveModal from './components/confirm-remove-modal';
 import LeaveTeamModal from './components/leave-team-modal';
 import CancelInviteModal from './components/cancel-invite-modal';
 import InviteMemberModal from './components/invite-modal';
 import ResendInviteModal from './components/resend-invite-modal';
+import { cn } from '@/lib/utils';
 
 function TeamManagement() {
   const queryClient = useQueryClient();
@@ -140,6 +134,7 @@ function TeamManagement() {
     setState((prev) => ({
       ...prev,
       isConfirmRemoveModalOpen: false,
+      selectedMember: null,
     }));
   };
 
@@ -177,22 +172,11 @@ function TeamManagement() {
       ...prev,
       isCancelInviteModalOpen: false,
       memberToCancel: null,
+      selectedMember: null,
     }));
   };
 
   const teamMemberActions = [
-    {
-      id: 'update-name',
-      label: 'Update Name',
-      handleClick: () => {
-        console.log('update name');
-        console.log(state.selectedMember);
-        setState((prev) => ({
-          ...prev,
-          isUpdateNameModalOpen: true,
-        }));
-      },
-    },
     {
       id: 'update-role',
       label: 'Update Role',
@@ -202,6 +186,7 @@ function TeamManagement() {
         setState((prev) => ({
           ...prev,
           isUpdateRoleModalOpen: true,
+          isDropdownOpen: false,
         }));
       },
     },
@@ -214,6 +199,7 @@ function TeamManagement() {
         setState((prev) => ({
           ...prev,
           isConfirmRemoveModalOpen: true,
+          isDropdownOpen: false,
         }));
       },
     },
@@ -229,6 +215,7 @@ function TeamManagement() {
             ...prev,
             memberToResendInvite: state.selectedMember,
             isResendInviteModalOpen: true,
+            isDropdownOpen: false,
           }));
         }
       },
@@ -242,6 +229,7 @@ function TeamManagement() {
             ...prev,
             memberToCancel: state.selectedMember,
             isCancelInviteModalOpen: true,
+            isDropdownOpen: false,
           }));
         }
       },
@@ -265,6 +253,7 @@ function TeamManagement() {
         setState((prev) => ({
           ...prev,
           isLeaveTeamModalOpen: true,
+          isDropdownOpen: false,
         }));
       },
     },
@@ -292,6 +281,20 @@ function TeamManagement() {
         const merged = [...oldData, ...newMembers];
         console.log('Merged result:', merged);
         return merged;
+      },
+    );
+  };
+
+  const handleUpdateRoleSuccess = (updatedMember: TeamMemberResponse) => {
+    console.log('updatedMember', updatedMember);
+    queryClient.setQueryData(
+      ['teamMembers'],
+      (oldData: TeamMemberResponse[]) => {
+        return oldData.map((member) =>
+          member.team_member.id === updatedMember.team_member.id
+            ? updatedMember
+            : member,
+        );
       },
     );
   };
@@ -326,6 +329,7 @@ function TeamManagement() {
               ...prev,
               isCancelInviteModalOpen: false,
               memberToCancel: null,
+              selectedMember: null,
             }));
           }}
           handleSubmit={handleCancelInvite}
@@ -344,27 +348,20 @@ function TeamManagement() {
         <ResendInviteModal
           isOpen={state.isResendInviteModalOpen}
           onClose={() =>
-            setState((prev) => ({ ...prev, isResendInviteModalOpen: false }))
+            setState((prev) => ({
+              ...prev,
+              isResendInviteModalOpen: false,
+              selectedMember: null,
+            }))
           }
           memberToResendInvite={state.memberToResendInvite}
           teamSlug={teamSlug as string}
         />
 
-        <UpdateNameModal
-          isOpen={state.isUpdateNameModalOpen}
-          onClose={() => {
-            setState((prev) => ({
-              ...prev,
-              isUpdateNameModalOpen: false,
-              selectedMember: null,
-            }));
-          }}
-          user={state.selectedMember?.user || null}
-        />
-
         <UpdateRoleModal
           isOpen={state.isUpdateRoleModalOpen}
           onClose={() => {
+            console.log('close update role modal');
             setState((prev) => ({
               ...prev,
               isUpdateRoleModalOpen: false,
@@ -372,6 +369,8 @@ function TeamManagement() {
             }));
           }}
           member={state.selectedMember}
+          teamSlug={teamSlug as string}
+          onSuccess={(updatedMember) => handleUpdateRoleSuccess(updatedMember)}
         />
 
         <ConfirmRemoveModal
@@ -390,7 +389,11 @@ function TeamManagement() {
         <LeaveTeamModal
           isOpen={state.isLeaveTeamModalOpen}
           onClose={() =>
-            setState((prev) => ({ ...prev, isLeaveTeamModalOpen: false }))
+            setState((prev) => ({
+              ...prev,
+              isLeaveTeamModalOpen: false,
+              selectedMember: null,
+            }))
           }
           handleSubmit={handleLeaveTeam}
         />
@@ -406,6 +409,12 @@ function TeamManagement() {
       statusText = 'Active';
     } else if (member.team_member.status === 'inactive') {
       statusText = 'Inactive';
+    } else if (member.team_member.status === 'left') {
+      statusText = 'Left';
+    } else if (member.team_member.status === 'revoked') {
+      statusText = 'Revoked';
+    } else {
+      statusText = 'Unknown';
     }
 
     return (
@@ -423,9 +432,31 @@ function TeamManagement() {
     );
   };
 
+  const getMemberShortName = (member: TeamMemberResponse) => {
+    const email = member.team_member.email || member.user?.email;
+    const firstName = member.user?.first_name;
+    const lastName = member.user?.last_name;
+
+    if (firstName && lastName) {
+      return `${firstName[0]}${lastName[0]}`.toUpperCase();
+    }
+
+    if (firstName && firstName.length > 0) {
+      return firstName[0].toUpperCase();
+    }
+
+    if (email && email.length > 0) {
+      return email[0].toUpperCase();
+    }
+
+    return '?';
+  };
+
   if (!teamMembers) {
     return <Spinner />;
   }
+
+  console.log('MEMEBR', teamMembers);
 
   return (
     <>
@@ -433,15 +464,20 @@ function TeamManagement() {
 
       <h1>Team Members</h1>
       <div className="flex flex-col items-end gap-4 pb-16">
-        <Button
-          variant="unstyled"
-          className="btn bg-brand-secondary text-typography-strong"
-          handleClick={() =>
-            setState((prev) => ({ ...prev, isInviteMemberModalOpen: true }))
-          }
-        >
-          Invite member
-        </Button>
+        <div className="flex w-full items-center justify-between gap-2">
+          <p className="text-sm font-medium text-typography-weak">
+            Showing <strong>{teamMembers.length}</strong> members
+          </p>
+          <Button
+            variant="unstyled"
+            className="btn bg-brand-secondary text-typography-strong"
+            handleClick={() =>
+              setState((prev) => ({ ...prev, isInviteMemberModalOpen: true }))
+            }
+          >
+            Invite member
+          </Button>
+        </div>
 
         <Table>
           <TableHeader>
@@ -474,14 +510,18 @@ function TeamManagement() {
                       />
                     ) : (
                       <div className="flex h-10 w-10 items-center justify-center rounded-full bg-accent text-sm text-white">
-                        {member.user?.first_name && member.user?.last_name
-                          ? `${member.user.first_name[0]}${member.user.last_name[0]}`
-                          : member.team_member?.email[0].toUpperCase()}
+                        {getMemberShortName(member)}
                       </div>
                     )}
                     <div className="flex flex-col">
                       <span className="text-typography-strong">
                         {member.user?.first_name} {member.user?.last_name}
+                        {member.user?.id === user?.id && (
+                          <strong className="text-typography-weak">
+                            {' '}
+                            (You)
+                          </strong>
+                        )}
                       </span>
                       <span className="text-sm text-typography-weak">
                         {member.team_member.email ||
@@ -506,7 +546,15 @@ function TeamManagement() {
                       },
                     )}
                 </TableCell>
-                <TableCell className="w-[50px] text-right opacity-0 group-hover:opacity-100">
+                <TableCell
+                  className={cn(
+                    'w-[50px] text-right opacity-0 group-hover:opacity-100',
+                    state.isDropdownOpen &&
+                      member.team_member.id ===
+                        state.selectedMember?.team_member.id &&
+                      'opacity-100',
+                  )}
+                >
                   <Button
                     variant="unstyled"
                     handleClick={(e) => {
@@ -545,7 +593,6 @@ function TeamManagement() {
             setState((prev) => ({
               ...prev,
               isDropdownOpen: false,
-              selectedMember: null,
             }));
           }}
           menuItems={getMenuItems()}

@@ -13,9 +13,17 @@ func StringToJSON(str string) (data interface{}, err error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		return data, nil
 	} else {
 		return str, nil
 	}
+}
+
+func StructToJSON(data interface{}) (string, error) {
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return "", err
+	}
+	return string(bytes), nil
 }

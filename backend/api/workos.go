@@ -133,6 +133,7 @@ func (s *Server) handleWorkosWebhook(w http.ResponseWriter, r *http.Request) err
 
 		teamMember, err := s.store.GetTeamMemberByTeamIDAndUserID(team.ID, user.ID)
 		if err != nil || teamMember == nil {
+			fmt.Println("error getting team member by team id")
 			// attempt to create team member
 			now := time.Now()
 			member := models.TeamMember{
@@ -142,7 +143,7 @@ func (s *Server) handleWorkosWebhook(w http.ResponseWriter, r *http.Request) err
 				JoinedAt:              &now,
 				TeamRole:              models.TeamRole(roleSlug),
 				Email:                 user.Email,
-				Status:                models.TeamMemberStatusActive,
+				Status:                models.TeamMemberStatusPending,
 			}
 
 			err = s.store.CreateTeamMember(&member)
@@ -150,13 +151,15 @@ func (s *Server) handleWorkosWebhook(w http.ResponseWriter, r *http.Request) err
 				fmt.Printf("error creating team member: %s\n", err)
 				return WriteJSON(w, http.StatusInternalServerError, Error{Error: err.Error()})
 			}
+
+			teamMember = &member
 		}
 
 		fmt.Printf("handling orgnization webhook for %s (%s) in %s\n", userID, roleSlug, orgID)
 
 		if event == "organization_membership.created" {
 			// todo handle nil case
-			teamMember.WorkosOrgMembershipID = orgID
+			teamMember.WorkosOrgMembershipID = orgMembershipID
 			err = s.store.UpdateTeamMember(teamMember)
 			if err != nil {
 				fmt.Printf("error updating team membership by team id (%s): %s\n", orgID, err)

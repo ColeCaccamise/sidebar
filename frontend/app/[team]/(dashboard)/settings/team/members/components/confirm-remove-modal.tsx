@@ -22,13 +22,11 @@ export default function ConfirmRemoveModal({
       handleSubmit={handleSubmit}
       submitText="Remove"
       className="w-full max-w-lg"
+      destructive
     >
       <p>
-        Are you sure you want to remove{' '}
-        {member?.user?.first_name
-          ? `${member.user.first_name} ${member.user.last_name}`
-          : 'this member'}{' '}
-        from the team?
+        Are you sure you want to remove {member?.team_member.email} from the
+        team? from the team?
       </p>
     </Modal>
   );
