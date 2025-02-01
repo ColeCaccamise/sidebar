@@ -295,7 +295,87 @@ func (s *Server) handleGetTeamBySlug(w http.ResponseWriter, r *http.Request) err
 		})
 	}
 
-	// todo verify user is a member OR on allowed list before returning data
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "token is invalid or expired.", Code: "invalid_token"})
+	}
+
+	decoded, _ := util.ParseJWT(userSession.AuthToken)
+
+	orgID := decoded.OrganizationID
+	if orgID != team.WorkosOrgID {
+		// not a member
+		teamMember, err := userIsTeamMember(s, userSession.User.ID, team.ID)
+
+		if !teamMember || err != nil {
+			return WriteJSON(w, http.StatusNotFound, Error{
+				Error: "team not found",
+				Code:  "team_not_found",
+			})
+		} else {
+			// attempt to auth with that team
+			usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
+
+
+			refresh, err := r.Cookie("refresh-token")
+			if err != nil {
+				return WriteJSON(w, http.StatusNotFound, Error{
+					Error: "team not found",
+					Code:  "team_not_found",
+				})
+			}
+
+			response, err := usermanagement.AuthenticateWithRefreshToken(
+				context.Background(),
+				usermanagement.AuthenticateWithRefreshTokenOpts{
+					ClientID:       os.Getenv("WORKOS_CLIENT_ID"),
+					RefreshToken:   refresh.Value,
+					OrganizationID: team.WorkosOrgID,
+				},
+			)
+
+			if err != nil {
+				return WriteJSON(w, http.StatusNotFound, Error{
+					Error: "team not found",
+					Code:  "team_not_found",
+				})
+			}
+
+			http.SetCookie(w, &http.Cookie{
+				Name:     "auth-token",
+				Value:    response.AccessToken,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   true,
+				MaxAge:   60 * 5,
+				SameSite: http.SameSiteLaxMode,
+			})
+
+			http.SetCookie(w, &http.Cookie{
+				Name:     "refresh-token",
+				Value:    response.RefreshToken,
+				Path:     "/",
+				HttpOnly: true,
+				Secure:   true,
+				MaxAge:   60 * 60 * 24 * 30,
+				SameSite: http.SameSiteLaxMode,
+			})
+
+			// update session
+			now := time.Now()
+			decoded, _ := util.ParseJWT(response.AccessToken)
+			session := userSession.Session
+			session.WorkosSessionID = decoded.SessionID
+			session.LastSeenAt = &now
+			err = s.store.UpdateSession(session)
+			if err != nil {
+				return WriteJSON(w, http.StatusNotFound, Error{
+					Error: "team not found",
+					Code:  "team_not_found",
+				})
+			}
+		}
+	}
 
 	if team == nil {
 		return WriteJSON(w, http.StatusNotFound, Error{
