@@ -48,7 +48,7 @@ body {
   border-radius: 4px;
 }
 
-/* For Firefox */
+/* for firefox */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--stroke-weak) transparent;
@@ -146,10 +146,13 @@ body {
     --success-stroke-weak: hsl(145, 32%, 30%);
     --success-fill: hsl(145, 32%, 14%);
 
-    --error: hsl(360, 75%, 65%);
-    --error-stroke-strong: hsl(360, 75%, 56%);
-    --error-stroke-weak: hsl(360, 75%, 20%);
-    --error-fill: hsl(360, 75%, 11%);
+    /* hsl(348deg 47.8% 51.2%) */
+    /* hsl(337deg 22.6% 18.2%) */
+
+    --error: hsl(360, 55%, 52%);
+    --error-stroke-strong: hsl(360, 55%, 62%);
+    --error-stroke-weak: hsl(360, 55%, 20%);
+    --error-fill: hsl(360, 55%, 9%);
 
     --warning: hsl(45, 73%, 47%);
     --warning-stroke-strong: hsl(45, 73%, 56%);
@@ -194,6 +197,7 @@ body {
     @apply leading-8 text-typography-weak;
   }
 
+  b,
   strong {
     @apply font-bold text-typography-strong;
   }
