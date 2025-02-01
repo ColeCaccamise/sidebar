@@ -81,3 +81,54 @@ export async function resendInvite({
     return handleApiError(error);
   }
 }
+
+export async function removeMember({
+  teamSlug,
+  teamMemberId,
+}: {
+  teamSlug: string;
+  teamMemberId: string;
+}): Promise<ApiResponse> {
+  try {
+    const {
+      data: { data, code },
+    } = await api.delete<RawApiResponse>(
+      `/teams/${teamSlug}/members/${teamMemberId}`,
+    );
+
+    return {
+      success: true,
+      data,
+      code,
+    };
+  } catch (error: unknown) {
+    return handleApiError(error);
+  }
+}
+
+export async function updateRole({
+  teamSlug,
+  teamMemberId,
+  role,
+}: {
+  teamSlug: string;
+  teamMemberId: string;
+  role: string;
+}): Promise<ApiResponse> {
+  try {
+    const {
+      data: { data, code },
+    } = await api.put<RawApiResponse>(
+      `/teams/${teamSlug}/members/${teamMemberId}/role`,
+      { role },
+    );
+
+    return {
+      success: true,
+      data,
+      code,
+    };
+  } catch (error: unknown) {
+    return handleApiError(error);
+  }
+}

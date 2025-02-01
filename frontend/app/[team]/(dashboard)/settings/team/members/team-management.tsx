@@ -28,7 +28,12 @@ import Modal from '@/components/ui/modal';
 import Input from '@/components/ui/input';
 import { isValidEmail } from '@/lib/validation';
 import toast from '@/lib/toast';
-import { inviteMembers, cancelInvites, resendInvite } from './actions';
+import {
+  inviteMembers,
+  cancelInvites,
+  resendInvite,
+  removeMember,
+} from './actions';
 import { getErrorMessage } from '@/messages';
 import {
   Select,
@@ -38,6 +43,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import Spinner from '@/components/ui/spinner';
+import UpdateNameModal from './update-name-modal';
+import UpdateRoleModal from './update-role-modal';
+import ConfirmRemoveModal from './confirm-remove-modal';
 
 function TeamManagement() {
   const queryClient = useQueryClient();
@@ -53,6 +61,10 @@ function TeamManagement() {
   const [memberToResendInvite, setMemberToResendInvite] =
     useState<TeamMemberResponse | null>(null);
   const [isResendInviteModalOpen, setIsResendInviteModalOpen] = useState(false);
+  const [isUpdateNameModalOpen, setIsUpdateNameModalOpen] = useState(false);
+  const [isUpdateRoleModalOpen, setIsUpdateRoleModalOpen] = useState(false);
+  const [isConfirmRemoveModalOpen, setIsConfirmRemoveModalOpen] =
+    useState(false);
 
   const { data: team } = useQuery({
     queryKey: ['team'],
@@ -100,6 +112,38 @@ function TeamManagement() {
     },
   });
 
+  const handleRemoveMember = async () => {
+    if (!selectedMember) return;
+
+    const resp = await removeMember({
+      teamSlug: teamSlug as string,
+      teamMemberId: selectedMember.team_member.id,
+    });
+
+    if (resp.success) {
+      toast({
+        message: 'Member removed successfully',
+        mode: 'success',
+      });
+      queryClient.setQueryData(
+        ['teamMembers'],
+        (oldData: TeamMemberResponse[] | undefined) => {
+          if (!oldData) return [];
+          return oldData.filter(
+            (member) => member.team_member.id !== selectedMember.team_member.id,
+          );
+        },
+      );
+    } else {
+      toast({
+        message: getErrorMessage(resp.code || ''),
+        mode: 'error',
+      });
+    }
+
+    setIsConfirmRemoveModalOpen(false);
+  };
+
   const handleCancelInvite = async () => {
     if (!memberToCancel) return;
 
@@ -137,14 +181,32 @@ function TeamManagement() {
     {
       id: 'update-name',
       label: 'Update Name',
+      handleClick: () => {
+        console.log('update name');
+        console.log(selectedMember);
+        setIsUpdateNameModalOpen(true);
+        setSelectedMember(selectedMember);
+      },
     },
     {
       id: 'update-role',
       label: 'Update Role',
+      handleClick: () => {
+        console.log('update role');
+        console.log(selectedMember);
+        setIsUpdateRoleModalOpen(true);
+        setSelectedMember(selectedMember);
+      },
     },
     {
       id: 'remove-member',
       label: 'Remove Member',
+      handleClick: () => {
+        console.log('remove member');
+        console.log(selectedMember);
+        setIsConfirmRemoveModalOpen(true);
+        setSelectedMember(selectedMember);
+      },
     },
   ];
 
@@ -265,9 +327,35 @@ function TeamManagement() {
         memberToResendInvite={memberToResendInvite}
         teamSlug={teamSlug as string}
       />
-      <h1>Team Members</h1>
+      <UpdateNameModal
+        isOpen={isUpdateNameModalOpen}
+        onClose={() => {
+          setIsUpdateNameModalOpen(false);
+          setSelectedMember(null);
+        }}
+        user={selectedMember?.user || null}
+      />
+      <UpdateRoleModal
+        isOpen={isUpdateRoleModalOpen}
+        onClose={() => {
+          setIsUpdateRoleModalOpen(false);
+          setSelectedMember(null);
+        }}
+        member={selectedMember}
+      />
 
-      <div className="flex flex-col items-end gap-4">
+      <ConfirmRemoveModal
+        isOpen={isConfirmRemoveModalOpen}
+        onClose={() => {
+          setIsConfirmRemoveModalOpen(false);
+          setSelectedMember(null);
+        }}
+        member={selectedMember}
+        handleSubmit={handleRemoveMember}
+      />
+
+      <h1>Team Members</h1>
+      <div className="flex flex-col items-end gap-4 pb-16">
         <Button
           variant="unstyled"
           className="btn bg-brand-secondary text-typography-strong"
