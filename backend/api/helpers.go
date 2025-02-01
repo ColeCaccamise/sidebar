@@ -21,33 +21,6 @@ type Response struct {
 
 type apiFunc func(http.ResponseWriter, *http.Request) error
 
-func (s *Server) handleGetAllTokens(w http.ResponseWriter, r *http.Request) error {
-	// get current user from auth token
-	//authToken, err := r.Cookie("auth-token")
-	//
-	//if err != nil {
-	//	return WriteJSON(w, http.StatusUnauthorized, ApiError{Message: "user is not authenticated", Error: err.Error()})
-	//}
-	//
-	//userId, authTokenType, err := util.ParseJWT(authToken.Value)
-	//if err != nil || authTokenType != "auth" {
-	//	return WriteJSON(w, http.StatusUnauthorized, ApiError{Message: "user is not authenticated", Error: err.Error()})
-	//}
-
-	//user, err := s.store.GetUserByID(uuid.MustParse(userId))
-	//if err != nil {
-	//	return WriteJSON(w, http.StatusUnauthorized, ApiError{Message: "user is not authenticated", Error: err.Error()})
-	//}
-
-	// get all of their api tokens from db
-	//tokens, err := s.store.GetAPITokensByUserID(user.ID)
-	//if err != nil {
-	//	return WriteJSON(w, http.StatusInternalServerError, ApiError{Message: "error getting tokens", Error: err.Error()})
-	//}
-
-	return WriteJSON(w, http.StatusOK, nil)
-}
-
 func WriteJSON(w http.ResponseWriter, status int, v any) error {
 	if status == http.StatusNoContent {
 		w.WriteHeader(status)

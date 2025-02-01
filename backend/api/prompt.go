@@ -1,33 +1,35 @@
 package api
 
 import (
+	"github.com/colecaccamise/go-backend/models"
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"net/http"
 	"time"
 )
 
-//func (s *Server) handleGetPrompts(w http.ResponseWriter, r *http.Request) error {
-//	user, _, _, err := getUserIdentity(s, r)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusUnauthorized, Error{
-//			Error: "unauthorized",
-//			Code:  "unauthorized",
-//		})
-//	}
-//
-//	prompts, err := s.store.GetPromptsForUser(user.ID)
-//	if err != nil {
-//		return WriteJSON(w, http.StatusInternalServerError, Error{
-//			Error: "internal server error",
-//			Code:  "internal_server_error",
-//		})
-//	}
-//
-//	return WriteJSON(w, http.StatusOK, map[string][]*models.Prompt{
-//		"prompts": prompts,
-//	})
-//}
+func (s *Server) handleGetPrompts(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{
+			Error: "unauthorized",
+			Code:  "unauthorized",
+		})
+	}
+
+	user := userSession.User
+	prompts, err := s.store.GetPromptsForUser(user.ID)
+	if err != nil {
+		return WriteJSON(w, http.StatusInternalServerError, Error{
+			Error: "internal server error",
+			Code:  "internal_server_error",
+		})
+	}
+
+	return WriteJSON(w, http.StatusOK, map[string][]*models.Prompt{
+		"prompts": prompts,
+	})
+}
 
 func (s *Server) handleDismissPrompt(w http.ResponseWriter, r *http.Request) error {
 	id := chi.URLParam(r, "id")
