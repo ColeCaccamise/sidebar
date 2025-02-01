@@ -14,7 +14,53 @@ class ApiClient {
         'Content-Type': 'application/json',
       },
       withCredentials: true,
+      maxRedirects: 0, // prevent auto redirects
     });
+  }
+
+  // helper to set cookies from response
+  private setCookiesFromResponse(response: AxiosResponse): void {
+    const setCookieHeader = response.headers['set-cookie'];
+    if (!setCookieHeader) return;
+
+    const cookieStore = cookies();
+
+    if (Array.isArray(setCookieHeader)) {
+      setCookieHeader.forEach((cookie) => {
+        const [name, ...rest] = cookie.split('=');
+        const value = rest.join('=').split(';')[0];
+        cookieStore.set(name, value);
+      });
+    } else {
+      const [name, ...rest] = setCookieHeader.split('=');
+      const value = rest.join('=').split(';')[0];
+      cookieStore.set(name, value);
+    }
+  }
+
+  // attempt token refresh
+  private async refreshToken(): Promise<boolean> {
+    try {
+      const refreshToken = cookies().get('refresh-token')?.value;
+      if (!refreshToken) {
+        return false;
+      }
+
+      const response = await this.client.get('/auth/refresh', {
+        headers: {
+          Cookie: `refresh-token=${refreshToken}`,
+        },
+        validateStatus: (status) => status < 400, // prevent redirect handling
+      });
+
+      if (response.headers['set-cookie']) {
+        this.setCookiesFromResponse(response);
+      }
+
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   // get auth token from cookie in server action
@@ -38,12 +84,48 @@ class ApiClient {
     return config;
   }
 
+  // make request with automatic token refresh on 401
+  private async request<T>(
+    method: string,
+    url: string,
+    config: AxiosRequestConfig = {},
+    data?: any,
+  ): Promise<AxiosResponse<T>> {
+    try {
+      // attempt request with current token
+      const response = await this.client({
+        method,
+        url,
+        ...this.addAuthHeader(config),
+        data,
+      });
+      return response;
+    } catch (error: any) {
+      // handle 401 by attempting refresh and retry
+      if (error.response?.status === 401) {
+        const refreshSuccess = await this.refreshToken();
+
+        if (refreshSuccess) {
+          // retry with new token
+          return this.client({
+            method,
+            url,
+            ...this.addAuthHeader(config),
+            data,
+          });
+        }
+      }
+
+      throw error;
+    }
+  }
+
   // wrapper methods for axios with auth
   async get<T>(
     url: string,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
-    return this.client.get(url, this.addAuthHeader(config));
+    return this.request<T>('get', url, config);
   }
 
   async post<T>(
@@ -51,7 +133,7 @@ class ApiClient {
     data?: any,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
-    return this.client.post(url, data, this.addAuthHeader(config));
+    return this.request<T>('post', url, config, data);
   }
 
   async put<T>(
@@ -59,14 +141,14 @@ class ApiClient {
     data?: any,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
-    return this.client.put(url, data, this.addAuthHeader(config));
+    return this.request<T>('put', url, config, data);
   }
 
   async delete<T>(
     url: string,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
-    return this.client.delete(url, this.addAuthHeader(config));
+    return this.request<T>('delete', url, config);
   }
 
   async patch<T>(
@@ -74,7 +156,7 @@ class ApiClient {
     data?: any,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
-    return this.client.patch(url, data, this.addAuthHeader(config));
+    return this.request<T>('patch', url, config, data);
   }
 }
 
