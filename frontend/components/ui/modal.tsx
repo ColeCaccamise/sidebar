@@ -6,13 +6,34 @@ import Button from '@/components/ui/button';
 import Spinner from './spinner';
 import { useEffect } from 'react';
 
-type Step = {
+interface Step {
   children: React.ReactNode;
   title?: string;
   disabled?: boolean;
   handleBack?: () => void | Promise<void>;
   handleSubmit?: () => void | Promise<void>;
-};
+}
+
+interface ModalProps {
+  open?: boolean;
+  setOpen?: (open: boolean) => void;
+  children?: React.ReactNode;
+  onClose?: () => void;
+  title?: string;
+  hint?: React.ReactNode;
+  canClose?: boolean;
+  showCloseButton?: boolean;
+  className?: string;
+  steps?: Step[];
+  currentStep?: number;
+  handleSubmit?: () => void | Promise<void>;
+  submitText?: string;
+  cancelText?: string;
+  showCancelButton?: boolean;
+  showSubmitButton?: boolean;
+  isLoading?: boolean;
+  destructive?: boolean;
+}
 
 export default function Modal({
   open = false,
@@ -32,25 +53,8 @@ export default function Modal({
   showSubmitButton = true,
   showCancelButton = true,
   isLoading = false,
-}: {
-  open?: boolean;
-  setOpen?: (open: boolean) => void;
-  children?: React.ReactNode;
-  onClose?: () => void;
-  title?: string;
-  hint?: React.ReactNode;
-  canClose?: boolean;
-  showCloseButton?: boolean;
-  className?: string;
-  steps?: Step[];
-  currentStep?: number;
-  handleSubmit?: () => void | Promise<void>;
-  submitText?: string;
-  cancelText?: string;
-  showCancelButton?: boolean;
-  showSubmitButton?: boolean;
-  isLoading?: boolean;
-}) {
+  destructive = false,
+}: ModalProps) {
   const handleClose = () => {
     if (!canClose) return;
     onClose?.();
@@ -125,7 +129,7 @@ export default function Modal({
                 )}
                 {((!steps && showSubmitButton) || steps) && handleSubmit && (
                   <Button
-                    className="btn btn-small btn-brand-secondary"
+                    className={`btn btn-small ${destructive ? 'btn-destructive' : 'btn-brand-secondary'}`}
                     variant="unstyled"
                     handleClick={activeStep?.handleSubmit || handleSubmit}
                     disabled={activeStep?.disabled || isLoading}
