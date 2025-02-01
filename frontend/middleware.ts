@@ -2,9 +2,7 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import axios from 'axios';
 import { cookies } from 'next/headers';
-import { parseJwt } from './lib/jwt';
-import api from './lib/api';
-import { Identity, Team, TeamMember, TeamMemberResponse, User } from './types';
+import { Identity, Team, TeamMember, User } from './types';
 
 const SIGNED_OUT_AUTH_ROUTES = ['/auth/login', '/auth/signup'];
 const AUTH_ROUTES = [
@@ -15,6 +13,12 @@ const AUTH_ROUTES = [
 const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms', '/select-team'];
 
 export async function middleware(request: NextRequest) {
+  // skip middleware for server actions
+  if (request.headers.get('next-action') !== null) {
+    console.log('next-action');
+    return NextResponse.next();
+  }
+
   const apiUrl = process.env.NEXT_PUBLIC_API_URL;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const cookieStore = cookies();
@@ -31,6 +35,7 @@ export async function middleware(request: NextRequest) {
 
   // get user data
   let isLoggedIn = false;
+
   let user: User | null = null;
   let team: Team | null = null;
   let teamMember: TeamMember | null = null;
@@ -46,6 +51,8 @@ export async function middleware(request: NextRequest) {
       return res?.data?.data;
     })
     .catch(() => null);
+
+  console.log('identity called');
 
   if (!identity?.valid) {
     // attempt to refresh
