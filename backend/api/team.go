@@ -316,7 +316,6 @@ func (s *Server) handleGetTeamBySlug(w http.ResponseWriter, r *http.Request) err
 			// attempt to auth with that team
 			usermanagement.SetAPIKey(os.Getenv("WORKOS_API_KEY"))
 
-
 			refresh, err := r.Cookie("refresh-token")
 			if err != nil {
 				return WriteJSON(w, http.StatusNotFound, Error{
@@ -471,6 +470,20 @@ func (s *Server) handleGetTeamMembers(w http.ResponseWriter, r *http.Request) er
 	}
 
 	return WriteJSON(w, http.StatusOK, Response{Data: map[string]interface{}{"team_members": teamMemberResponse}})
+}
+
+func (s *Server) handleUpdateTeamMember(w http.ResponseWriter, r *http.Request) error {
+	return WriteJSON(w, http.StatusNotImplemented, Error{
+		Error: "not implemented",
+		Code:  "not_implemented",
+	})
+}
+
+func (s *Server) handleRemoveTeamMember(w http.ResponseWriter, r *http.Request) error {
+	return WriteJSON(w, http.StatusNotImplemented, Error{
+		Error: "not implemented",
+		Code:  "not_implemented",
+	})
 }
 
 func (s *Server) handleGetUpsells(w http.ResponseWriter, r *http.Request) error {

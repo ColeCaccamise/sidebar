@@ -94,9 +94,15 @@ func (s *Server) SetupRoutes() *chi.Mux {
 			r.Post("/", makeHttpHandleFunc(s.handleCreateTeam))
 			r.Get("/{slug}", makeHttpHandleFunc(s.handleGetTeamBySlug))
 			r.Get("/{slug}/member", makeHttpHandleFunc(s.HandleGetTeamMember))
-			r.Get("/{slug}/members", makeHttpHandleFunc(s.handleGetTeamMembers))
 			r.Get("/{slug}/upsells", makeHttpHandleFunc(s.handleGetUpsells))
 			r.Get("/{slug}/switch", makeHttpHandleFunc(s.handleSwitchTeam))
+			// member management
+			r.Route("/members", func(r chi.Router) {
+				r.Get("/", makeHttpHandleFunc(s.handleGetTeamMembers))
+				r.Post("/{id}/remove", makeHttpHandleFunc(s.handleRemoveTeamMember))
+				r.Patch("/{id}", makeHttpHandleFunc(s.handleUpdateTeamMember))
+			})
+
 			// invite links
 			r.Post("/{slug}/invite", makeHttpHandleFunc(s.handleSendTeamInvites)) // send an invite to one or many
 			r.Post("/{slug}/invite/{teamMemberId}/cancel", makeHttpHandleFunc(s.handleCancelTeamInvites))

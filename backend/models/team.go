@@ -92,15 +92,6 @@ const (
 	TeamRoleMember TeamRole = "member"
 )
 
-type TeamMemberStatus string
-
-const (
-	TeamMemberStatusPending TeamMemberStatus = "pending"
-	TeamMemberStatusActive  TeamMemberStatus = "active"
-	TeamMemberStatusLeft    TeamMemberStatus = "left"
-	TeamMemberStatusRevoked TeamMemberStatus = "revoked"
-)
-
 type TeamSubscriptionPlan string
 
 const (
@@ -184,6 +175,15 @@ type CreateTeamInviteRequest struct {
 	TeamMemberID uuid.UUID
 }
 
+type TeamMemberStatus string
+
+const (
+	TeamMemberStatusPending TeamMemberStatus = "pending"
+	TeamMemberStatusActive  TeamMemberStatus = "active"
+	TeamMemberStatusLeft    TeamMemberStatus = "left"
+	TeamMemberStatusRemoved TeamMemberStatus = "removed"
+)
+
 type TeamMember struct {
 	ID                    uuid.UUID        `gorm:"type:uuid;primary_key;default:gen_random_uuid()" json:"id"`
 	CreatedAt             time.Time        `gorm:"autoCreateTime" json:"created_at"`
@@ -191,6 +191,7 @@ type TeamMember struct {
 	WorkosOrgMembershipID string           `gorm:"default:null" json:"workos_org_membership_id"`
 	JoinedAt              *time.Time       `gorm:"default:null" json:"joined_at"`
 	LeftAt                *time.Time       `gorm:"default:null" json:"left_at"`
+	RemovedAt             *time.Time       `gorm:"default:null" json:"removed_at"`
 	InviterUserID         uuid.UUID        `gorm:"type:uuid;default:null" json:"inviter_user_id"`
 	TeamID                uuid.UUID        `gorm:"type:uuid;not null" json:"team_id"`
 	UserID                *uuid.UUID       `gorm:"type:uuid;not null" json:"user_id"`
