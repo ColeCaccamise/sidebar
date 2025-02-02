@@ -2,9 +2,10 @@ package api
 
 import (
 	"fmt"
-	"gorm.io/gorm"
 	"net/http"
 	"os"
+
+	"gorm.io/gorm"
 
 	"github.com/colecaccamise/go-backend/middleware"
 	"github.com/colecaccamise/go-backend/storage"
@@ -33,21 +34,21 @@ func (s *Server) Start() error {
 	)
 
 	fmt.Println("Server is running on port", s.listenAddr)
-
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:8000", "https://colecaccamise.com"},
+		AllowedOrigins:   []string{os.Getenv("APP_URL"), os.Getenv("API_URL")},
 		AllowCredentials: true,
 		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"*"},
 		ExposedHeaders:   []string{"Content-Type", "Location"},
 		AllowOriginFunc: func(origin string) bool {
-			if os.Getenv("ENVIRONMENT") == "development" {
-				return origin == "http://localhost:3000" || origin == "http://localhost:8000"
-			} else {
-				return origin == "https://colecaccamise.com"
+			allowedOrigins := []string{os.Getenv("APP_URL"), os.Getenv("API_URL")}
+			for _, allowed := range allowedOrigins {
+				if origin == allowed {
+					return true
+				}
 			}
+			return false
 		},
-		// Enable Debugging for testing, disable in production
 		Debug: os.Getenv("ENVIRONMENT") == "development",
 	})
 
