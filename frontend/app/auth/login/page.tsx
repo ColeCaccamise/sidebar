@@ -15,6 +15,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
 import Divider from '@/components/ui/divider';
 import getOauthUrl from '../actions';
+import api from '@/lib/axios';
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
@@ -59,21 +60,16 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
-        { email, redirect: redirectUrl },
-        {
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          withCredentials: true,
-        },
-      );
+      const response = await api.post('/auth/login', {
+        email,
+        redirect: redirectUrl,
+      });
 
       if (response.status === 200) {
         setEmailSent(true);
       }
     } catch (error) {
+      console.log(error);
       if (axios.isAxiosError(error) && error.response) {
         const apiError = error.response.data as RawApiResponse;
         toast({
