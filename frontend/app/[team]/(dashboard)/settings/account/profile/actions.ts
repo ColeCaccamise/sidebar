@@ -6,6 +6,7 @@ import axios from 'axios';
 import { cookies } from 'next/headers';
 import { parseNextCookie } from '@/lib/cookie';
 import api from '@/lib/api';
+import { getErrorMessage } from '@/messages';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
@@ -13,12 +14,10 @@ export async function updateUser({
   user,
   firstName,
   lastName,
-  email,
 }: {
   user: User | null;
   firstName?: string;
   lastName?: string;
-  email?: string;
 }) {
   if (!user) {
     return { success: false };
@@ -28,18 +27,24 @@ export async function updateUser({
     const response = await api.patch(`${apiUrl}/users`, {
       first_name: firstName,
       last_name: lastName,
-      email,
     });
-
-    console.log('response', response);
 
     return {
       success: true,
       data: response.data,
     };
   } catch (error) {
+    if (error instanceof Error && 'response' in error) {
+      const apiError = error as unknown as ApiResponse;
+      return {
+        success: false,
+        error: getErrorMessage(apiError.code || ''),
+      };
+    }
+
     return {
       success: false,
+      error: 'There was a problem updating your account.',
     };
   }
 }

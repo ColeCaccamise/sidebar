@@ -47,6 +47,8 @@ export async function cancelInvites({
 
     return {
       success: true,
+      data,
+      code,
     };
   } catch (error: unknown) {
     return handleApiError(error);
@@ -76,6 +78,8 @@ export async function resendInvite({
 
     return {
       success: true,
+      data,
+      code,
     };
   } catch (error: unknown) {
     return handleApiError(error);

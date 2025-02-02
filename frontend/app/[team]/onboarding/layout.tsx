@@ -1,7 +1,6 @@
 'use client';
 
 import Button from '@/components/ui/button';
-import { logout } from './actions';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
 

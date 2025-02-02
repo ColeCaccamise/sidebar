@@ -140,15 +140,18 @@ function SecurityPageContent() {
           } else {
             revokeSession(selectedSession.id).then((res) => {
               if (!res.error) {
-                queryClient.setQueryData(['sessions'], (oldData: any) => {
-                  if (!oldData) return oldData;
-                  return {
-                    ...oldData,
-                    sessions: oldData.sessions.filter(
-                      (s: Session) => s.id !== selectedSession.id,
-                    ),
-                  };
-                });
+                queryClient.setQueryData(
+                  ['sessions'],
+                  (oldData: { sessions: Session[] }) => {
+                    if (!oldData) return oldData;
+                    return {
+                      ...oldData,
+                      sessions: oldData.sessions.filter(
+                        (s: Session) => s.id !== selectedSession.id,
+                      ),
+                    };
+                  },
+                );
                 setSelectedSession(null);
                 setIsOpen(false);
               } else {

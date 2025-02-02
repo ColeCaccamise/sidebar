@@ -1,4 +1,3 @@
-import Button from '@/components/ui/button';
 import api from '@/lib/api';
 import { Identity } from '@/types';
 import Link from 'next/link';

@@ -8,7 +8,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from '@tanstack/react-query';
-import { notFound, useRouter } from 'next/navigation';
+import { notFound } from 'next/navigation';
 
 export default function Layout({
   children,
@@ -17,7 +17,6 @@ export default function Layout({
   children: React.ReactNode;
   params: { team: string };
 }) {
-  const router = useRouter();
   const queryClient = new QueryClient();
   function TeamContent() {
     const { data: team, isLoading } = useQuery({

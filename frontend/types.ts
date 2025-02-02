@@ -13,6 +13,7 @@ export type User = {
   team_created_or_joined?: boolean;
   default_team_slug?: string;
   deleted?: boolean;
+  restorable?: boolean;
 };
 
 export type Identity = {

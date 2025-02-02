@@ -46,7 +46,7 @@ export default function SelectTeamForm({
     } else {
       setTeamData(value.teams || teams);
     }
-  }, [chosenTeam, token, teams, setValue]);
+  }, [chosenTeam, token, teams, setValue, value.teams]);
 
   const handleClose = () => {
     router.push('/logout');
@@ -74,7 +74,7 @@ export default function SelectTeamForm({
             <div className="flex flex-col gap-1">
               <h1 className="text-2xl font-bold">Select your team</h1>
               <p className="text-sm text-typography-weak">
-                Choose which team you'd like to log in with
+                Choose which team you&apos;d like to log in with
               </p>
             </div>
             <form

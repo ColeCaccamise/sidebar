@@ -27,8 +27,8 @@ export default function CancelInviteModal({
       <div className="flex flex-col gap-4">
         <p>
           Are you sure you want to cancel{' '}
-          <b> {memberToCancel?.team_member?.email}</b>'s invite? They will not
-          be able to join your team.
+          <b> {memberToCancel?.team_member?.email}</b>&apos;s invite? They will
+          not be able to join your team.
         </p>
       </div>
     </Modal>

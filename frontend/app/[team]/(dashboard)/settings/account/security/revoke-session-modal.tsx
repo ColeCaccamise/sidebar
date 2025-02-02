@@ -32,12 +32,15 @@ export default function RevokeSessionModal({
 
         const res = await revokeSession(selectedSessionId);
         if (!res.error) {
-          queryClient.setQueryData(['sessions'], (oldData: any) => ({
-            ...oldData,
-            sessions: oldData.sessions.filter(
-              (s: Session) => s.id !== selectedSessionId,
-            ),
-          }));
+          queryClient.setQueryData(
+            ['sessions'],
+            (oldData: { sessions: Session[] }) => ({
+              ...oldData,
+              sessions: oldData.sessions.filter(
+                (s: Session) => s.id !== selectedSessionId,
+              ),
+            }),
+          );
           setSelectedSessionId(null);
           setRevokeModalOpen(false);
         } else {

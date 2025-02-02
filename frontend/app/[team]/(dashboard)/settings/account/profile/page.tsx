@@ -13,7 +13,6 @@ import {
   verifyPassword,
   uploadAvatar,
   deleteAvatar,
-  deleteSessions,
   deleteAccount,
 } from './actions';
 import Button from '@/components/ui/button';
@@ -41,7 +40,6 @@ export default function AccountSettingsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const emailForm = useRef<HTMLFormElement>(null);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const [userValues, setUserValues] = useState<{
     firstName?: { initial: string; current: string };
@@ -108,8 +106,6 @@ export default function AccountSettingsPage() {
       },
     });
   }, []);
-
-  async function handleDeleteAccount() {}
 
   useEffect(() => {
     setIsLoading(true);
@@ -220,15 +216,20 @@ export default function AccountSettingsPage() {
               return;
             }
 
+            type UserData = {
+              first_name: string;
+              last_name: string;
+            };
+
             setUserValues((prev) => ({
               ...prev,
               firstName: {
-                initial: data.first_name || '',
-                current: data.first_name || '',
+                initial: (data as UserData).first_name || '',
+                current: (data as UserData).first_name || '',
               },
               lastName: {
-                initial: data.last_name || '',
-                current: data.last_name || '',
+                initial: (data as UserData).last_name || '',
+                current: (data as UserData).last_name || '',
               },
             }));
 
@@ -415,8 +416,6 @@ export default function AccountSettingsPage() {
               user,
               formData,
             });
-
-            console.log(data, success, code);
 
             if (!success) {
               toast({
@@ -681,7 +680,8 @@ export default function AccountSettingsPage() {
                   if (resp.error) {
                     toast({
                       message:
-                        getErrorMessage(resp.code) || 'Something went wrong',
+                        getErrorMessage(resp.code || '') ||
+                        'Something went wrong',
                       mode: 'error',
                     });
                   }
@@ -709,7 +709,7 @@ export default function AccountSettingsPage() {
                       if (resp.error) {
                         toast({
                           message:
-                            getErrorMessage(resp.code) ||
+                            getErrorMessage(resp.code || '') ||
                             'Something went wrong',
                           mode: 'error',
                         });
@@ -754,7 +754,8 @@ export default function AccountSettingsPage() {
                 if (resp.error) {
                   toast({
                     message:
-                      getErrorMessage(resp.code) || 'Something went wrong',
+                      getErrorMessage(resp.code || '') ||
+                      'Something went wrong',
                     mode: 'error',
                   });
                 }

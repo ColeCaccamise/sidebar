@@ -55,23 +55,7 @@ function TeamManagement() {
     isLeaveTeamModalOpen: false,
   });
 
-  const { data: team } = useQuery({
-    queryKey: ['team'],
-    queryFn: async () => {
-      const {
-        data: {
-          data: { team },
-        },
-      } = await api.get(`/teams/${teamSlug}`);
-      return team;
-    },
-  });
-
-  const {
-    data: teamMembers,
-    refetch: refetchTeamMembers,
-    isLoading: isLoadingTeamMembers,
-  } = useQuery({
+  const { data: teamMembers } = useQuery({
     queryKey: ['teamMembers'],
     queryFn: async () => {
       const {

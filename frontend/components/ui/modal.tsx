@@ -4,7 +4,7 @@ import { Dialog, DialogPanel } from '@headlessui/react';
 import { ArrowLeftIcon, Cross1Icon } from '@radix-ui/react-icons';
 import Button from '@/components/ui/button';
 import Spinner from './spinner';
-import { useEffect } from 'react';
+import { useEffect, useCallback } from 'react';
 
 interface Step {
   children: React.ReactNode;
@@ -55,32 +55,36 @@ export default function Modal({
   isLoading = false,
   destructive = false,
 }: ModalProps) {
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (!canClose) return;
     onClose?.();
     setOpen?.(false);
-  };
+  }, [canClose, onClose, setOpen]);
 
   const activeStep = steps?.[currentStep];
   const showContent = !steps ? children : activeStep?.children;
 
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-      if (handleSubmit && !isLoading && !activeStep?.disabled) {
-        activeStep?.handleSubmit?.() || handleSubmit();
-      }
-    }
-    if (e.key === 'Escape') {
-      handleClose();
-    }
-  };
-
   useEffect(() => {
     if (open) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          if (handleSubmit && !isLoading && !activeStep?.disabled) {
+            if (activeStep?.handleSubmit) {
+              activeStep.handleSubmit();
+            } else {
+              handleSubmit();
+            }
+          }
+        }
+        if (e.key === 'Escape') {
+          handleClose();
+        }
+      };
+
       window.addEventListener('keydown', handleKeyDown);
       return () => window.removeEventListener('keydown', handleKeyDown);
     }
-  }, [open, handleSubmit, isLoading, activeStep]);
+  }, [open, handleSubmit, isLoading, activeStep, handleClose]);
 
   return (
     <Dialog open={open} onClose={handleClose} className="relative z-50">

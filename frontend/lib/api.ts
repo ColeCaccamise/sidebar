@@ -18,24 +18,19 @@ class ApiClient {
     });
   }
 
-  // helper to set cookies from response
   private setCookiesFromResponse(response: AxiosResponse): void {
-    const setCookieHeader = response.headers['set-cookie'];
+    const setCookieHeader = response.headers['set-cookie'] as
+      | string[]
+      | undefined;
     if (!setCookieHeader) return;
 
     const cookieStore = cookies();
 
-    if (Array.isArray(setCookieHeader)) {
-      setCookieHeader.forEach((cookie) => {
-        const [name, ...rest] = cookie.split('=');
-        const value = rest.join('=').split(';')[0];
-        cookieStore.set(name, value);
-      });
-    } else {
-      const [name, ...rest] = setCookieHeader.split('=');
+    setCookieHeader.forEach((cookie) => {
+      const [name, ...rest] = cookie.split('=');
       const value = rest.join('=').split(';')[0];
       cookieStore.set(name, value);
-    }
+    });
   }
 
   // attempt token refresh
@@ -59,6 +54,7 @@ class ApiClient {
 
       return true;
     } catch (error) {
+      console.error('error refreshing token', error);
       return false;
     }
   }
@@ -89,7 +85,7 @@ class ApiClient {
     method: string,
     url: string,
     config: AxiosRequestConfig = {},
-    data?: any,
+    data?: unknown, // allow any data type for multipart etc
   ): Promise<AxiosResponse<T>> {
     try {
       // attempt request with current token
@@ -100,9 +96,14 @@ class ApiClient {
         data,
       });
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       // handle 401 by attempting refresh and retry
-      if (error.response?.status === 401) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'response' in error &&
+        (error.response as { status?: number })?.status === 401
+      ) {
         const refreshSuccess = await this.refreshToken();
 
         if (refreshSuccess) {
@@ -130,7 +131,7 @@ class ApiClient {
 
   async post<T>(
     url: string,
-    data?: any,
+    data?: unknown,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
     return this.request<T>('post', url, config, data);
@@ -138,7 +139,7 @@ class ApiClient {
 
   async put<T>(
     url: string,
-    data?: any,
+    data?: unknown,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
     return this.request<T>('put', url, config, data);
@@ -153,7 +154,7 @@ class ApiClient {
 
   async patch<T>(
     url: string,
-    data?: any,
+    data?: unknown,
     config: AxiosRequestConfig = {},
   ): Promise<AxiosResponse<T>> {
     return this.request<T>('patch', url, config, data);

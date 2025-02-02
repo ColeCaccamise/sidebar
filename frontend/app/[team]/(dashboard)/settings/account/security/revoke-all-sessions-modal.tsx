@@ -26,12 +26,15 @@ export default function RevokeAllSessionsModal({
       handleSubmit={async () => {
         const res = await revokeAllSessions();
         if (!res.error) {
-          queryClient.setQueryData(['sessions'], (oldData: any) => ({
-            ...oldData,
-            sessions: oldData.sessions.filter(
-              (s: Session) => s.id === currentSessionId,
-            ),
-          }));
+          queryClient.setQueryData(
+            ['sessions'],
+            (oldData: { sessions: Session[] }) => ({
+              ...oldData,
+              sessions: oldData.sessions.filter(
+                (s: Session) => s.id === currentSessionId,
+              ),
+            }),
+          );
           setRevokeAllModalOpen(false);
         } else {
           console.error(res.code);

@@ -38,20 +38,27 @@ export default function AcceptInviteForm({ data }: { data: TeamInvite }) {
       });
     }
   }
-
   async function handleDecline() {
     if (!data?.team_slug || !data?.slug) {
+      console.error(data);
       return;
     }
 
-    const response = await api.post(
-      `/teams/${data.team_slug}/join/${data.slug}/decline`,
-    );
+    try {
+      await api.post(`/teams/${data.team_slug}/join/${data.slug}/decline`);
 
-    toast({
-      message: 'Invite declined',
-      mode: 'success',
-    });
+      toast({
+        message: 'Invite declined',
+        mode: 'success',
+      });
+    } catch (error) {
+      console.error('Error declining invite', error);
+
+      toast({
+        message: 'Error declining invite',
+        mode: 'error',
+      });
+    }
   }
 
   return (

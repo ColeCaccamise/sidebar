@@ -3,12 +3,12 @@
 import Modal from '@/components/ui/modal';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import axios from 'axios';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/axios';
+import { User } from '@/types';
 
 export default function DeletedPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 

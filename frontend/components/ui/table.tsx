@@ -4,31 +4,23 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 type SortDirection = 'asc' | 'desc' | undefined;
 
-interface SortableTableProps extends React.HTMLAttributes<HTMLTableElement> {
-  onSort?: (column: string, direction: SortDirection) => void;
-}
-
 interface SortableTableHeadProps
   extends React.ThHTMLAttributes<HTMLTableCellElement> {
   sortKey?: string;
   sortDirection?: SortDirection;
-  onSort?: (key: string) => void;
+  onSort?: (key: string, direction: SortDirection) => void;
 }
 
-// updated table component with overflow handling
-const Table = React.forwardRef<HTMLTableElement, SortableTableProps>(
-  ({ className, onSort, ...props }, ref) => (
-    <div className="relative w-full rounded-md border border-stroke-weak">
-      <div className="overflow-auto">
-        <table
-          ref={ref}
-          className={cn('w-full text-sm', className)}
-          {...props}
-        />
-      </div>
+const Table = React.forwardRef<
+  HTMLTableElement,
+  React.HTMLAttributes<HTMLTableElement>
+>(({ className, ...props }, ref) => (
+  <div className="relative w-full rounded-md border border-stroke-weak">
+    <div className="overflow-auto">
+      <table ref={ref} className={cn('w-full text-sm', className)} {...props} />
     </div>
-  ),
-);
+  </div>
+));
 Table.displayName = 'Table';
 
 const TableHeader = React.forwardRef<
@@ -110,7 +102,16 @@ const TableHead = React.forwardRef<
       sortKey && 'cursor-pointer select-none',
       className,
     )}
-    onClick={() => sortKey && onSort?.(sortKey)}
+    onClick={() => {
+      if (sortKey && onSort) {
+        const nextDirection = !sortDirection
+          ? 'asc'
+          : sortDirection === 'asc'
+            ? 'desc'
+            : 'asc';
+        onSort(sortKey, nextDirection);
+      }
+    }}
     {...props}
   >
     <div className="flex items-center gap-2">

@@ -1,4 +1,4 @@
-import { Invite } from '@/types';
+import { ApiResponse } from '@/types';
 import api from '@/lib/api';
 import JoinModal from './join-modal';
 import { redirect } from 'next/navigation';
@@ -57,10 +57,10 @@ export default async function JoinPage({
   async function verifyAuth() {
     const response = await api
       .get('/auth/verify')
-      .then((res) => {
+      .then(() => {
         return true;
       })
-      .catch((err) => {
+      .catch(() => {
         return false;
       });
     return response;
@@ -68,7 +68,7 @@ export default async function JoinPage({
 
   async function verifyTeamMember() {
     const response = await api
-      .get(`/teams/${params.team}/member`)
+      .get<ApiResponse>(`/teams/${params.team}/member`)
       .then((res) => {
         if (res.data.data.team_member.status === 'active') {
           return true;
@@ -76,7 +76,7 @@ export default async function JoinPage({
           return false;
         }
       })
-      .catch((err) => {
+      .catch(() => {
         return false;
       });
     return response;
@@ -87,18 +87,15 @@ export default async function JoinPage({
   const invite = await fetchInvite();
 
   if (invite?.data.active) {
-    console.log('already a member');
     redirect(`/${params.team}`);
   }
 
   if (alreadyMember) {
-    console.log('already a member');
     redirect(`/${params.team}`);
   }
 
   // auto-accept invite if accept param is present
   if (searchParams.accept && invite && isAuthenticated) {
-    console.log('auto accepting invite');
     try {
       await api.post(`/teams/${params.team}/join/${params.slug}/accept`);
       redirect(`/${params.team}/onboarding/welcome`);
