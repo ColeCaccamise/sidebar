@@ -1,5 +1,7 @@
 'use server';
 
+import api from '@/lib/api';
+import { ApiResponse } from '@/types';
 import axios from 'axios';
 import { cookies } from 'next/headers';
 
@@ -17,14 +19,11 @@ export default async function getOauthUrl({
 }> {
   if (provider === 'google') {
     try {
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/auth/authorize/GoogleOAuth`,
-        {
-          params: {
-            redirect: redirectUrl,
-          },
+      const res = await api.get<ApiResponse>(`/auth/authorize/GoogleOAuth`, {
+        params: {
+          redirect: redirectUrl,
         },
-      );
+      });
 
       // set cookies from response
       const cookieHeader = res.headers['set-cookie'];
@@ -51,14 +50,11 @@ export default async function getOauthUrl({
     }
   } else if (provider === 'github') {
     try {
-      const res = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL}/auth/authorize/GitHubOAuth`,
-        {
-          params: {
-            redirect: redirectUrl,
-          },
+      const res = await api.get<ApiResponse>(`/auth/authorize/GitHubOAuth`, {
+        params: {
+          redirect: redirectUrl,
         },
-      );
+      });
 
       // set cookies from response
       const cookieHeader = res.headers['set-cookie'];
