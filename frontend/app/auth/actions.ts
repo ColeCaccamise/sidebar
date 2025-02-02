@@ -81,6 +81,8 @@ export default async function getOauthUrl({
     }
   }
 
+  console.error('Invalid provider', provider);
+
   return {
     success: false,
     error: 'Invalid provider',
