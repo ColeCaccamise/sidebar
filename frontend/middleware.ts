@@ -15,7 +15,6 @@ const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms', '/select-team'];
 export async function middleware(request: NextRequest) {
   // skip middleware for server actions
   if (request.headers.get('next-action') !== null) {
-    console.log('next-action');
     return NextResponse.next();
   }
 
@@ -23,6 +22,10 @@ export async function middleware(request: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const cookieStore = cookies();
   const pathname = request.nextUrl.pathname;
+  const redirect = request.nextUrl.searchParams.get('redirect');
+  const loginUrl = redirect
+    ? `${appUrl}/auth/login?redirect=${redirect}`
+    : `${appUrl}/auth/login`;
 
   // allow access to team join routes
   if (pathname.match(/^\/[^\/]+\/join\/[^\/]+$/)) {
@@ -76,7 +79,7 @@ export async function middleware(request: NextRequest) {
         !AUTH_ROUTES.includes(pathname) &&
         !ALLOWED_ROUTES.includes(pathname)
       ) {
-        return NextResponse.redirect(`${appUrl}/auth/login`);
+        return NextResponse.redirect(loginUrl);
       } else {
         return NextResponse.next();
       }
