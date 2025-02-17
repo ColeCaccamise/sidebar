@@ -27,6 +27,13 @@ import (
 	"golang.org/x/exp/rand"
 )
 
+const (
+	accessTokenExpiry       = time.Minute
+	refreshTokenExpiry      = 720 * time.Hour
+	emailVerificationExpiry = 24 * time.Hour
+	emailResendExpiry       = time.Minute
+)
+
 func (s *Server) VerifySecurityVersion(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		userSession, err := getUserSession(s, r)
@@ -238,16 +245,18 @@ func handleAuthenticateWithCode(opts *authenticateWithCodeOpts) (response *Authe
 // authenticate a user using OAuth/SSO
 func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	code := r.URL.Query().Get("code")
-	appUrl := os.Getenv("APP_URL")
+	appUrl := fmt.Sprintf("%s/auth/callback", os.Getenv("APP_URL"))
 	loginUrl := fmt.Sprintf("%s/auth/login?error=invalid_token", appUrl)
 	redirectCookie, _ := r.Cookie("redirect")
 	var redirectUrl string
 	if redirectCookie != nil {
 		var err error
-		redirectUrl, err = url.QueryUnescape(redirectCookie.Value)
+		rawRedirectUrl, err := url.QueryUnescape(redirectCookie.Value)
 		if err != nil {
 			redirectUrl = appUrl
 		}
+
+		redirectUrl = fmt.Sprintf("%s?redirect=%s", appUrl, rawRedirectUrl)
 	} else {
 		redirectUrl = appUrl
 	}
@@ -255,6 +264,8 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
 		return nil
 	}
+
+	fmt.Printf("redirectUrl: %s\n", redirectUrl)
 
 	httpClient := util.NewHTTPClient()
 	var authResponse *AuthenticateWithCodeResponse
@@ -275,7 +286,6 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 			err = util.DecodeBody(body, &authWithCodeErr)
 			fmt.Printf("err: %+v\n", err)
 
-			// todo check if the error has to do with organization selection - if so, display list of orgs and use pending auth token from the error
 			if authWithCodeErr.Code == "organization_selection_required" {
 				pendingAuthToken := authWithCodeErr.PendingAuthenticationToken
 				orgs := authWithCodeErr.Organizations
@@ -314,7 +324,7 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 					return nil
 				}
 
-				selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s", appUrl, url.QueryEscape(pendingAuthToken), url.QueryEscape(activeOrgsJson))
+				selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s&redirect=%s", os.Getenv("APP_URL"), url.QueryEscape(pendingAuthToken), url.QueryEscape(activeOrgsJson), url.QueryEscape(redirectUrl))
 
 				http.Redirect(w, r, selectTeamUrl, http.StatusTemporaryRedirect)
 				return nil
@@ -328,6 +338,10 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 	readCloser := util.BytesToReadCloser(response.RawBody)
 
 	err = util.DecodeBody(readCloser, &authResponse)
+	if err != nil {
+		http.Redirect(w, r, loginUrl, http.StatusTemporaryRedirect)
+		return nil
+	}
 
 	accessToken := authResponse.AccessToken
 	refreshToken := authResponse.RefreshToken
@@ -714,6 +728,7 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 	refresh, err := r.Cookie("refresh-token")
 
 	if err != nil {
+		fmt.Println(err)
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "refresh token is invalid or expired.", Code: "invalid_token"})
 	}
 
@@ -726,11 +741,15 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 	)
 
 	if err != nil {
+		fmt.Println(err)
+
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "refresh token is invalid or expired.", Code: "invalid_token"})
 	}
 
 	decoded, err := util.ParseJWT(response.AccessToken)
 	if err != nil {
+		fmt.Println(err)
+
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "refresh token is invalid or expired.", Code: "invalid_token"})
 	}
 
@@ -742,6 +761,8 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 	)
 
 	if err != nil {
+		fmt.Println(err)
+
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "refresh token is invalid or expired.", Code: "invalid_token"})
 	}
 
@@ -769,7 +790,11 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 	})
 
 	return WriteJSON(w, http.StatusOK, Response{
-		Data: user,
+		Data: map[string]interface{}{
+			"user":          user,
+			"access_token":  accessToken,
+			"refresh_token": refreshToken,
+		},
 	})
 }
 
@@ -910,13 +935,24 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) error {
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
 	}
 
+	redis := util.NewRedisClient()
+	redis.Set(context.Background(), util.RedisSetOpts{
+		Key:   fmt.Sprintf("user:%s", response.UserId),
+		Value: map[string]interface{}{
+			"id":    user.ID,
+			"email": email,
+		},
+	})
+
 	// check for team member with this email (in the case of invited user)
-	existingTeamMember, _ := s.store.GetTeamMemberByEmail(user.Email)
-	if existingTeamMember != nil {
-		existingTeamMember.UserID = &user.ID
-		err = s.store.UpdateTeamMember(existingTeamMember)
-		if err != nil {
-			fmt.Printf("Failed to update team member with newly created user: %v\n", err)
+	existingTeamMembers, _ := s.store.GetTeamMembersByEmail(user.Email)
+	if len(existingTeamMembers) > 0 {
+		for _, teamMember := range existingTeamMembers {
+			teamMember.UserID = &user.ID
+			err = s.store.UpdateTeamMember(teamMember)
+			if err != nil {
+				fmt.Printf("Failed to update team member with newly created user: %v\n", err)
+			}
 		}
 	}
 
@@ -1396,7 +1432,7 @@ func (s *Server) handleConfirmMagicAuth(w http.ResponseWriter, r *http.Request) 
 				return nil
 			}
 
-			selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s", appUrl, url.QueryEscape(token), url.QueryEscape(string(orgsData)))
+			selectTeamUrl := fmt.Sprintf("%s/select-team?token=%s&teams=%s&redirect=%s", appUrl, url.QueryEscape(token), url.QueryEscape(string(orgsData)), redirect)
 
 			http.Redirect(w, r, selectTeamUrl, http.StatusFound)
 			return nil
