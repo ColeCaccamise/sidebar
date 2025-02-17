@@ -383,6 +383,15 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 			return nil
 		}
 
+		redis := util.NewRedisClient()
+		redis.Set(context.Background(), util.RedisSetOpts{
+			Key:   fmt.Sprintf("user:%s", workosUserID),
+			Value: map[string]interface{}{
+				"id":    user.ID,
+				"email": user.Email,
+			},
+		})
+
 		// create an auth method record
 		var authMethod models.AuthMethod
 		if authResponse.AuthenticationMethod == "GoogleOAuth" {

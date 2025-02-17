@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"os"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisClient struct {
@@ -27,7 +28,7 @@ func NewRedisClient() *RedisClient {
 
 type RedisSetOpts struct {
 	Key   string
-	Value string
+	Value interface{}
 }
 
 func (r *RedisClient) Set(ctx context.Context, opts RedisSetOpts) error {
