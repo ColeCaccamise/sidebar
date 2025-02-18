@@ -10,13 +10,18 @@ import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { getErrorMessage } from '@/messages';
+import { ArrowRightIcon } from '@radix-ui/react-icons';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faGithub, faGoogle } from '@fortawesome/free-brands-svg-icons';
+import Divider from '@/components/ui/divider';
+import getOauthUrl from '../actions';
 
 export default function LoginPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [emailSent, setEmailSent] = useState(false);
 
   useEffect(() => {
     const error = searchParams.get('error');
@@ -54,7 +59,7 @@ export default function LoginPage() {
     try {
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/auth/login`,
-        { email, password },
+        { email },
         {
           headers: {
             'Content-Type': 'application/json',
@@ -64,11 +69,7 @@ export default function LoginPage() {
       );
 
       if (response.status === 200) {
-        toast({
-          message: 'Logged in successfully',
-          mode: 'success',
-        });
-        router.push('/dashboard');
+        setEmailSent(true);
       }
     } catch (error) {
       if (axios.isAxiosError(error) && error.response) {
@@ -88,52 +89,113 @@ export default function LoginPage() {
     setIsLoading(false);
   }
 
-  return (
-    <div className="flex flex-col gap-4">
-      <h1>Log in to your account</h1>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-        <Input
-          label="Email address"
-          type="email"
-          name="email"
-          placeholder="name@company.com"
-          required
-          value={email}
-          handleChange={(e) => setEmail(e.target.value)}
-        />
-        <Input
-          label="Password"
-          type="password"
-          name="password"
-          placeholder="Password"
-          required
-          value={password}
-          handleChange={(e) => setPassword(e.target.value)}
-          hint={
-            <Link
-              className="text-xs text-typography-weak"
-              href="/auth/forgot-password"
-              tabIndex={-1}
-            >
-              Forgot password?
-            </Link>
-          }
-        />
-        <Button
-          className="w-full"
-          type="submit"
-          disabled={isLoading || !email || !password}
-          loading={isLoading}
-        >
-          Continue with email
-        </Button>
+  if (emailSent) {
+    return (
+      <div className="flex flex-col gap-8">
+        <div className="flex flex-col gap-4">
+          <h1>Check your email</h1>
+          <div className="flex flex-col gap-2">
+            <p>We&apos;ve sent a temporary login link.</p>
+            <p>
+              Please check your inbox at{' '}
+              <b className="text-typography-strong">{email}</b>
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-        <div className="text-center">
-          <Link className="no-underline" href="/auth/signup">
-            or sign up instead
+  return (
+    <>
+      <div className="flex flex-col gap-1">
+        <h1>Sign in to Dashboard</h1>
+        <div className="flex items-center gap-1">
+          <p>Don&apos;t have an account?</p>
+          <Link
+            href="/auth/signup"
+            className="flex items-center gap-1 no-underline"
+          >
+            Get started <ArrowRightIcon className="h-4 w-4" />
           </Link>
         </div>
-      </form>
-    </div>
+      </div>
+
+      <div className="flex w-full flex-col gap-4">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+          <Input
+            label="Enter your email"
+            type="email"
+            name="email"
+            placeholder="name@company.com"
+            required
+            value={email}
+            handleChange={(e) => setEmail(e.target.value)}
+          />
+
+          <Button
+            className="w-full"
+            type="submit"
+            disabled={isLoading || !email}
+            loading={isLoading}
+          >
+            Continue with email
+          </Button>
+        </form>
+        <span className="flex items-center gap-2">
+          <Divider />
+          <span className="px-2 text-xs text-typography-muted">OR</span>
+          <Divider />
+        </span>
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="unstyled"
+            className="btn flex w-full border border-stroke-weak bg-fill"
+            handleClick={async () => {
+              const res = await getOauthUrl({ provider: 'google' });
+              if (res.redirectUrl) {
+                router.push(res.redirectUrl);
+              } else {
+                toast({
+                  message: getErrorMessage(res.code || ''),
+                  mode: 'error',
+                });
+              }
+            }}
+          >
+            <span className="mr-2">
+              <FontAwesomeIcon icon={faGoogle} />
+            </span>
+            Continue with Google
+          </Button>
+          <Button
+            variant="unstyled"
+            className="btn flex w-full border border-stroke-weak bg-fill"
+            handleClick={async () => {
+              const res = await getOauthUrl({ provider: 'github' });
+              if (res.redirectUrl) {
+                router.push(res.redirectUrl);
+              } else {
+                toast({
+                  message: getErrorMessage(res.code || ''),
+                  mode: 'error',
+                });
+              }
+            }}
+          >
+            <span className="mr-2">
+              <FontAwesomeIcon icon={faGithub} />
+            </span>
+            Continue with GitHub
+          </Button>
+        </div>
+      </div>
+
+      <p className="text-muted">
+        By signing in, you agree to the{' '}
+        <Link href="/legal/terms">Terms of Service</Link> and{' '}
+        <Link href="/legal/privacy">Privacy Policy</Link>.
+      </p>
+    </>
   );
 }

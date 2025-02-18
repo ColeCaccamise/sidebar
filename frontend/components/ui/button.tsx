@@ -1,10 +1,10 @@
-import Spinner from "./spinner";
-import Link from "next/link";
+import Spinner from './spinner';
+import Link from 'next/link';
 
 export default function Button({
   className,
   children,
-  type = "button",
+  type = 'button',
   variant,
   loading = false,
   disabled,
@@ -14,7 +14,7 @@ export default function Button({
   className?: string;
   color?: string;
   children: React.ReactNode;
-  type?: "button" | "submit" | "reset";
+  type?: 'button' | 'submit' | 'reset';
   variant?: string;
   loading?: boolean;
   disabled?: boolean;
@@ -25,25 +25,25 @@ export default function Button({
   // TODO: create variants for destructive, outline, ghost, link, icon, text w/ icon
   // reference: https://ui.shadcn.com/docs/components/button
 
-  if (variant === "link") {
+  if (variant === 'link') {
     return (
       <Link
         className={`${className} text-typography-strong hover:text-typography-strong`}
         onClick={handleClick}
-        href={href || ""}
+        href={href || ''}
       >
         {children}
       </Link>
     );
   }
 
-  if (variant === "destructive") {
+  if (variant === 'destructive') {
     return (
       <button
         type={type}
         disabled={loading || disabled}
         className={`btn btn-destructive whitespace-nowrap ${className} ${
-          (loading || disabled) && "btn-disabled"
+          (loading || disabled) && 'btn-disabled'
         }`}
         onClick={handleClick}
       >
@@ -54,17 +54,19 @@ export default function Button({
     );
   }
 
-  if (variant === "unstyled") {
+  if (variant === 'unstyled') {
     return (
       <button
         type={type}
         disabled={loading || disabled}
         className={`${className} whitespace-nowrap ${
-          (loading || disabled) && "btn-disabled"
+          (loading || disabled) && 'btn-disabled'
         } group flex items-center`}
         onClick={handleClick}
       >
-        <span className={loading ? "pr-2" : ""}>{loading && <Spinner />}</span>
+        {loading && (
+          <span className={loading ? 'pr-2' : ''}>{<Spinner />}</span>
+        )}
 
         {children}
       </button>
@@ -72,24 +74,24 @@ export default function Button({
   }
 
   const buttonClasses =
-    variant === "secondary"
-      ? "btn btn-secondary"
-      : variant === "destructive"
-        ? "btn btn-destructive"
-        : "btn btn-brand";
+    variant === 'secondary'
+      ? 'btn btn-secondary'
+      : variant === 'destructive'
+        ? 'btn btn-destructive'
+        : 'btn btn-brand';
 
   return (
     <button
       type={type}
       disabled={loading || disabled}
       className={`${className} ${buttonClasses} whitespace-nowrap ${
-        (loading || disabled) && "btn-disabled"
+        (loading || disabled) && 'btn-disabled'
       } group flex items-center`}
       onClick={handleClick}
     >
-      <span className={loading ? "pr-2" : ""}>
+      <span className={loading ? 'pr-2' : ''}>
         {loading && (
-          <Spinner variant={variant === "brand" ? "light" : "dark"} />
+          <Spinner variant={variant === 'brand' ? 'light' : 'dark'} />
         )}
       </span>
 
