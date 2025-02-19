@@ -3,14 +3,18 @@ const DEFAULT_ERROR_MESSAGE =
 const DEFAULT_RESPONSE_MESSAGE = 'Completed successfully.';
 
 export const errorCodes = {
+  unauthorized: 'You are not authorized to take this action.',
+  forbidden: 'You are not permitted to take this action.',
   email_taken: 'An account with this email already exists.',
   invalid_token: 'Token is invalid or expired.',
-  missing_token: 'Token is missing.',
+  missing_token: 'Something went wrong. Please try the request again.',
   email_unchanged: 'Email is unchanged.',
   invalid_password: 'Password is invalid.',
   invalid_credentials: 'Invalid credentials.',
   invalid_update_token:
     'Could not update your account. Token is invalid or expired.',
+  invalid_request:
+    'Input is invalid. Please double-check what you typed and try again.',
   password_mismatch: 'Passwords do not match',
   missing_password: 'Password is required.',
   missing_new_password: 'New password is required.',
@@ -19,12 +23,39 @@ export const errorCodes = {
   new_password_mismatch: 'New passwords do not match.',
   missing_confirm_password: 'Password confirmation is required.',
   internal_server_error:
-    'An unexpected error occurred. Please try again or contact support if the issue persists.',
+    'An error has occured on our end. Please try again or contact support.',
   email_not_provided: 'A valid email address is required.',
   user_not_deleted: 'User is not deleted.',
   user_deleted:
     "You're not authorized to take this action, your account has been deleted.",
   session_expired: 'Your session has expired. Please log in again.',
+  subscription_flow_canceled:
+    'Could not complete the subscription signup process. Please try again.',
+  checkout_canceled:
+    'Your checkout session was canceled. No charges have been made to your account.',
+  subscription_already_canceled: 'Your subscription has already been canceled.',
+  subscription_active:
+    "Your subscription is currently active, it can't be renewed.",
+  email_already_confirmed: 'Your email has already been confirmed.',
+  terms_declined:
+    'You must accept the Terms of Service and Privacy Policy to use our app.',
+  team_name_length: 'Team name must be between 3 and 32 characters.',
+  team_name_taken: 'Team name unavailable.',
+  team_name_invalid:
+    'Team name can only contain letters, numbers, spaces, hyphens and underscores, and must start and end with a letter or number.',
+  team_name_consecutive:
+    'Team name cannot contain consecutive special characters.',
+  no_emails_provided: 'No emails provided.',
+  too_many_invites: 'You can only invite up to 25 people at a time.',
+  already_invited: 'One or more emails has already received an invite.',
+  invalid_self_invite: 'You cannot invite yourself.',
+  invite_expired: 'This invite has expired. Ask your team for a new one.',
+  team_role_required: 'Please select a team role.',
+  team_member_not_found: 'Team member not found.',
+  no_team_owner:
+    'You are the only owner of this team. Add another owner to leave the team.',
+  avatar_too_large: 'File is too large. Max file size is 2MB.',
+  avatar_invalid_file_type: 'Invalid file type. Please choose a valid image.',
   default: DEFAULT_ERROR_MESSAGE,
 } as const;
 
@@ -36,6 +67,9 @@ export const responseCodes = {
   password_reset_sent:
     "You'll receive an email if your are registered in our system.",
   user_restored: 'Your account has been restored successfully.',
+  subscription_successful: 'Subscription successful!',
+  terms_accepted: 'Terms accepted!',
+  team_created: 'Team created!',
   default: DEFAULT_RESPONSE_MESSAGE,
 } as const;
 

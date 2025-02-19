@@ -1,6 +1,7 @@
 package util
 
 import (
+	"os"
 	"regexp"
 	"strings"
 	"unicode"
@@ -63,8 +64,18 @@ func ValidateEmail(email string) bool {
 		return false
 	}
 
-	// Comprehensive regex pattern for email validation
 	emailPattern := regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)
 
 	return emailPattern.MatchString(email)
+}
+
+func ValidateRedirectDomain(host string) bool {
+	allowedDomains := []string{os.Getenv("APP_URL"), os.Getenv("API_URL")}
+
+	for _, domain := range allowedDomains {
+		if host == domain {
+			return true
+		}
+	}
+	return false
 }

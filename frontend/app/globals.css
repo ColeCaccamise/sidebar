@@ -5,181 +5,235 @@
 @import './styles/btn.css';
 
 html {
-	min-height: 100%;
-	height: auto;
-	max-width: 100vw;
+  min-height: 100%;
+  height: auto;
+  max-width: 100vw;
 }
 
 body {
-	min-height: 100vh;
-}
-
-body {
-	width: 100%;
-	height: 100%;
+  width: 100%;
+  height: 100%;
+  min-height: 100vh;
+  font-size: 14px;
 }
 
 [data-sonner-toast] {
-	font-family:
-		Inter,
-		system-ui,
-		-apple-system,
-		BlinkMacSystemFont,
-		'Segoe UI',
-		Roboto,
-		Oxygen,
-		Ubuntu,
-		Cantarell,
-		'Open Sans',
-		'Helvetica Neue',
-		sans-serif;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    Roboto,
+    Oxygen,
+    Ubuntu,
+    Cantarell,
+    'Open Sans',
+    'Helvetica Neue',
+    sans-serif;
+}
+
+/* hide scrollbar track while preserving scrolling functionality */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: var(--stroke-weak);
+  border-radius: 4px;
+}
+
+/* for firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--stroke-weak) transparent;
 }
 
 @layer base {
-	:root {
-		--background: hsla(214, 0%, 100%, 100%);
-		--sidebar: hsla(214, 0%, 97%, 100%);
+  :root {
+    --background: hsla(214, 0%, 100%, 100%);
+    --sidebar: hsla(214, 0%, 97%, 100%);
 
-		--typography-strong: hsla(214, 0%, 0%, 100%);
-		--typography-strong-dark: hsla(214, 0%, 100%, 100%);
-		--typography-weak: hsla(214, 0%, 0%, 78%);
-		--typography-weak-dark: hsla(214, 0%, 100%, 78%);
-		--hover: hsla(214, 0%, 0%, 6%);
-		--fill: hsla(214, 0%, 0%, 2%);
-		--fill-solid: hsl(214, 0%, 10%, 100%);
-		--fill-hover: hsla(214, 0%, 0%, 2%);
-		--stroke-strong: hsla(214, 0%, 0%, 16%);
-		--stroke-medium: hsla(214, 0%, 0%, 12%);
-		--stroke-weak: hsla(214, 0%, 0%, 9%);
+    --typography-strong: hsla(214, 0%, 0%, 100%);
+    --typography-strong-dark: hsla(214, 0%, 100%, 100%);
+    --typography-weak: hsla(214, 0%, 0%, 78%);
+    --typography-muted: hsla(214, 0%, 0%, 50%);
+    --typography-weak-dark: hsla(214, 0%, 100%, 78%);
+    --hover: hsla(214, 0%, 0%, 6%);
+    --fill: hsla(214, 0%, 0%, 2%);
+    --fill-solid: hsl(214, 0%, 10%, 100%);
+    --fill-hover: hsla(214, 0%, 0%, 2%);
+    --stroke-strong: hsla(214, 0%, 0%, 16%);
+    --stroke-medium: hsla(214, 0%, 0%, 12%);
+    --stroke-weak: hsla(214, 0%, 0%, 9%);
 
-		--secondary: hsl(214, 0%, 97%);
-		--secondary-stroke-strong: hsla(214, 0%, 97%, 80%);
-		--secondary-stroke-weak: hsla(214, 0%, 97%, 20%);
-		--secondary-fill: hsla(214, 0%, 97%, 5%);
-		--secondary-typography-strong: hsla(214, 0%, 0%, 100%);
-		--secondary-typography-strong-dark: hsla(214, 0%, 100%, 100%);
-		--secondary-typography-weak: hsla(214, 0%, 0%, 78%);
-		--secondary-typography-weak-dark: hsla(214, 0%, 100%, 78%);
+    --secondary: hsl(214, 0%, 97%);
+    --secondary-stroke-strong: hsla(214, 0%, 97%, 80%);
+    --secondary-stroke-weak: hsla(214, 0%, 97%, 20%);
+    --secondary-fill: hsla(214, 0%, 97%, 5%);
+    --secondary-typography-strong: hsla(214, 0%, 0%, 100%);
+    --secondary-typography-strong-dark: hsla(214, 0%, 100%, 100%);
+    --secondary-typography-weak: hsla(214, 0%, 0%, 78%);
+    --secondary-typography-weak-dark: hsla(214, 0%, 100%, 78%);
 
-		--brand: hsl(0, 0%, 0%);
-		--brand-stroke-strong: hsla(0, 0%, 100%, 80%);
-		--brand-stroke-weak: hsla(0, 0%, 100%, 20%);
-		--brand-fill: hsla(0, 0%, 100%, 5%);
+    --accent: hsla(214, 0%, 96%, 100%); /* very light warm gray */
+    --accent-stroke-strong: hsla(214, 0%, 75%, 100%);
+    --accent-stroke-weak: hsla(214, 0%, 85%, 100%);
 
-		--success: hsl(145, 32%, 30%);
-		--success-stroke-strong: hsl(145, 32%, 56%);
-		--success-stroke-weak: hsl(145, 32%, 75%);
-		--success-fill: hsl(145, 32%, 90%);
-		--error: hsl(360, 75%, 35%);
-		--error-stroke-strong: hsl(360, 75%, 56%);
-		--error-stroke-weak: hsl(360, 75%, 80%);
-		--error-fill: hsl(360, 75%, 95%);
+    --brand: hsl(0, 0%, 0%);
+    --brand-stroke-strong: hsla(0, 0%, 100%, 80%);
+    --brand-stroke-weak: hsla(0, 0%, 100%, 20%);
+    --brand-fill: hsla(0, 0%, 100%, 5%);
 
-		--warning: hsl(45, 93%, 43%);
-		--warning-stroke-strong: hsl(45, 93%, 56%);
-		--warning-stroke-weak: hsl(45, 93%, 80%);
-		--warning-fill: hsl(45, 93%, 97%);
-		--radius: 0.5rem;
-	}
+    --brand-secondary: hsl(0, 0%, 24%);
+    --brand-secondary-stroke-strong: hsla(0, 0%, 100%, 80%);
+    --brand-secondary-stroke-weak: hsla(0, 0%, 100%, 20%);
+    --brand-secondary-fill: hsla(0, 0%, 100%, 5%);
 
-	.dark {
-		--brand: hsl(0, 0%, 100%);
-		--background: hsla(214, 0%, 8%, 100%);
-		--sidebar: hsla(214, 0%, 10%, 100%);
-		--typography-strong: hsla(214, 0%, 100%, 100%);
-		--typography-weak: hsla(214, 0%, 100%, 78%);
-		--hover: hsla(214, 0%, 100%, 6%);
-		--fill: hsla(214, 0%, 100%, 2%);
-		--fill-solid: hsla(214, 0%, 10%, 100%);
-		--fill-hover: hsla(0, 100%, 100%, 3%);
-		--stroke-strong: hsla(214, 0%, 100%, 60%);
-		--stroke-medium: hsla(214, 0%, 100%, 16%);
-		--stroke-weak: hsla(214, 0%, 100%, 8%);
+    --success: hsl(145, 32%, 30%);
+    --success-stroke-strong: hsl(145, 32%, 56%);
+    --success-stroke-weak: hsl(145, 32%, 75%);
+    --success-fill: hsl(145, 32%, 90%);
+    --error: hsl(360, 75%, 35%);
+    --error-stroke-strong: hsl(360, 75%, 56%);
+    --error-stroke-weak: hsl(360, 75%, 80%);
+    --error-fill: hsl(360, 75%, 95%);
 
-		--success: hsl(145, 32%, 60%);
-		--success-stroke-strong: hsl(145, 32%, 36%);
-		--success-stroke-weak: hsl(145, 32%, 30%);
-		--success-fill: hsl(145, 32%, 14%);
+    --warning: hsl(45, 93%, 43%);
+    --warning-stroke-strong: hsl(45, 93%, 56%);
+    --warning-stroke-weak: hsl(45, 93%, 80%);
+    --warning-fill: hsl(45, 93%, 97%);
 
-		--error: hsl(360, 75%, 65%);
-		--error-stroke-strong: hsl(360, 75%, 56%);
-		--error-stroke-weak: hsl(360, 75%, 20%);
-		--error-fill: hsl(360, 75%, 11%);
+    --info: hsl(214, 93%, 43%);
+    --info-stroke-strong: hsl(214, 93%, 56%);
+    --info-stroke-weak: hsl(214, 93%, 80%);
+    --info-fill: hsl(214, 93%, 97%);
 
-		--warning: hsl(45, 73%, 47%);
-		--warning-stroke-strong: hsl(45, 73%, 56%);
-		--warning-stroke-weak: hsl(45, 73%, 40%);
-		--warning-fill: hsla(45, 93%, 43%, 0.2);
-	}
+    --radius: 0.5rem;
+  }
 
-	html {
-		@apply !p-0 !overflow-visible;
-	}
+  .dark {
+    --brand: hsl(0, 0%, 100%);
+    --background: hsla(214, 0%, 8%, 100%);
+    --sidebar: hsla(214, 0%, 10%, 100%);
+    --typography-strong: hsla(214, 0%, 100%, 100%);
+    --typography-weak: hsla(214, 0%, 100%, 78%);
+    --typography-muted: hsla(214, 0%, 100%, 35%);
+    --hover: hsla(214, 0%, 100%, 6%);
+    --fill: hsla(214, 0%, 100%, 2%);
+    --fill-solid: hsla(214, 0%, 10%, 100%);
+    --fill-hover: hsla(0, 100%, 100%, 3%);
+    --stroke-strong: hsla(214, 0%, 100%, 60%);
+    --stroke-medium: hsla(214, 0%, 100%, 16%);
+    --stroke-weak: hsla(214, 0%, 100%, 8%);
 
-	h1 {
-		@apply text-xl font-bold text-typography-strong;
-	}
+    --accent: hsla(214, 0%, 16%, 100%); /* slightly lighter than your sidebar */
+    --accent-stroke-strong: hsla(214, 0%, 25%, 100%);
+    --accent-stroke-weak: hsla(214, 0%, 16%, 100%);
 
-	h2 {
-		@apply scroll-m-20 text-lg font-semibold tracking-tight transition-colors text-typography-strong first:mt-0;
-	}
+    --brand-secondary: hsl(0, 0%, 24%);
+    --brand-secondary-stroke-strong: hsla(0, 0%, 100%, 80%);
+    --brand-secondary-stroke-weak: hsla(0, 0%, 100%, 20%);
+    --brand-secondary-fill: hsla(0, 0%, 100%, 5%);
 
-	p {
-		@apply text-typography-weak;
-	}
+    --success: hsl(145, 32%, 60%);
+    --success-stroke-strong: hsl(145, 32%, 36%);
+    --success-stroke-weak: hsl(145, 32%, 30%);
+    --success-fill: hsl(145, 32%, 14%);
 
-	a {
-		@apply underline transition-effect text-typography-strong hover:opacity-90;
-	}
+    /* hsl(348deg 47.8% 51.2%) */
+    /* hsl(337deg 22.6% 18.2%) */
 
-	ul {
-		@apply list-inside list-disc;
-	}
+    --error: hsl(360, 55%, 52%);
+    --error-stroke-strong: hsl(360, 55%, 62%);
+    --error-stroke-weak: hsl(360, 55%, 20%);
+    --error-fill: hsl(360, 55%, 9%);
 
-	ol {
-		@apply list-inside list-decimal space-y-2;
-	}
+    --warning: hsl(45, 73%, 47%);
+    --warning-stroke-strong: hsl(45, 73%, 56%);
+    --warning-stroke-weak: hsl(45, 73%, 40%);
+    --warning-fill: hsla(45, 93%, 43%, 0.2);
 
-	li {
-		@apply text-typography-weak leading-8;
-	}
+    --info: hsl(214, 60%, 65%);
+    --info-stroke-strong: hsl(214, 60%, 75%);
+    --info-stroke-weak: hsl(214, 60%, 30%);
+    --info-fill: hsla(214, 60%, 43%, 0.2);
+  }
 
-	strong {
-		@apply font-bold text-typography-strong;
-	}
+  html {
+    @apply !overflow-visible !p-0;
+  }
 
-	span {
-		@apply text-typography-weak;
-	}
+  h1 {
+    @apply text-xl font-bold text-typography-strong;
+  }
 
-	select {
-		@apply text-typography-weak text-sm;
-	}
+  h2 {
+    @apply scroll-m-20 text-lg font-semibold tracking-tight text-typography-strong transition-colors first:mt-0;
+  }
 
-	/* Styling scrollbars with transparent background */
-	::-webkit-scrollbar {
-		width: 6px; /* Adjust scrollbar width here */
-	}
-	::-webkit-scrollbar-track {
-		background: transparent; /* Remove background color */
-	}
-	::-webkit-scrollbar-thumb {
-		background-color: var(--stroke-strong);
-		border-radius: 10px;
-		border: 3px solid transparent;
-	}
+  p {
+    @apply text-typography-weak;
+  }
+
+  a {
+    @apply transition-effect text-typography-strong underline hover:opacity-90;
+  }
+
+  ul {
+    @apply list-inside list-disc;
+  }
+
+  ol {
+    @apply list-inside list-decimal space-y-2;
+  }
+
+  li {
+    @apply leading-8 text-typography-weak;
+  }
+
+  b,
+  strong {
+    @apply font-bold text-typography-strong;
+  }
+
+  span {
+    @apply text-typography-weak;
+  }
+
+  select {
+    @apply text-sm text-typography-weak;
+  }
+
+  /* Styling scrollbars with transparent background */
+  ::-webkit-scrollbar {
+    width: 6px; /* Adjust scrollbar width here */
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent; /* Remove background color */
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--stroke-strong);
+    border-radius: 10px;
+    border: 3px solid transparent;
+  }
 }
 
 @layer utilities {
-	.disabled {
-		@apply opacity-20 cursor-not-allowed;
-	}
+  .disabled {
+    @apply cursor-not-allowed opacity-20;
+  }
 
-	.transition-effect {
-		@apply transition duration-200;
-	}
+  .transition-effect {
+    @apply transition duration-200;
+  }
 
-	.link-brand {
-		@apply text-brand hover:text-brand hover:opacity-80;
-	}
+  .link-brand {
+    @apply text-brand hover:text-brand hover:opacity-80;
+  }
 }
