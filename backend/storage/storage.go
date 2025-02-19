@@ -41,6 +41,7 @@ type Storage interface {
 	GetTeamMemberByTeamIDAndUserID(uuid.UUID, uuid.UUID) (*models.TeamMember, error)
 	GetTeamMemberByID(uuid.UUID) (*models.TeamMember, error)
 	GetTeamMemberByEmail(string) (*models.TeamMember, error)
+	GetTeamMembersByEmail(string) ([]*models.TeamMember, error)
 	GetTeamMembersByTeamID(uuid.UUID) ([]*models.TeamMember, error)
 	GetTeamMembersByTeamIDAndRole(uuid.UUID, models.TeamRole) ([]*models.TeamMember, error)
 	GetTeamMemberOwnersByTeamID(uuid.UUID) ([]*models.TeamMember, error)
@@ -518,6 +519,15 @@ func (s *PostgresStore) GetTeamMemberByEmail(email string) (*models.TeamMember, 
 		return nil, result.Error
 	}
 	return &teamMember, nil
+}
+
+func (s *PostgresStore) GetTeamMembersByEmail(email string) ([]*models.TeamMember, error) {
+	var teamMembers []*models.TeamMember
+	result := s.db.Where("email = ?", email).Find(&teamMembers)
+	if result.Error != nil {
+		return nil, result.Error
+	}
+	return teamMembers, nil
 }
 
 func (s *PostgresStore) GetTeamByWorkosOrgID(orgID string) (*models.Team, error) {

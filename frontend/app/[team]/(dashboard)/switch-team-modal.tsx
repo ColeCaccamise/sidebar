@@ -1,4 +1,4 @@
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Modal from '@/components/ui/modal';
 import { Team } from '@/types';
 import { useState } from 'react';
@@ -99,7 +99,7 @@ export default function SwitchTeamModal(props: {
         </div>
 
         <Button
-          handleClick={handleSubmit}
+          onClick={handleSubmit}
           disabled={!selectedTeam && !selectedNewTeam}
           className="w-full"
         >

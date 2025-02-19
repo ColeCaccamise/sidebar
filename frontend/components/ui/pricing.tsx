@@ -1,6 +1,6 @@
 'use client';
 
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import Input from '@/components/ui/input';
 import Modal from '@/components/ui/modal';
@@ -330,9 +330,8 @@ export default function Pricing({
                 </p>
               </div>
               <Button
-                variant="unstyled"
-                className="text-typography-strong"
-                handleClick={handleManageSubscription}
+                className="btn-small btn-brand-secondary w-full"
+                onClick={handleManageSubscription}
               >
                 Manage subscription
               </Button>
@@ -462,11 +461,10 @@ export default function Pricing({
           <p className="flex items-center gap-1">
             Having problems?{' '}
             <Button
-              variant="unstyled"
-              className="text-typography-strong"
-              handleClick={handleRefreshSubscription}
+              className="btn-small btn-brand-secondary w-full"
+              onClick={handleRefreshSubscription}
             >
-              Refresh your subscription
+              Refresh subscription
             </Button>
           </p>
         </div>

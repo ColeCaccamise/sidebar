@@ -17,11 +17,12 @@ export async function getRedis({ key }: { key: string }) {
     return {
       success: false,
       error: 'failed to get redis value',
+      data: null,
     };
   }
 }
 
-export async function setRedis({ key, value }: { key: string; value: string }) {
+export async function setRedis({ key, value }: { key: string; value: any }) {
   const redis = new Redis({
     url: process.env.REDIS_ENDPOINT,
     token: process.env.REDIS_PASSWORD,

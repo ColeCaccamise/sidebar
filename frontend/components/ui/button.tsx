@@ -1,101 +1,78 @@
-import Spinner from './spinner';
-import Link from 'next/link';
+import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
+import { cva, type VariantProps } from 'class-variance-authority';
+import { Loader2 } from 'lucide-react';
 
-export default function Button({
-  className,
-  children,
-  type = 'button',
-  variant,
-  loading = false,
-  disabled,
-  handleClick,
-  href,
-}: {
-  className?: string;
-  color?: string;
-  children: React.ReactNode;
-  type?: 'button' | 'submit' | 'reset';
-  variant?: string;
+import { cn } from '@/lib/utils';
+
+const buttonVariants = cva(
+  'btn transition-effect inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 disabled:cursor-not-allowed',
+  {
+    variants: {
+      variant: {
+        default: 'bg-brand text-background hover:bg-brand/90',
+        destructive: 'bg-error text-typography-strong hover:opacity-90',
+        outline:
+          'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
+        secondary: 'bg-brand-secondary text-typography-strong',
+        ghost: 'hover:bg-fill-solid hover:text-typography-strong',
+        link: 'text-primary underline-offset-4 hover:underline',
+        unstyled: '',
+      },
+      size: {
+        default: 'h-10 px-4 py-2',
+        sm: 'h-9 rounded-md px-3',
+        lg: 'h-11 rounded-md px-8',
+        icon: 'h-10 w-10',
+      },
+    },
+    defaultVariants: {
+      variant: 'default',
+      size: 'default',
+    },
+  },
+);
+
+export interface ButtonProps
+  extends React.ButtonHTMLAttributes<HTMLButtonElement>,
+    VariantProps<typeof buttonVariants> {
+  asChild?: boolean;
   loading?: boolean;
-  disabled?: boolean;
-  handleClick?: (e: React.MouseEvent) => void;
-  href?: string;
-}) {
-  // const backgroundColor = color ? `bg-${color}` : undefined;
-  // TODO: create variants for destructive, outline, ghost, link, icon, text w/ icon
-  // reference: https://ui.shadcn.com/docs/components/button
-
-  if (variant === 'link') {
-    return (
-      <Link
-        className={`${className} text-typography-strong hover:text-typography-strong`}
-        onClick={handleClick}
-        href={href || ''}
-      >
-        {children}
-      </Link>
-    );
-  }
-
-  if (variant === 'destructive') {
-    return (
-      <button
-        type={type}
-        disabled={loading || disabled}
-        className={`btn btn-destructive whitespace-nowrap ${className} ${
-          (loading || disabled) && 'btn-disabled'
-        }`}
-        onClick={handleClick}
-      >
-        {loading && <Spinner />}
-
-        {children}
-      </button>
-    );
-  }
-
-  if (variant === 'unstyled') {
-    return (
-      <button
-        type={type}
-        disabled={loading || disabled}
-        className={`${className} whitespace-nowrap ${
-          (loading || disabled) && 'btn-disabled'
-        } group flex items-center`}
-        onClick={handleClick}
-      >
-        {loading && (
-          <span className={loading ? 'pr-2' : ''}>{<Spinner />}</span>
-        )}
-
-        {children}
-      </button>
-    );
-  }
-
-  const buttonClasses =
-    variant === 'secondary'
-      ? 'btn btn-secondary'
-      : variant === 'destructive'
-        ? 'btn btn-destructive'
-        : 'btn btn-brand';
-
-  return (
-    <button
-      type={type}
-      disabled={loading || disabled}
-      className={`${className} ${buttonClasses} whitespace-nowrap ${
-        (loading || disabled) && 'btn-disabled'
-      } group flex items-center`}
-      onClick={handleClick}
-    >
-      <span className={loading ? 'pr-2' : ''}>
-        {loading && (
-          <Spinner variant={variant === 'brand' ? 'light' : 'dark'} />
-        )}
-      </span>
-
-      {children}
-    </button>
-  );
 }
+
+const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      loading = false,
+      children,
+      ...props
+    },
+    ref,
+  ) => {
+    const Comp = asChild ? Slot : 'button';
+    return (
+      <Comp
+        className={cn(buttonVariants({ variant, size, className }))}
+        ref={ref}
+        disabled={loading || props.disabled}
+        {...props}
+      >
+        {loading ? (
+          <>
+            <Loader2 className="animate-spin" />
+            {children}
+          </>
+        ) : (
+          children
+        )}
+      </Comp>
+    );
+  },
+);
+Button.displayName = 'Button';
+
+export { Button, buttonVariants };

@@ -384,13 +384,11 @@ func (s *Server) handleCallback(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		redis := util.NewRedisClient()
-		redis.Set(context.Background(), util.RedisSetOpts{
+		err = redis.Set(context.Background(), util.RedisSetOpts{
 			Key:   fmt.Sprintf("user:%s", workosUserID),
-			Value: map[string]interface{}{
-				"id":    user.ID,
-				"email": user.Email,
-			},
+			Value: fmt.Sprintf(`{"id":"%s","email":"%s","onboarded": false}`, user.ID, user.Email),
 		})
+		fmt.Printf("error seting user:%v\n", err)
 
 		// create an auth method record
 		var authMethod models.AuthMethod
@@ -736,6 +734,8 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 
 	refresh, err := r.Cookie("refresh-token")
 
+	orgId := r.URL.Query().Get("org_id")
+
 	if err != nil {
 		fmt.Println(err)
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "refresh token is invalid or expired.", Code: "invalid_token"})
@@ -746,6 +746,7 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 		usermanagement.AuthenticateWithRefreshTokenOpts{
 			ClientID:     os.Getenv("WORKOS_CLIENT_ID"),
 			RefreshToken: refresh.Value,
+			OrganizationID:        orgId,
 		},
 	)
 
@@ -945,13 +946,14 @@ func (s *Server) handleSignup(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	redis := util.NewRedisClient()
-	redis.Set(context.Background(), util.RedisSetOpts{
+	err = redis.Set(context.Background(), util.RedisSetOpts{
 		Key:   fmt.Sprintf("user:%s", response.UserId),
-		Value: map[string]interface{}{
-			"id":    user.ID,
-			"email": email,
-		},
+		Value: fmt.Sprintf(`{"id":"%s","email":"%s","onboarded":false}`, user.ID, user.Email),
 	})
+
+	if err != nil {
+		fmt.Printf("Failed to set user: %v\n", err)
+	}
 
 	// check for team member with this email (in the case of invited user)
 	existingTeamMembers, _ := s.store.GetTeamMembersByEmail(user.Email)

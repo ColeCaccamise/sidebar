@@ -1,7 +1,7 @@
 'use client';
 
 import Input from '@/components/ui/input';
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import toast from '@/lib/toast';
 import { useState } from 'react';

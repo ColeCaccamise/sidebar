@@ -28,11 +28,24 @@ func NewRedisClient() *RedisClient {
 
 type RedisSetOpts struct {
 	Key   string
-	Value interface{}
+	Value string
 }
 
 func (r *RedisClient) Set(ctx context.Context, opts RedisSetOpts) error {
 	return r.Client.Set(ctx, opts.Key, opts.Value, 0).Err()
+}
+
+type RedisSetJSONOpts struct {
+	Key   string
+	Value interface{}
+}
+
+func (r *RedisClient) SetJSON(ctx context.Context, opts RedisSetJSONOpts) error {
+	jsonData, err := json.Marshal(opts.Value)
+	if err != nil {
+		return err
+	}
+	return r.Client.Set(ctx, opts.Key, jsonData, 0).Err()
 }
 
 type RedisGetOpts struct {

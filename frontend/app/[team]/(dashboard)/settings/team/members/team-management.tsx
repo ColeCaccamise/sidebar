@@ -20,8 +20,8 @@ import Image from 'next/image';
 import Dropdown from '@/components/ui/dropdown';
 import { DotsHorizontalIcon } from '@radix-ui/react-icons';
 import { TeamMemberResponse } from '@/types';
-import Button from '@/components/ui/button';
-import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { useState, useEffect } from 'react';
 import { capitalize } from '@/lib/sting';
 import toast from '@/lib/toast';
 import { cancelInvites, removeMember, leaveTeam } from './actions';
@@ -53,6 +53,7 @@ function TeamManagement() {
     isUpdateRoleModalOpen: false,
     isConfirmRemoveModalOpen: false,
     isLeaveTeamModalOpen: false,
+    showMenuButton: false,
   });
 
   const { data: teamMembers } = useQuery({
@@ -69,6 +70,13 @@ function TeamManagement() {
       return team_members;
     },
   });
+
+  useEffect(() => {
+    setState((prev) => ({
+      ...prev,
+      showMenuButton: getMenuItems().length > 0,
+    }));
+  }, [state.selectedMember]);
 
   const { data: user } = useQuery({
     queryKey: ['user'],
@@ -160,34 +168,38 @@ function TeamManagement() {
     }));
   };
 
-  const teamMemberActions = [
-    {
-      id: 'update-role',
-      label: 'Update Role',
-      handleClick: () => {
-        console.log('update role');
-        console.log(state.selectedMember);
-        setState((prev) => ({
-          ...prev,
-          isUpdateRoleModalOpen: true,
-          isDropdownOpen: false,
-        }));
+  const teamMemberActions: {
+    id: string;
+    label: string;
+    handleClick: () => void;
+  }[] = [];
+
+  if (user?.team_role === 'owner') {
+    teamMemberActions.push(
+      {
+        id: 'update-role',
+        label: 'Update Role',
+        handleClick: () => {
+          setState((prev) => ({
+            ...prev,
+            isUpdateRoleModalOpen: true,
+            isDropdownOpen: false,
+          }));
+        },
       },
-    },
-    {
-      id: 'remove-member',
-      label: 'Remove Member',
-      handleClick: () => {
-        console.log('remove member');
-        console.log(state.selectedMember);
-        setState((prev) => ({
-          ...prev,
-          isConfirmRemoveModalOpen: true,
-          isDropdownOpen: false,
-        }));
+      {
+        id: 'remove-member',
+        label: 'Remove Member',
+        handleClick: () => {
+          setState((prev) => ({
+            ...prev,
+            isConfirmRemoveModalOpen: true,
+            isDropdownOpen: false,
+          }));
+        },
       },
-    },
-  ];
+    );
+  }
 
   const pendingMemberActions = [
     {
@@ -244,6 +256,7 @@ function TeamManagement() {
   ];
 
   const getMenuItems = () => {
+    console.log('state.selectedMember', state.selectedMember);
     if (state.selectedMember?.team_member.status === 'pending') {
       return pendingMemberActions;
     } else if (state.selectedMember?.user?.id === user?.id) {
@@ -251,6 +264,7 @@ function TeamManagement() {
     } else if (state.selectedMember?.team_member.status === 'active') {
       return teamMemberActions;
     }
+    return [];
   };
 
   const handleInviteMemberSuccess = (newMembers: TeamMemberResponse[]) => {
@@ -539,23 +553,26 @@ function TeamManagement() {
                       'opacity-100',
                   )}
                 >
-                  <Button
-                    variant="unstyled"
-                    handleClick={(e) => {
-                      const rect = e.currentTarget.getBoundingClientRect();
-                      setState((prev) => ({
-                        ...prev,
-                        dropdownPosition: {
-                          top: rect.top + window.scrollY,
-                          left: rect.left + window.scrollX,
-                        },
-                        isDropdownOpen: !prev.isDropdownOpen,
-                        selectedMember: member,
-                      }));
-                    }}
-                  >
-                    <DotsHorizontalIcon className="h-4 w-4" />
-                  </Button>
+                  {/* TODO: only render when its their own with a leave option and valid perms for others */}
+                  {state.showMenuButton && (
+                    <Button
+                      variant="unstyled"
+                      handleClick={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setState((prev) => ({
+                          ...prev,
+                          dropdownPosition: {
+                            top: rect.top + window.scrollY,
+                            left: rect.left + window.scrollX,
+                          },
+                          isDropdownOpen: !prev.isDropdownOpen,
+                          selectedMember: member,
+                        }));
+                      }}
+                    >
+                      <DotsHorizontalIcon className="h-4 w-4" />
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             ))}
@@ -570,17 +587,19 @@ function TeamManagement() {
           left: `${state.dropdownPosition.left}px`,
         }}
       >
-        <Dropdown
-          position="right"
-          open={state.isDropdownOpen}
-          onClose={() => {
-            setState((prev) => ({
-              ...prev,
-              isDropdownOpen: false,
-            }));
-          }}
-          menuItems={getMenuItems()}
-        ></Dropdown>
+        {state.showMenuButton && (
+          <Dropdown
+            position="right"
+            open={state.isDropdownOpen}
+            onClose={() => {
+              setState((prev) => ({
+                ...prev,
+                isDropdownOpen: false,
+              }));
+            }}
+            menuItems={getMenuItems()}
+          ></Dropdown>
+        )}
       </div>
     </>
   );

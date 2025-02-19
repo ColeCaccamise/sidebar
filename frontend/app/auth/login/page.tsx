@@ -1,6 +1,6 @@
 'use client';
 
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Input from '@/components/ui/input';
 import axios from 'axios';
 import toast from '@/lib/toast';
@@ -135,9 +135,8 @@ export default function LoginPage() {
             className="w-full"
             type="submit"
             disabled={isLoading || !email}
-            loading={isLoading}
           >
-            Continue with email
+            {isLoading ? 'Continuing...' : 'Continue with email'}
           </Button>
         </form>
         <span className="flex items-center gap-2">
@@ -149,7 +148,7 @@ export default function LoginPage() {
           <Button
             variant="unstyled"
             className="btn flex w-full border border-stroke-weak bg-fill"
-            handleClick={async () => {
+            onClick={async () => {
               const res = await getOauthUrl({
                 provider: 'google',
                 redirectUrl: redirectUrl || undefined,
@@ -164,7 +163,7 @@ export default function LoginPage() {
               }
             }}
           >
-            <span className="mr-2">
+            <span className="mr-1 flex items-center justify-center">
               <FontAwesomeIcon icon={faGoogle} />
             </span>
             Continue with Google
@@ -172,7 +171,7 @@ export default function LoginPage() {
           <Button
             variant="unstyled"
             className="btn flex w-full border border-stroke-weak bg-fill"
-            handleClick={async () => {
+            onClick={async () => {
               const res = await getOauthUrl({
                 provider: 'github',
                 redirectUrl: redirectUrl || undefined,
@@ -188,7 +187,7 @@ export default function LoginPage() {
               }
             }}
           >
-            <span className="mr-2">
+            <span className="mr-1 flex items-center justify-center">
               <FontAwesomeIcon icon={faGithub} />
             </span>
             Continue with GitHub

@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useState } from 'react';
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import { updateRole } from '../actions';
 import toast from '@/lib/toast';
 import { getErrorMessage } from '@/messages';

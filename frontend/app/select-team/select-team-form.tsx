@@ -1,12 +1,12 @@
 'use client';
 
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Modal from '@/components/ui/modal';
 import { SelectTeamOptions } from '@/types';
 import { useEffect, useState } from 'react';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ShieldIcon } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useLocalStorage } from 'usehooks-ts';
 import Spinner from '@/components/ui/spinner';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -27,15 +27,19 @@ export default function SelectTeamForm({
     token: token,
     teams: teams,
   });
-  const [teamData, setTeamData] = useState<SelectTeamOptions[]>(
-    value.teams || teams,
-  );
+  const [teamData, setTeamData] = useState<SelectTeamOptions[]>(teams);
   const [chosenTeam, setChosenTeam] = useState<SelectTeamOptions | null>(
     value.chosenTeam,
   );
   const submitUrl = `${process.env.NEXT_PUBLIC_API_URL}/teams/select?token=${token || value.token}&org_id=${chosenTeam?.id}`;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirect = searchParams.get('redirect');
+  const loginUrl = redirect
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/auth/login?redirect=${redirect}`
+    : `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`;
 
+  // update local storage when chosen team changes
   useEffect(() => {
     if (teams.length > 0 && token) {
       setValue({
@@ -43,19 +47,26 @@ export default function SelectTeamForm({
         token: token,
         teams: teams,
       });
-    } else {
-      setTeamData(value.teams || teams);
     }
-  }, [chosenTeam, token, teams, setValue, value.teams]);
+  }, [chosenTeam, token, teams, setValue]);
+
+  // initialize team data from props or storage
+  useEffect(() => {
+    if (teams.length > 0) {
+      setTeamData(teams);
+    } else if (value.teams) {
+      setTeamData(value.teams);
+    }
+  }, [teams, value.teams]);
 
   const handleClose = () => {
-    router.push('/logout');
+    router.push(loginUrl);
     removeValue();
   };
 
   useEffect(() => {
     if (teamData.length === 0) {
-      router.push('/auth/login');
+      router.push(loginUrl);
       removeValue();
     }
   }, [teamData, router, removeValue]);

@@ -1,5 +1,5 @@
 import { CheckCircledIcon, CrossCircledIcon } from '@radix-ui/react-icons';
-import Button from './button';
+import { Button } from './button';
 import Link from 'next/link';
 import Divider from './divider';
 
@@ -82,9 +82,7 @@ export default function PricingBox({
         <Button
           disabled={subscribedTo}
           className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
-          handleClick={() =>
-            priceLookupKey && handleSelectPlan?.(priceLookupKey)
-          }
+          onClick={() => priceLookupKey && handleSelectPlan?.(priceLookupKey)}
         >
           {subscribedTo
             ? 'Subscribing...'
@@ -97,7 +95,7 @@ export default function PricingBox({
     return (
       <Button
         className={`${highlight ? 'btn-brand' : 'btn-brand-secondary'} w-full`}
-        handleClick={() => priceLookupKey && handleUpdatePlan?.(priceLookupKey)}
+        onClick={() => priceLookupKey && handleUpdatePlan?.(priceLookupKey)}
         disabled={subscribedTo}
       >
         {subscribedTo

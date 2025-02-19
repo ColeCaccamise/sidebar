@@ -1,5 +1,5 @@
 import { ForwardedRef, forwardRef, useState } from 'react';
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 const SettingsBox = forwardRef(function SettingsBox(
@@ -72,9 +72,7 @@ const SettingsBox = forwardRef(function SettingsBox(
             : 'bg-fill'
         }`}
       >
-        <div
-          className={`text-sm text-typography-weak ${submitText ? 'py-3' : ''}`}
-        >
+        <div className={`text-sm text-typography-weak ${note ? 'py-3' : ''}`}>
           {note}
         </div>
 
@@ -86,7 +84,7 @@ const SettingsBox = forwardRef(function SettingsBox(
               </Link>
             ) : (
               <Button
-                variant={variant === 'destructive' ? 'destructive' : ''}
+                variant={variant === 'destructive' ? 'destructive' : 'default'}
                 type="submit"
                 disabled={disabled || disableSubmit}
                 loading={disableSubmit}

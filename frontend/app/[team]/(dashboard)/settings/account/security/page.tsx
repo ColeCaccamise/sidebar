@@ -18,7 +18,7 @@ import {
 } from '@fortawesome/free-brands-svg-icons';
 import { faGlobe } from '@fortawesome/free-solid-svg-icons';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Modal from '@/components/ui/modal';
 import { useState } from 'react';
 import Divider from '@/components/ui/divider';
@@ -180,8 +180,8 @@ function SecurityPageContent() {
           <Button
             variant="unstyled"
             key={currentSession.id}
-            className="group flex flex-col gap-2 rounded-lg border border-stroke-weak bg-fill p-4 hover:bg-secondary-fill"
-            handleClick={() => {
+            className="group flex w-full flex-col gap-2 rounded-lg border border-stroke-weak bg-fill px-4 py-10 hover:bg-secondary-fill"
+            onClick={() => {
               setSelectedSession(currentSession);
               setIsOpen(true);
             }}
@@ -219,8 +219,8 @@ function SecurityPageContent() {
               </div>
               <Button
                 variant="unstyled"
-                className="btn-small btn hidden h-10 px-4 text-sm hover:bg-accent group-hover:block"
-                handleClick={async (e) => {
+                className="btn-small btn hidden h-10 px-4 text-sm hover:bg-accent hover:text-typography-strong group-hover:block"
+                onClick={async (e) => {
                   e.stopPropagation();
 
                   setLogoutModalOpen(true);
@@ -241,8 +241,8 @@ function SecurityPageContent() {
               </span>
               <Button
                 variant="unstyled"
-                className="btn btn-small h-10 rounded-md px-4 py-1 text-sm hover:bg-secondary-fill"
-                handleClick={async (e) => {
+                className="btn btn-small h-10 rounded-md px-4 py-1 text-sm hover:bg-secondary-fill hover:text-typography-strong"
+                onClick={async (e) => {
                   e.stopPropagation();
                   setRevokeAllModalOpen(true);
                 }}
@@ -256,8 +256,8 @@ function SecurityPageContent() {
                 <Button
                   variant="unstyled"
                   key={session.id}
-                  className="group flex flex-col gap-2 p-4 hover:bg-secondary-fill"
-                  handleClick={() => {
+                  className="group flex w-full flex-col gap-2 rounded-none p-4 px-4 py-10 hover:bg-secondary-fill"
+                  onClick={() => {
                     setSelectedSession(session);
                     setIsOpen(true);
                   }}
@@ -317,7 +317,7 @@ function SecurityPageContent() {
                       <Button
                         variant="unstyled"
                         className="btn btn-small hidden h-10 px-4 text-sm hover:bg-accent group-hover:block"
-                        handleClick={async (e) => {
+                        onClick={async (e) => {
                           e.stopPropagation();
                           setSelectedSessionId(session.id);
                           setRevokeModalOpen(true);

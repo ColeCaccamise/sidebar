@@ -3,8 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
-	"github.com/h2non/filetype"
 	"io"
+
+	"github.com/h2non/filetype"
 
 	"github.com/colecaccamise/go-backend/util"
 
@@ -376,13 +377,9 @@ func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error
 		return WriteJSON(w, http.StatusUnauthorized, Error{Error: "unauthorized", Code: "unauthorized"})
 	}
 	user := userSession.User
-	redirectUrl := fmt.Sprintf("%s/onboarding/team", os.Getenv("APP_URL"))
 
 	if user.TermsAcceptedAt != nil {
-
-		return WriteJSON(w, http.StatusOK, Response{Message: "terms accepted.", Code: "terms_accepted", Data: map[string]interface{}{
-			"redirect_url": redirectUrl,
-		}})
+		return WriteJSON(w, http.StatusNoContent, nil)
 	}
 
 	acceptTermsReq := new(models.AcceptTermsRequest)
@@ -401,9 +398,28 @@ func (s *Server) handleAcceptTerms(w http.ResponseWriter, r *http.Request) error
 			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
 		}
 
-		return WriteJSON(w, http.StatusOK, Response{Message: "terms accepted.", Code: "terms_accepted", Data: map[string]interface{}{
-			"redirect_url": redirectUrl,
-		}})
+		// update user data in redis
+		redis := util.NewRedisClient()
+		currentUser, err := redis.GetJSON(context.Background(), util.RedisGetOpts{
+			Key: fmt.Sprintf("user:%s", user.WorkosUserID),
+		})
+		if err != nil {
+			fmt.Printf("Error getting user data: %v\n", err)
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		updatedUser := currentUser.(map[string]interface{})
+		updatedUser["terms_accepted"] = true
+		err = redis.SetJSON(context.Background(), util.RedisSetJSONOpts{
+			Key:   fmt.Sprintf("user:%s", user.WorkosUserID),
+			Value: updatedUser,
+		})
+		if err != nil {
+			fmt.Printf("Error setting user data: %v\n", err)
+			return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
+		}
+
+		return WriteJSON(w, http.StatusNoContent, nil)
 	}
 }
 

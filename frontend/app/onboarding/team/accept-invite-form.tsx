@@ -1,6 +1,6 @@
 'use client';
 
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import api from '@/lib/axios';
 import toast from '@/lib/toast';
 import { TeamInvite } from '@/types';
@@ -63,13 +63,13 @@ export default function AcceptInviteForm({ data }: { data: TeamInvite }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <Button className="w-full" handleClick={handleAccept}>
+      <Button className="w-full" onClick={handleAccept}>
         Join Team
       </Button>
       <Button
         className="btn w-full justify-center text-center"
-        variant="unstyled"
-        handleClick={handleDecline}
+        variant="ghost"
+        onClick={handleDecline}
       >
         Decline
       </Button>

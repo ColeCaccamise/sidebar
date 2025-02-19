@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/colecaccamise/go-backend/models"
 	"github.com/colecaccamise/go-backend/util"
 	"github.com/mileusna/useragent"
 	"github.com/workos/workos-go/v4/pkg/usermanagement"
 	"github.com/workos/workos-go/v4/pkg/webhooks"
-	"io"
-	"net/http"
-	"os"
-	"time"
 )
 
 type WorkOsWebhookEvent struct {
@@ -86,6 +87,8 @@ func (s *Server) handleWorkosWebhook(w http.ResponseWriter, r *http.Request) err
 		email := data.Email
 		firstName := data.FirstName
 		lastName := data.LastName
+
+		// todo get db user
 
 		if event == "user.created" {
 

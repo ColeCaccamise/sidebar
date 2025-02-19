@@ -1,96 +1,64 @@
-'use client';
-
-import Button from '@/components/ui/button';
-import { useRouter } from 'next/navigation';
-import api from '@/lib/axios';
-import {
-  QueryClient,
-  QueryClientProvider,
-  useQuery,
-} from '@tanstack/react-query';
+import { Button } from '@/components/ui/button';
+import api from '@/lib/api';
+import { parseJwt } from '@/lib/jwt';
+import { getRedis } from '@/lib/redis';
+import { User, Workspace } from '@/types';
 import { ChevronLeftIcon } from 'lucide-react';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
+import OnboardingActions from './onboarding-actions';
 
-// create a client
-const queryClient = new QueryClient();
-
-function OnboardingLayoutContent({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
-  async function handleLogout() {
-    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`;
-
-    try {
-      const res = await api.post('/auth/logout');
-      router.push(res.data.data.redirect_url || loginUrl);
-    } catch (error) {
-      console.error('error logging out: ', error);
-      router.push(loginUrl);
-    }
-  }
-
-  const { data: teams } = useQuery({
-    queryKey: ['existingTeams'],
-    queryFn: async () => {
-      const {
-        data: { data },
-      } = await api.get('/teams');
-      return data;
-    },
-  });
-
-  const { data: user } = useQuery({
-    queryKey: ['user'],
-    queryFn: async () => {
-      const {
-        data: {
-          data: { user },
-        },
-      } = await api.get('/auth/identity');
-      return user;
-    },
-  });
-
-  return (
-    <>
-      {children}
-
-      {teams?.length > 0 &&
-        user?.default_team_slug &&
-        user?.onboarding_completed && (
-          <div className="fixed left-8 top-8">
-            <Button
-              className="transition-effect flex items-center gap-1 hover:opacity-90"
-              variant="unstyled"
-              type="submit"
-              handleClick={() => router.push(`/${user?.default_team_slug}`)}
-            >
-              <ChevronLeftIcon className="h-4 w-4" />
-              Back to dashboard
-            </Button>
-          </div>
-        )}
-
-      <div className="fixed right-8 top-8">
-        <Button
-          className="transition-effect hover:opacity-90"
-          variant="unstyled"
-          type="submit"
-          handleClick={handleLogout}
-        >
-          Log out
-        </Button>
-      </div>
-    </>
-  );
-}
-
-export default function OnboardingLayout({
+export default async function OnboardingLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  async function handleLogout() {
+    'use server';
+
+    const loginUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`;
+
+    try {
+      const res = await api.post<{ data: { redirect_url: string } }>(
+        '/auth/logout',
+      );
+      redirect(res.data.data.redirect_url || loginUrl);
+    } catch (error) {
+      console.error('error logging out: ', error);
+      redirect(loginUrl);
+    }
+  }
+
+  const cookieStore = cookies();
+  // const teams = await api
+  //   .get<{ data: { teams: Team[] } }>('/teams')
+  //   .then((res) => res.data.data.teams)
+  //   .catch(() => []);
+
+  const authToken = cookieStore.get('auth-token');
+  const access = parseJwt(authToken?.value ?? '');
+  console.log('access', access);
+  const orgId = access?.orgId;
+  const { data: workspace } = await getRedis({
+    key: `workspace:${orgId}`,
+  });
+  console.log(`workspace:${orgId}`);
+  console.log(`user:${access?.sub}`);
+  const { data: user, success } = await getRedis({
+    key: `user:${access?.sub}`,
+  });
+  if (!success) {
+    redirect('/auth/login');
+  }
+
   return (
-    <QueryClientProvider client={queryClient}>
-      <OnboardingLayoutContent>{children}</OnboardingLayoutContent>
-    </QueryClientProvider>
+    <>
+      {children}
+      <OnboardingActions
+        workspace={workspace as Workspace}
+        user={user as User}
+        handleLogout={handleLogout}
+      />
+    </>
   );
 }

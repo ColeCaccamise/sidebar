@@ -142,3 +142,9 @@ export default function Sidebar({
     </div>
   );
 }
+
+export function SkeletonSidebar() {
+  return (
+    <div className="bg-sidebar-fill flex max-h-screen w-64 min-w-64 max-w-64 flex-col justify-between gap-12 overflow-y-auto bg-sidebar px-4 py-12"></div>
+  );
+}

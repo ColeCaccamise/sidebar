@@ -6,7 +6,7 @@ import toast from '@/lib/toast';
 import { getErrorMessage, getResponseMessage } from '@/messages';
 import axios from 'axios';
 import Input from '@/components/ui/input';
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Spinner from '@/components/ui/spinner';
 
 export default function CreateTeamForm() {

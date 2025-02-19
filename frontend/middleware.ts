@@ -2,15 +2,30 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import axios from 'axios';
 import { cookies } from 'next/headers';
-import { Identity, Team, TeamMember, User } from './types';
+import { User, Workspace } from './types';
+import { parseJwt, isTokenExpired } from './lib/jwt';
+import { getRedis } from './lib/redis';
 
 const SIGNED_OUT_AUTH_ROUTES = ['/auth/login', '/auth/signup'];
 const AUTH_ROUTES = [
   '/auth/forgot-password',
   '/auth/change-password',
   '/auth/confirm',
+  '/auth/callback',
+  '/auth/refresh',
 ];
 const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms', '/select-team'];
+
+// times in s
+const accessTokenExpiry = 1 * 60; // 1 minute
+const refreshTokenExpiry = 720 * 60 * 60; // 30 days
+
+const handleRedirect = (request: NextRequest, url: string) => {
+  if (request.nextUrl.pathname === url) {
+    return NextResponse.next();
+  }
+  return NextResponse.redirect(new URL(url, request.url));
+};
 
 export async function middleware(request: NextRequest) {
   // skip middleware for server actions
@@ -18,161 +33,121 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
   const cookieStore = cookies();
   const pathname = request.nextUrl.pathname;
-  const redirect = request.nextUrl.searchParams.get('redirect');
-  const loginUrl = redirect
-    ? `${appUrl}/auth/login?redirect=${redirect}`
-    : `${appUrl}/auth/login`;
 
-  // allow access to team join routes
-  if (pathname.match(/^\/[^\/]+\/join\/[^\/]+$/)) {
+  if (
+    pathname.startsWith('/auth/callback/') ||
+    ALLOWED_ROUTES.includes(pathname) ||
+    AUTH_ROUTES.includes(pathname)
+  ) {
     return NextResponse.next();
   }
 
-  if (!apiUrl) {
-    return NextResponse.next();
+  let authToken = cookieStore.get('auth-token')?.value;
+  let refreshToken = cookieStore.get('refresh-token')?.value;
+
+  if (!authToken && !refreshToken) {
+    return handleRedirect(request, '/auth/login');
   }
 
-  // get user data
-  let isLoggedIn = false;
-  let user: User | null = null;
-  let team: Team | null = null;
-  let teamMember: TeamMember | null = null;
-
-  const identity = await axios
-    .get<{ data: Identity }>(`${apiUrl}/auth/identity`, {
-      headers: {
-        Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
-      },
-      withCredentials: true,
-    })
-    .then((res) => {
-      return res?.data?.data;
-    })
-    .catch(() => null);
-
-  if (!identity?.valid) {
-    // attempt to refresh
-    const refresh = await axios
-      .get<{ data: Identity }>(`${apiUrl}/auth/refresh`, {
-        headers: {
-          Cookie: `refresh-token=${cookieStore.get('refresh-token')?.value}`,
-          'Content-Type': 'application/json',
+  const authExpired = isTokenExpired(authToken ?? '');
+  console.log('auth expired', authExpired);
+  if ((authExpired || !authToken) && refreshToken) {
+    // handle refresh inline
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
+        {
+          method: 'GET',
+          headers: {
+            Cookie: `refresh-token=${refreshToken}`,
+          },
+          credentials: 'include',
         },
-        withCredentials: true,
-      })
-      .then(async (res) => {
-        isLoggedIn = true;
-        return res;
-      })
-      .catch((err) => {
-        return err.response;
+      );
+
+      if (!response.ok) {
+        return handleRedirect(
+          request,
+          '/auth/login?error=refresh_token_expired',
+        );
+      }
+
+      // get the new tokens from response
+      const { data } = await response.json();
+      const { access_token, refresh_token } = data;
+
+      console.log('refreshed token', access_token, refresh_token);
+
+      // create response with new tokens
+      const newResponse = NextResponse.next();
+
+      // set the cookies with proper attributes
+      newResponse.cookies.set({
+        name: 'auth-token',
+        value: access_token,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: accessTokenExpiry,
+        path: '/',
       });
 
-    if (refresh?.status != 200) {
-      // handle failed refresh
-      if (
-        !SIGNED_OUT_AUTH_ROUTES.includes(pathname) &&
-        !AUTH_ROUTES.includes(pathname) &&
-        !ALLOWED_ROUTES.includes(pathname)
-      ) {
-        return NextResponse.redirect(loginUrl);
-      } else {
-        return NextResponse.next();
-      }
-    } else {
-      const response = NextResponse.next();
-      const setCookieHeader = refresh.headers['set-cookie'];
-      if (setCookieHeader) {
-        if (Array.isArray(setCookieHeader)) {
-          setCookieHeader.forEach((cookie) => {
-            response.headers.append('Set-Cookie', cookie);
-          });
-        } else {
-          setCookieHeader.split(', ')?.forEach((cookie: string) => {
-            response.headers.append('Set-Cookie', cookie);
-          });
-        }
-      }
-      return response;
-    }
-  } else {
-    isLoggedIn = true;
-    user = identity.user;
-    team = identity.team;
-    teamMember = identity.team_member;
-  }
+      newResponse.cookies.set({
+        name: 'refresh-token',
+        value: refresh_token,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: refreshTokenExpiry,
+        path: '/',
+      });
 
-  // redirect logged in users to root path
-  if (isLoggedIn && SIGNED_OUT_AUTH_ROUTES.includes(pathname)) {
-    return NextResponse.redirect(new URL(`/${team.slug}`, request.url));
-  }
-
-  // check onboarding status
-  const termsAccepted = user?.terms_accepted;
-  const teamCreatedOrJoined = user?.team_created_or_joined;
-  const deleted = user?.deleted;
-
-  // redirect to deleted page if user has been deleted
-  if (deleted) {
-    if (pathname === '/deleted') {
-      return NextResponse.next();
-    }
-    return NextResponse.redirect(`${appUrl}/deleted`);
-  }
-
-  // verify terms accepted
-  if (!termsAccepted) {
-    if (pathname === '/onboarding/terms') {
-      return NextResponse.next();
-    }
-    return NextResponse.redirect(`${appUrl}/onboarding/terms`);
-  }
-
-  // verify team created or joined
-  if (!teamCreatedOrJoined) {
-    if (pathname === '/onboarding/team') {
-      return NextResponse.next();
-    }
-    return NextResponse.redirect(`${appUrl}/onboarding/team`);
-  }
-
-  // verify onboarding complete
-  const subscriptionTierChosen = team?.subscription_tier_chosen;
-  const teamMemberOnboarded = teamMember?.onboarded;
-  const isOwner = teamMember?.team_role === 'owner';
-
-  // verify subscription status
-  if (subscriptionTierChosen && pathname === `/${team.slug}/onboarding/plans`) {
-    if (pathname === `/${team.slug}`) {
-      return NextResponse.next();
-    }
-    return NextResponse.redirect(`${appUrl}/${team.slug}`);
-  }
-
-  if (teamMember) {
-    // handle onboarding redirects
-    if (!subscriptionTierChosen && isOwner) {
-      if (pathname === `/${team.slug}/onboarding/plans`) {
-        return NextResponse.next();
-      }
-      return NextResponse.redirect(`${appUrl}/${team.slug}/onboarding/plans`);
-    }
-
-    if (!teamMemberOnboarded) {
-      if (pathname === `/${team.slug}/onboarding/welcome`) {
-        return NextResponse.next();
-      }
-      return NextResponse.redirect(`${appUrl}/${team.slug}/onboarding/welcome`);
+      // update the current request auth token for subsequent middleware checks
+      authToken = access_token;
+      console.log('refreshed token');
+      return newResponse;
+    } catch {
+      console.log('error refreshing token');
+      return handleRedirect(request, '/auth/login');
     }
   }
 
-  // redirect root to default team
-  if (pathname === '/') {
-    return NextResponse.redirect(`${appUrl}/${team.slug}`);
+  const parsedAuth = parseJwt(authToken ?? '');
+  console.log('parsed auth', parsedAuth);
+
+  if (!parsedAuth) {
+    return handleRedirect(request, '/auth/login');
+  }
+
+  const userId = parsedAuth.sub;
+
+  // if (!workspace.onboarded) {
+  //   return handleRedirect(request, `/${slug}/onboarding`);
+  // }
+
+  const redisUser = await getRedis({ key: `user:${userId}` });
+  if (!redisUser.success || !redisUser.data) {
+    return handleRedirect(request, '/auth/login');
+  }
+
+  const user = redisUser.data as User;
+
+  if (!user.onboarded) {
+    return handleRedirect(request, '/onboarding');
+  }
+
+  console.log('pathname', pathname);
+
+  if (SIGNED_OUT_AUTH_ROUTES.includes(pathname) || pathname === '/') {
+    console.log('redirecting to workspace');
+    // redirect to workspace on root or auth routes
+    const workspaceId = parsedAuth.org_id;
+    const workspaceData = await getRedis({ key: `workspace:${workspaceId}` });
+    const workspace = workspaceData.data as Workspace;
+    const slug = workspace.slug ?? '';
+    return handleRedirect(request, `/${slug}`);
   }
 
   return NextResponse.next();

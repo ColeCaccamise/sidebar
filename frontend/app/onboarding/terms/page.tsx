@@ -1,17 +1,19 @@
 'use client';
 
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import toast from '@/lib/toast';
 import { getErrorMessage, getResponseMessage } from '@/messages';
 import axios from 'axios';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import Spinner from '@/components/ui/spinner';
 
 export default function OnboardingTermsPage() {
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const router = useRouter();
+
   async function handleAgree() {
     setAgreed(true);
     setLoading(true);
@@ -60,11 +62,13 @@ export default function OnboardingTermsPage() {
       </div>
       <Button
         className="w-full"
-        handleClick={handleAgree}
-        loading={loading}
+        onClick={handleAgree}
         disabled={loading || agreed}
       >
-        {loading ? 'Agreeing...' : agreed ? 'Agreed' : 'Agree and continue'}
+        <div className="flex items-center gap-2">
+          {loading && <Spinner variant="light" />}
+          {loading ? 'Agreeing...' : agreed ? 'Agreed' : 'Agree and continue'}
+        </div>
       </Button>
     </div>
   );

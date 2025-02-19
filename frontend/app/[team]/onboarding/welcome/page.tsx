@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/axios';
 import Spinner from '@/components/ui/spinner';
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Logo from '@/components/ui/logo';
 import { Team } from '@/types';
 
@@ -115,7 +115,7 @@ export default function WelcomePage() {
       <div className="flex w-full flex-col items-center gap-4">
         <Button
           className="btn-brand-secondary w-full"
-          handleClick={() => {
+          onClick={() => {
             if (onboardingStep + 1 === onboardingCopy.length) {
               completeOnboarding();
             } else {
@@ -125,7 +125,7 @@ export default function WelcomePage() {
         >
           {buttonText}
         </Button>
-        <Button variant="unstyled" className="">
+        <Button variant="ghost" className="">
           {buttonLinkText}
         </Button>
       </div>
@@ -133,10 +133,10 @@ export default function WelcomePage() {
       <div className="mt-10 flex w-full justify-start">
         {onboardingStep > 0 && (
           <Button
-            handleClick={() => {
+            onClick={() => {
               updateStep(onboardingStep - 1);
             }}
-            variant="unstyled"
+            variant="ghost"
             className="text-sm"
           >
             Back

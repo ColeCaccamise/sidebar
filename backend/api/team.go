@@ -95,8 +95,6 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 		return WriteJSON(w, http.StatusBadRequest, Error{Error: errorMsg, Code: "invalid_request"})
 	}
 
-	// validate team name
-
 	// trim whitespace
 	teamReq.Name = strings.TrimSpace(teamReq.Name)
 
@@ -186,6 +184,17 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 			Code:  "internal_server_error",
 		})
 	}
+	
+	// update team in redis
+	redis := util.NewRedisClient()
+	redis.SetJSON(context.Background(), util.RedisSetJSONOpts{
+		Key:   fmt.Sprintf("workspace:%s", org.ID),
+		Value: map[string]interface{}{
+			"id": team.ID,
+			"name": team.Name,
+			"slug": team.Slug,
+		},
+	})
 
 	// add logged-in user as created by
 	team.CreatedBy = user.ID
@@ -194,6 +203,26 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 	// handle onboarding team creation requirement
 	if user.TeamCreatedOrJoinedAt == nil {
 		user.TeamCreatedOrJoinedAt = &now
+		// get current user data from redis
+		userData, err := redis.GetJSON(context.Background(), util.RedisGetOpts{
+			Key: fmt.Sprintf("user:%s", user.WorkosUserID),
+		})
+		if err != nil {
+			return WriteJSON(w, http.StatusInternalServerError, Error{
+				Error: "internal server error.",
+				Code:  "internal_server_error", 
+			})
+		}
+
+		// merge existing data with new fields
+		userDataMap := userData.(map[string]interface{})
+		userDataMap["workspace_created_or_joined"] = true
+		userDataMap["onboarded"] = true
+
+		redis.SetJSON(context.Background(), util.RedisSetJSONOpts{
+			Key:   fmt.Sprintf("user:%s", user.WorkosUserID),
+			Value: userData,
+		})
 	}
 
 	user.DefaultTeamSlug = team.Slug
@@ -236,6 +265,18 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 			Code:  "internal_server_error",
 		})
 	}
+
+	// store member in redis
+	redis.SetJSON(context.Background(), util.RedisSetJSONOpts{
+		Key:   fmt.Sprintf("member:%s:%s", user.WorkosUserID, org.ID),
+		Value: map[string]interface{}{
+			"id": teamMember.ID,
+			"role": teamMember.TeamRole,
+			"status": teamMember.Status,
+			"left": false,
+			"removed": false,
+		},
+	})
 
 	// generate initial team invite
 	inviteToken, err := generateInviteToken()
@@ -292,6 +333,7 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 
 	return WriteJSON(w, http.StatusCreated, Response{Message: "team created", Code: "team_created", Data: map[string]string{
 		"slug": team.Slug,
+		"org_id": org.ID,
 	}})
 }
 

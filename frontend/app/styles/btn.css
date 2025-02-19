@@ -1,5 +1,5 @@
 .btn {
-  @apply inline-flex h-10 w-fit items-center justify-center rounded-md bg-none px-4 font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
+  @apply transition-effect inline-flex h-10 w-fit items-center justify-center rounded-md bg-none px-4 font-medium transition-all duration-200 hover:opacity-90 focus:opacity-100 active:opacity-95;
 }
 
 .btn-small {

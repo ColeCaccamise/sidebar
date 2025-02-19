@@ -29,7 +29,7 @@ const (
 
 // ai client interface defines available methods
 type AIClientInterface interface {
-	GenerateText(opts *GenerateTextOpts) (interface{}, error)
+	Chat(opts *ChatRequest) (interface{}, error)
 }
 
 type AIClient struct {
@@ -80,11 +80,16 @@ type GenerateTextOpts struct {
 }
 
 type ChatRequest struct {
-	Prompt string `json:"prompt"`
+	Messages []ChatMessage `json:"messages"`
+}
+
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 // generate text with anthropic model
-func (c *AIClient) generateAnthropicText(opts *GenerateTextOpts) (interface{}, error) {
+func (c *AIClient) generateAnthropicText(opts *ChatRequest) (interface{}, error) {
 	model, ok := c.Model.(AnthropicModel)
 	if !ok {
 		return nil, fmt.Errorf("invalid anthropic model")
@@ -172,12 +177,13 @@ func (c *AIClient) generateDeepSeekText(opts *GenerateTextOpts) (interface{}, er
 }
 
 // generate text based on model type
-func (c *AIClient) GenerateText(opts *GenerateTextOpts) (interface{}, error) {
+func (c *AIClient) Chat(opts *ChatRequest) (interface{}, error) {
 	switch c.ModelType {
 	case Anthropic:
 		return c.generateAnthropicText(opts)
 	case DeepSeek:
-		return c.generateDeepSeekText(opts)
+		//return c.generateDeepSeekText(opts)
+		return nil, fmt.Errorf("not implemented")
 	default:
 		return nil, fmt.Errorf("invalid model type")
 	}

@@ -1,6 +1,6 @@
 'use client';
 
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Input from '@/components/ui/input';
 import toast from '@/lib/toast';
 import { getErrorMessage, getResponseMessage } from '@/messages';

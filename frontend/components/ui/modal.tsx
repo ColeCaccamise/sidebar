@@ -2,7 +2,7 @@
 
 import { Dialog, DialogPanel } from '@headlessui/react';
 import { ArrowLeftIcon, Cross1Icon } from '@radix-ui/react-icons';
-import Button from '@/components/ui/button';
+import { Button } from '@/components/ui/button';
 import Spinner from './spinner';
 import { useEffect, useCallback } from 'react';
 
@@ -98,7 +98,7 @@ export default function Modal({
           {(!steps ? title : activeStep?.title) ? (
             <div className="flex justify-between border-b border-stroke-weak p-4">
               {activeStep?.handleBack && (
-                <Button handleClick={activeStep.handleBack} variant="unstyled">
+                <Button onClick={activeStep.handleBack} variant="ghost">
                   <ArrowLeftIcon />
                 </Button>
               )}
@@ -107,7 +107,7 @@ export default function Modal({
               </h3>
               {canClose && showCloseButton && (
                 <Button
-                  handleClick={handleClose}
+                  onClick={handleClose}
                   className="transition-effect hover:opacity-80"
                   variant="unstyled"
                 >
@@ -124,9 +124,9 @@ export default function Modal({
               <div className="flex justify-end gap-3">
                 {showCancelButton && (
                   <Button
-                    variant="unstyled"
+                    variant="ghost"
                     className="btn btn-outline btn-small"
-                    handleClick={activeStep?.handleBack || handleClose}
+                    onClick={activeStep?.handleBack || handleClose}
                   >
                     {cancelText}
                   </Button>
@@ -134,8 +134,8 @@ export default function Modal({
                 {((!steps && showSubmitButton) || steps) && handleSubmit && (
                   <Button
                     className={`btn btn-small ${destructive ? 'btn-destructive' : 'btn-brand-secondary'}`}
-                    variant="unstyled"
-                    handleClick={activeStep?.handleSubmit || handleSubmit}
+                    variant={destructive ? 'destructive' : 'secondary'}
+                    onClick={activeStep?.handleSubmit || handleSubmit}
                     disabled={activeStep?.disabled || isLoading}
                   >
                     {isLoading && (

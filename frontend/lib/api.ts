@@ -53,8 +53,7 @@ class ApiClient {
       }
 
       return true;
-    } catch (error) {
-      console.error('error refreshing token', error);
+    } catch {
       return false;
     }
   }

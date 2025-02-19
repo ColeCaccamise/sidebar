@@ -37,8 +37,6 @@ api.interceptors.response.use(
       _retry?: boolean;
     };
 
-    console.log('using client handler');
-
     if (error.response?.status === 401 && originalRequest._retry) {
       return Promise.reject(error);
     }

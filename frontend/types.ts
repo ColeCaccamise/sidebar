@@ -1,5 +1,20 @@
 import { ErrorCode, ResponseCode } from '@/messages';
 
+export type WorkspaceMember = {
+  id: string;
+  left: boolean;
+  removed: boolean;
+  role: string;
+  status: string;
+};
+
+export type Workspace = {
+  id: string;
+  name: string;
+  slug: string;
+  onboarded: boolean;
+};
+
 export type User = {
   id: string;
   first_name?: string;
@@ -9,11 +24,13 @@ export type User = {
   is_admin?: boolean;
   avatar_url?: string;
   deleted_at?: string | null;
-  terms_accepted?: boolean;
   team_created_or_joined?: boolean;
   default_team_slug?: string;
   deleted?: boolean;
   restorable?: boolean;
+  onboarded: boolean;
+  terms_accepted?: boolean;
+  workspace_created_or_joined?: boolean;
 };
 
 export type Identity = {
@@ -108,7 +125,7 @@ export type SelectTeamOptions = {
   id: string;
 };
 
-export type TeamPaymentMethod = {
+export type WorkspacePaymentMethod = {
   id: string;
   card: {
     brand: string;
