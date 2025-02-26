@@ -1,18 +1,8 @@
 import { cookies } from 'next/headers';
 import { getRedis, setRedis } from './redis';
 import { parseJwt } from './jwt';
-import { WorkspaceMember } from '@/types';
-interface User {
-  id?: string;
-  email?: string;
-  firstName?: string;
-  lastName?: string;
-  profileImageUrl?: string;
-  onboarded?: boolean;
-  teamCreatedOrJoined?: boolean;
-  termsAccepted?: boolean;
-  deleted?: boolean;
-}
+import { WorkspaceMember, User } from '@/types';
+import api from './api';
 
 export async function getUser(userId: string): Promise<User> {
   const { data, success, error } = await getRedis({ key: `user:${userId}` });
@@ -64,6 +54,22 @@ export async function getCurrentUser(): Promise<{
     return { success: false, error };
   }
   return { success: true, user: data as User };
+}
+
+export async function getCurrentUserData(): Promise<{
+  success: boolean;
+  error?: string;
+  user?: User;
+}> {
+  try {
+    const response = await api.get('/users/me');
+    console.log(response.data);
+
+    return { success: true, user: response.data as User };
+  } catch (error) {
+    console.log(error);
+    return { success: false, error: 'Something went wrong' };
+  }
 }
 
 export async function getCurrentMember(): Promise<{

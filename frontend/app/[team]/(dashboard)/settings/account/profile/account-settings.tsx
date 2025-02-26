@@ -29,9 +29,12 @@ import { Label } from '@/components/ui/label';
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
-export default function AccountSettings() {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+interface AccountSettingsProps {
+  user: User;
+}
+
+export default function AccountSettings({ user }: AccountSettingsProps) {
+  const [isLoading, setIsLoading] = useState(false);
   const [avatar, setAvatar] = useState<File | undefined>(undefined);
   const [editingEmail, setEditingEmail] = useState(false);
   const [password, setPassword] = useState('');
@@ -47,7 +50,25 @@ export default function AccountSettings() {
     email?: { initial: string; current: string };
     updatedEmail?: string;
     avatar?: { initial: string; current: string };
-  }>({});
+  }>({
+    firstName: {
+      initial: user?.first_name || '',
+      current: user?.first_name || '',
+    },
+    lastName: {
+      initial: user?.last_name || '',
+      current: user?.last_name || '',
+    },
+    email: {
+      initial: user?.email || '',
+      current: user?.email || '',
+    },
+    updatedEmail: user?.updated_email || '',
+    avatar: {
+      initial: user?.avatar_url || '',
+      current: user?.avatar_url || '',
+    },
+  });
 
   const [deleteAccountValues, setDeleteAccountValues] = useState<{
     reason: string;
@@ -71,49 +92,6 @@ export default function AccountSettings() {
   const message = searchParams.get('message');
 
   const router = useRouter();
-
-  const getUser = useCallback(async () => {
-    console.log('get user 76');
-    const userResponse: User | null = await axios
-      .get(`${apiUrl}/auth/identity`, {
-        withCredentials: true,
-      })
-      .then((response) => {
-        return response.data.data.user;
-      })
-      .catch((error) => console.error(error));
-
-    setUser(userResponse);
-
-    console.log(userResponse);
-
-    setUserValues({
-      firstName: {
-        initial: userResponse?.first_name || '',
-        current: userResponse?.first_name || '',
-      },
-      lastName: {
-        initial: userResponse?.last_name || '',
-        current: userResponse?.last_name || '',
-      },
-      email: {
-        initial: userResponse?.email || '',
-        current: userResponse?.email || '',
-      },
-      updatedEmail: userResponse?.updated_email || '',
-      avatar: {
-        initial: userResponse?.avatar_url || '',
-        current: userResponse?.avatar_url || '',
-      },
-    });
-  }, []);
-
-  useEffect(() => {
-    setIsLoading(true);
-    getUser().then(() => {
-      setIsLoading(false);
-    });
-  }, [getUser]);
 
   useEffect(() => {
     if (!editingEmail) {
@@ -144,7 +122,6 @@ export default function AccountSettings() {
   async function updateEmail() {
     try {
       const res = await updateUserEmail({
-        user,
         email: userValues.email?.current || '',
       }).then((res) => res);
 
@@ -204,7 +181,6 @@ export default function AccountSettings() {
           note="Max 32 characters."
           onSettingSubmit={async () => {
             const { data, success } = await updateUser({
-              user,
               firstName: userValues.firstName?.current,
               lastName: userValues.lastName?.current,
             });
@@ -301,7 +277,9 @@ export default function AccountSettings() {
                   className="underline"
                   variant="link"
                   onClick={() =>
-                    resendUpdateEmailConfirmation({ user }).then(() => {
+                    resendUpdateEmailConfirmation({
+                      user: user as User,
+                    }).then(() => {
                       toast({
                         message: 'Email sent',
                         description:
@@ -414,7 +392,6 @@ export default function AccountSettings() {
             const formData = new FormData();
             formData.append('avatar', avatar || '');
             const { data, success, code } = await uploadAvatar({
-              user,
               formData,
             });
 

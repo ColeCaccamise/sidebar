@@ -184,13 +184,13 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 			Code:  "internal_server_error",
 		})
 	}
-	
+
 	// update team in redis
 	redis := util.NewRedisClient()
 	redis.SetJSON(context.Background(), util.RedisSetJSONOpts{
-		Key:   fmt.Sprintf("workspace:%s", org.ID),
+		Key: fmt.Sprintf("workspace:%s", org.ID),
 		Value: map[string]interface{}{
-			"id": team.ID,
+			"id":   team.ID,
 			"name": team.Name,
 			"slug": team.Slug,
 		},
@@ -210,7 +210,7 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 		if err != nil {
 			return WriteJSON(w, http.StatusInternalServerError, Error{
 				Error: "internal server error.",
-				Code:  "internal_server_error", 
+				Code:  "internal_server_error",
 			})
 		}
 
@@ -268,12 +268,12 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 
 	// store member in redis
 	redis.SetJSON(context.Background(), util.RedisSetJSONOpts{
-		Key:   fmt.Sprintf("member:%s:%s", user.WorkosUserID, org.ID),
+		Key: fmt.Sprintf("member:%s:%s", user.WorkosUserID, org.ID),
 		Value: map[string]interface{}{
-			"id": teamMember.ID,
-			"role": teamMember.TeamRole,
-			"status": teamMember.Status,
-			"left": false,
+			"id":      teamMember.ID,
+			"role":    teamMember.TeamRole,
+			"status":  teamMember.Status,
+			"left":    false,
 			"removed": false,
 		},
 	})
@@ -332,7 +332,7 @@ func (s *Server) handleCreateTeam(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	return WriteJSON(w, http.StatusCreated, Response{Message: "team created", Code: "team_created", Data: map[string]string{
-		"slug": team.Slug,
+		"slug":   team.Slug,
 		"org_id": org.ID,
 	}})
 }
@@ -1975,7 +1975,12 @@ func (s *Server) handleSelectTeam(w http.ResponseWriter, r *http.Request) error 
 	}
 
 	// update default team slug
-	team, _ := s.store.GetTeamByWorkosOrgID(orgId)
+	team, err := s.store.GetTeamByWorkosOrgID(orgId)
+	if err != nil {
+		redirectUrl = fmt.Sprintf("%s/auth/login?error=internal_server_error", os.Getenv("APP_URL"))
+		http.Redirect(w, r, redirectUrl, http.StatusFound)
+		return nil
+	}
 	slug := team.Slug
 	decoded, _ := util.ParseJWT(accessToken)
 	workosUserId := decoded.WorkosUserID

@@ -42,6 +42,16 @@ export async function updateUser(userId: string, opts: User): Promise<User> {
   return data as User;
 }
 
+export async function getCurrentOrgID(): Promise<string | null> {
+  const cookieStore = cookies();
+  const authToken = cookieStore.get('auth-token')?.value;
+  if (!authToken) {
+    return null;
+  }
+  const access = parseJwt(authToken);
+  return access.org_id;
+}
+
 export async function getCurrentWorkspace(): Promise<{
   success: boolean;
   error?: string;

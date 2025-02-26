@@ -3,6 +3,7 @@
 import axios from 'axios';
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
+import api from '@/lib/api';
 
 export async function revokeSession(sessionId: string) {
   const { cookies } = await import('next/headers');
@@ -27,13 +28,7 @@ export async function revokeAllSessions() {
   const cookieStore = cookies();
   const authToken = cookieStore.get('auth-token');
 
-  const response = await axios
-    .delete(`${process.env.NEXT_PUBLIC_API_URL}/auth/sessions`, {
-      withCredentials: true,
-      headers: {
-        Cookie: `auth-token=${authToken?.value}`,
-      },
-    })
+  const response = await api.delete('/auth/sessions')
     .then((res) => res.data)
     .catch((err) => err.response.data);
 

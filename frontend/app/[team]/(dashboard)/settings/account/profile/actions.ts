@@ -11,18 +11,12 @@ import { getErrorMessage } from '@/messages';
 const apiUrl = process.env.NEXT_PUBLIC_API_URL;
 
 export async function updateUser({
-  user,
   firstName,
   lastName,
 }: {
-  user: User | null;
   firstName?: string;
   lastName?: string;
 }) {
-  if (!user) {
-    return { success: false };
-  }
-
   try {
     const response = await api.patch(`${apiUrl}/users`, {
       first_name: firstName,
@@ -50,13 +44,11 @@ export async function updateUser({
 }
 
 export async function updateUserEmail({
-  user,
   email,
 }: {
-  user: User | null;
   email: string;
 }) {
-  if (!user || !email) return;
+  if (!email) return;
 
   const cookieStore = cookies();
 
@@ -134,13 +126,11 @@ export async function verifyPassword({
 }
 
 export async function uploadAvatar({
-  user,
   formData,
 }: {
-  user: User | null;
   formData: FormData;
 }): Promise<ApiResponse> {
-  if (!user || !formData) {
+  if (!formData) {
     return {
       success: false,
       error: 'Missing required data',

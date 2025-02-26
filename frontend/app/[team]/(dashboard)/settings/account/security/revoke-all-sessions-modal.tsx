@@ -14,7 +14,7 @@ export default function RevokeAllSessionsModal({
   currentSessionId: string;
 }) {
   const queryClient = useQueryClient();
-
+  
   return (
     <Modal
       title="Revoke all sessions?"

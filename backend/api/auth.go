@@ -599,6 +599,7 @@ func (s *Server) handleRevokeSessions(w http.ResponseWriter, r *http.Request) er
 
 	sessions, err := s.store.GetSessionsByUserID(userSession.User.ID)
 	if err != nil {
+		fmt.Println("failed at 602")
 		return WriteJSON(w, http.StatusInternalServerError, Error{Error: "internal server error.", Code: "internal_server_error"})
 	}
 
@@ -619,15 +620,12 @@ func (s *Server) handleRevokeSessions(w http.ResponseWriter, r *http.Request) er
 				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
 			}
 
-			err = usermanagement.RevokeSession(
+			// ignore workos session revoke
+			_ = usermanagement.RevokeSession(
 				context.Background(),
 				usermanagement.RevokeSessionOpts{
 					SessionID: session.WorkosSessionID,
 				})
-
-			if err != nil {
-				return WriteJSON(w, http.StatusBadRequest, Error{Error: "internal server error.", Code: "internal_server_error"})
-			}
 		}
 	}
 
@@ -744,9 +742,9 @@ func (s *Server) handleRefreshToken(w http.ResponseWriter, r *http.Request) erro
 	response, err := usermanagement.AuthenticateWithRefreshToken(
 		context.Background(),
 		usermanagement.AuthenticateWithRefreshTokenOpts{
-			ClientID:     os.Getenv("WORKOS_CLIENT_ID"),
-			RefreshToken: refresh.Value,
-			OrganizationID:        orgId,
+			ClientID:       os.Getenv("WORKOS_CLIENT_ID"),
+			RefreshToken:   refresh.Value,
+			OrganizationID: orgId,
 		},
 	)
 

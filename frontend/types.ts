@@ -20,7 +20,7 @@ export type User = {
   first_name?: string;
   last_name?: string;
   email: string;
-  updated_email: string;
+  updated_email?: string;
   is_admin?: boolean;
   avatar_url?: string;
   deleted_at?: string | null;

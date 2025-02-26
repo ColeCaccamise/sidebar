@@ -19,16 +19,34 @@ export type SubscriptionData = {
   data?: Subscription | null;
 };
 
-export async function getStripeCustomerId(userId: string) {
-  if (!userId) {
+/**
+ * The function `setStripeCustomerId` sets a customer ID in Redis for a specific workspace.
+ * @param {string} workspaceId - A string representing the ID of the workspace for which the Stripe
+ * customer ID is being set.
+ * @param {string} customerId - The `customerId` parameter is a string that represents the unique
+ * identifier for a customer in the Stripe payment system.
+ */
+export async function setStripeCustomerId(
+  workspaceId: string,
+  customerId: string,
+) {
+  await setRedis({ key: `stripe:workspace:${workspaceId}`, value: customerId });
+}
+
+export async function getStripeCustomerId(workspaceId: string | null) {
+  if (!workspaceId) {
     return null;
   }
 
-  const customerId = await getRedis({ key: `stripe:user:${userId}` });
-  return customerId;
+  const customerId = await getRedis({ key: `stripe:workspace:${workspaceId}` });
+  return customerId.data as string | null;
 }
 
-export async function getStripeSubscription(customerId: string) {
+export async function getStripeSubscription(customerId: string | null) {
+  if (!customerId) {
+    return null;
+  }
+
   const subscription = await getRedis({ key: `stripe:customer:${customerId}` });
   return subscription;
 }

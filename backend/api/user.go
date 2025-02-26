@@ -27,6 +27,20 @@ import (
 )
 
 // USERS
+func (s *Server) handleGetCurrentUser(w http.ResponseWriter, r *http.Request) error {
+	userSession, err := getUserSession(s, r)
+	if err != nil {
+		return WriteJSON(w, http.StatusUnauthorized, Error{
+			Error: "unauthorized",
+			Code:  "unauthorized",
+		})
+	}
+
+	user := userSession.User
+
+	return WriteJSON(w, http.StatusOK, user)
+}
+
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) error {
 	createUserReq := new(models.CreateUserRequest)
 	if err := json.NewDecoder(r.Body).Decode(createUserReq); err != nil {

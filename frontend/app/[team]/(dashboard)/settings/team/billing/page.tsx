@@ -6,8 +6,19 @@ import {
   Plan,
 } from '@/types';
 import { PaymentMethodWarning, PlanInformation } from './billing-components';
+import { Metadata } from 'next';
+import { getStripeCustomerId, getStripeSubscription } from '@/lib/stripe';
+import { getCurrentOrgID } from '@/lib/workspace';
 
-export default function BillingPage({ params }: { params: { team: string } }) {
+export const metadata: Metadata = {
+  title: 'Billing',
+};
+
+export default async function BillingPage({
+  params,
+}: {
+  params: { team: string };
+}) {
   const paymentMethods: WorkspacePaymentMethod[] = [];
   const plans: Plan[] = [];
   const subscription: Subscription = {
@@ -56,6 +67,10 @@ export default function BillingPage({ params }: { params: { team: string } }) {
       },
     },
   };
+
+  const orgId = await getCurrentOrgID();
+  const cust = await getStripeCustomerId(orgId);
+  const sub = await getStripeSubscription(cust);
 
   const handleAddNewPaymentMethod = async () => {
     'use server';

@@ -21,7 +21,9 @@ const accessTokenExpiry = 1 * 60; // 1 minute
 const refreshTokenExpiry = 720 * 60 * 60; // 30 days
 
 const handleRedirect = (request: NextRequest, url: string) => {
-  if (request.nextUrl.pathname === url) {
+  console.log('handleRedirect', request.nextUrl.pathname, url);
+  // ignore query params when comparing equality
+  if (request.nextUrl.pathname === url.split('?')[0]) {
     return NextResponse.next();
   }
   return NextResponse.redirect(new URL(url, request.url));
@@ -52,7 +54,6 @@ export async function middleware(request: NextRequest) {
   }
 
   const authExpired = isTokenExpired(authToken ?? '');
-  console.log('auth expired', authExpired);
   if ((authExpired || !authToken) && refreshToken) {
     // handle refresh inline
     try {
@@ -68,6 +69,7 @@ export async function middleware(request: NextRequest) {
       );
 
       if (!response.ok) {
+        console.log(70)
         return handleRedirect(
           request,
           '/auth/login?error=refresh_token_expired',

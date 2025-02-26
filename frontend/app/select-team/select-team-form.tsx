@@ -41,7 +41,7 @@ export default function SelectTeamForm({
 
   // update local storage when chosen team changes
   useEffect(() => {
-    if (teams.length > 0 && token) {
+    if (teams?.length > 0 && token) {
       setValue({
         chosenTeam: chosenTeam,
         token: token,
@@ -52,7 +52,7 @@ export default function SelectTeamForm({
 
   // initialize team data from props or storage
   useEffect(() => {
-    if (teams.length > 0) {
+    if (teams?.length > 0) {
       setTeamData(teams);
     } else if (value.teams) {
       setTeamData(value.teams);
@@ -65,13 +65,13 @@ export default function SelectTeamForm({
   };
 
   useEffect(() => {
-    if (teamData.length === 0) {
+    if (teamData?.length === 0) {
       router.push(loginUrl);
       removeValue();
     }
   }, [teamData, router, removeValue]);
 
-  if (teamData.length > 0 || teams.length > 0) {
+  if (teamData?.length > 0 || teams?.length > 0) {
     return (
       <>
         <Modal
@@ -127,7 +127,8 @@ export default function SelectTeamForm({
                 Continue
               </Button>
 
-              {chosenTeam && (
+              {/* TODO: implement later */}
+              {/* {chosenTeam && (
                 <div className="flex items-center gap-2 pt-2">
                   <Checkbox id="always-login" />
                   <label
@@ -137,7 +138,7 @@ export default function SelectTeamForm({
                     Always log in as this team
                   </label>
                 </div>
-              )}
+              )} */}
             </form>
           </div>
         </Modal>
