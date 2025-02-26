@@ -10,11 +10,15 @@ export default function RevokeAllSessionsModal({
 }: {
   revokeAllModalOpen: boolean;
   setRevokeAllModalOpen: (open: boolean) => void;
-  revokeAllSessions: () => Promise<{ error: boolean; code: string }>;
+  revokeAllSessions: () => Promise<{
+    success: boolean;
+    error?: string;
+    data?: any;
+  }>;
   currentSessionId: string;
 }) {
   const queryClient = useQueryClient();
-  
+    
   return (
     <Modal
       title="Revoke all sessions?"
@@ -37,7 +41,7 @@ export default function RevokeAllSessionsModal({
           );
           setRevokeAllModalOpen(false);
         } else {
-          console.error(res.code);
+          console.error(res.error);
         }
       }}
     >

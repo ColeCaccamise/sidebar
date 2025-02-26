@@ -23,12 +23,20 @@ export async function revokeSession(sessionId: string) {
   return response;
 }
 
-export async function revokeAllSessions() {
+export async function revokeAllSessions(): Promise<{
+  success: boolean;
+  error?: string;
+  data?: any;
+}> {
   const { cookies } = await import('next/headers');
   const cookieStore = cookies();
   const authToken = cookieStore.get('auth-token');
 
-  const response = await api.delete('/auth/sessions')
+  const response = await api.delete<{
+    success: boolean;
+    error?: string;
+    data?: any;
+  }>('/auth/sessions')
     .then((res) => res.data)
     .catch((err) => err.response.data);
 
