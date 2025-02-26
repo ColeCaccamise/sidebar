@@ -1,42 +1,45 @@
-import { NextRequest, NextResponse } from "next/server";
-import axios from "axios";
-import { cookies } from "next/headers";
+import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
+import { parseJwt } from '@/lib/jwt';
+import axios from 'axios';
 
 export async function GET(request: NextRequest) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-  const allCookies = cookies().getAll();
-
   try {
-    const response = await axios.get(`${apiUrl}/auth/refresh`, {
-      headers: {
-        Cookie: `refresh-token=${cookies().get("refresh-token")}`,
+    console.log('refresh route');
+    const cookieStore = cookies();
+    const { searchParams } = new URL(request.url);
+    const redirect = searchParams.get('redirect');
+    console.log('redirect', redirect);
+
+    const authToken = cookieStore.get('auth-token')?.value;
+    const parsedAuth = parseJwt(authToken ?? '');
+
+    if (parsedAuth) {
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+
+    const { data } = await axios.get(
+      `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
+      {
+        withCredentials: true,
       },
-      withCredentials: true,
+    );
+
+    const { access_token, refresh_token } = data;
+
+    console.log('access_token', access_token);
+    console.log('refresh_token', refresh_token);
+
+    return NextResponse.json({
+      access_token,
+      refresh_token,
     });
 
-    const setCookie = response.headers["set-cookie"];
-    console.log("Set-Cookie:", setCookie);
-    if (response.status !== 200) {
-      return NextResponse.redirect(
-        new URL("/auth/login?error=no-refresh", request.url),
-      );
-    }
-
-    const redirectResponse = NextResponse.redirect(
-      new URL("/dashboard", request.url),
-    );
-
-    // Forward the Set-Cookie header from the API response
-    if (setCookie) {
-      setCookie.forEach((cookie) => {
-        redirectResponse.headers.append("Set-Cookie", cookie);
-      });
-    }
-
-    return redirectResponse;
+    // return NextResponse.redirect(new URL('/', request.url));
   } catch (error) {
-    return NextResponse.redirect(
-      new URL("/auth/login?error=other-error-refresh", request.url),
-    );
+    // return NextResponse.redirect(new URL('/auth/login', request.url));
+    return NextResponse.json({
+      error: 'Failed to refresh token',
+    });
   }
 }

@@ -2,181 +2,159 @@ import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import axios from 'axios';
 import { cookies } from 'next/headers';
+import { User, Workspace } from './types';
+import { parseJwt, isTokenExpired } from './lib/jwt';
+import { getRedis } from './lib/redis';
+
+const SIGNED_OUT_AUTH_ROUTES = ['/auth/login', '/auth/signup'];
+const AUTH_ROUTES = [
+  '/auth/forgot-password',
+  '/auth/change-password',
+  '/auth/confirm',
+  '/auth/callback',
+  '/auth/refresh',
+];
+const ALLOWED_ROUTES = ['/legal/privacy', '/legal/terms', '/select-team'];
+
+// times in s
+const accessTokenExpiry = 1 * 60; // 1 minute
+const refreshTokenExpiry = 720 * 60 * 60; // 30 days
+
+const handleRedirect = (request: NextRequest, url: string) => {
+  console.log('handleRedirect', request.nextUrl.pathname, url);
+  // ignore query params when comparing equality
+  if (request.nextUrl.pathname === url.split('?')[0]) {
+    return NextResponse.next();
+  }
+  return NextResponse.redirect(new URL(url, request.url));
+};
 
 export async function middleware(request: NextRequest) {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+  // skip middleware for server actions
+  if (request.headers.get('next-action') !== null) {
+    return NextResponse.next();
+  }
+
   const cookieStore = cookies();
   const pathname = request.nextUrl.pathname;
 
-  // Allow legal pages to be accessed without authentication
-  if (pathname.startsWith('/legal')) {
+  if (
+    pathname.startsWith('/auth/callback/') ||
+    ALLOWED_ROUTES.includes(pathname) ||
+    AUTH_ROUTES.includes(pathname)
+  ) {
     return NextResponse.next();
   }
 
-  if (!apiUrl) {
-    console.error('NEXT_PUBLIC_API_URL is not defined');
-    return NextResponse.next();
+  let authToken = cookieStore.get('auth-token')?.value;
+  let refreshToken = cookieStore.get('refresh-token')?.value;
+
+  if (!authToken && !refreshToken) {
+    return handleRedirect(request, '/auth/login');
   }
 
-  try {
-    // TODO: retain the initial request url to be redirected back to after login
-
-    const response = await axios
-      .get(`${apiUrl}/auth/identity`, {
-        headers: {
-          Cookie: `auth-token=${cookieStore.get('auth-token')?.value}`,
+  const authExpired = isTokenExpired(authToken ?? '');
+  if ((authExpired || !authToken) && refreshToken) {
+    // handle refresh inline
+    try {
+      const response = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/auth/refresh`,
+        {
+          method: 'GET',
+          headers: {
+            Cookie: `refresh-token=${refreshToken}`,
+          },
+          credentials: 'include',
         },
-        withCredentials: true,
-      })
-      .then((res) => res)
-      .catch((err) => err.response);
+      );
 
-    const authPath = pathname.startsWith('/auth');
-    const isPasswordPath =
-      pathname.startsWith('/auth/forgot-password') ||
-      pathname.startsWith('/auth/change-password');
-
-    // attempt to refresh the auth token
-    if (response.status === 401) {
-      const refreshToken = request.cookies.get('refresh-token')?.value;
-      if (refreshToken) {
-        const refreshResponse = await axios
-          .get(`${apiUrl}/auth/refresh`, {
-            headers: {
-              Cookie: `refresh-token=${refreshToken}`,
-            },
-            withCredentials: true,
-          })
-          .then((res) => res)
-          .catch((err) => err.response);
-
-        if (refreshResponse.status === 200) {
-          // Set cookies from the refresh response
-          const response = NextResponse.next();
-
-          if (authPath && !isPasswordPath && pathname !== '/auth/confirm') {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
-          }
-
-          if (pathname === '/') {
-            return NextResponse.redirect(new URL('/dashboard', request.url));
-          }
-
-          const cookies = refreshResponse.headers['set-cookie'];
-          if (cookies) {
-            if (Array.isArray(cookies)) {
-              cookies.forEach((cookie) => {
-                response.headers.append('Set-Cookie', cookie);
-              });
-            } else if (typeof cookies === 'string') {
-              response.headers.append('Set-Cookie', cookies);
-            }
-          }
-
-          return response;
-        }
-      }
-      if (response.data?.code === 'session_expired' && !authPath) {
-        const loginUrl = new URL('/auth/login', request.url);
-        loginUrl.searchParams.append('error', 'session_expired');
-        return NextResponse.redirect(loginUrl);
+      if (!response.ok) {
+        console.log(70)
+        return handleRedirect(
+          request,
+          '/auth/login?error=refresh_token_expired',
+        );
       }
 
-      if (!authPath) {
-        return NextResponse.redirect(new URL('/auth/login', request.url));
-      }
+      // get the new tokens from response
+      const { data } = await response.json();
+      const { access_token, refresh_token } = data;
 
-      return NextResponse.next();
+      console.log('refreshed token', access_token, refresh_token);
+
+      // create response with new tokens
+      const newResponse = NextResponse.next();
+
+      // set the cookies with proper attributes
+      newResponse.cookies.set({
+        name: 'auth-token',
+        value: access_token,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: accessTokenExpiry,
+        path: '/',
+      });
+
+      newResponse.cookies.set({
+        name: 'refresh-token',
+        value: refresh_token,
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        maxAge: refreshTokenExpiry,
+        path: '/',
+      });
+
+      // update the current request auth token for subsequent middleware checks
+      authToken = access_token;
+      console.log('refreshed token');
+      return newResponse;
+    } catch {
+      console.log('error refreshing token');
+      return handleRedirect(request, '/auth/login');
     }
-
-    // User exists and is authenticated
-    const userData = response.data;
-
-    const emailConfirmed = userData && userData.email_confirmed;
-    const updateEmailRequested = userData && userData.updated_email;
-
-    const nextResponse = NextResponse.next();
-
-    // Add cookies from the original response to all responses
-    const cookies = response.headers['set-cookie'];
-
-    if (cookies) {
-      if (Array.isArray(cookies)) {
-        cookies.forEach((cookie) => {
-          nextResponse.headers.append('Set-Cookie', cookie);
-        });
-      } else {
-        nextResponse.headers.append('Set-Cookie', cookies);
-      }
-    }
-
-    if (
-      userData &&
-      emailConfirmed &&
-      pathname.startsWith('/auth/confirm-email')
-    ) {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-
-    if (
-      (updateEmailRequested && pathname.startsWith('/auth/confirm')) ||
-      (!emailConfirmed && pathname.startsWith('/auth/confirm'))
-    ) {
-      return nextResponse;
-    }
-
-    if (
-      !emailConfirmed &&
-      userData &&
-      !pathname.startsWith('/auth/confirm-email')
-    ) {
-      return NextResponse.redirect(new URL('/auth/confirm-email', request.url));
-    }
-
-    if (
-      !emailConfirmed &&
-      userData &&
-      pathname.startsWith('/auth/confirm-email')
-    ) {
-      return nextResponse;
-    }
-
-    if (!emailConfirmed && userData && !pathname.startsWith('/auth/confirm')) {
-      return NextResponse.redirect(new URL('/auth/confirm-email', request.url));
-    }
-
-    if (userData) {
-      if (
-        (authPath && !isPasswordPath && pathname !== '/dashboard') ||
-        pathname === '/'
-      ) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-      }
-    }
-
-    return nextResponse;
-  } catch (err) {
-    const pathname = request.nextUrl.pathname;
-    const authPath = pathname.startsWith('/auth');
-    const emailConfirmed = pathname.startsWith('/auth/confirm-email');
-
-    if (!authPath || emailConfirmed) {
-      return NextResponse.redirect(new URL('/auth/login', request.url));
-    }
-
-    return NextResponse.next();
   }
+
+  const parsedAuth = parseJwt(authToken ?? '');
+  console.log('parsed auth', parsedAuth);
+
+  if (!parsedAuth) {
+    return handleRedirect(request, '/auth/login');
+  }
+
+  const userId = parsedAuth.sub;
+
+  // if (!workspace.onboarded) {
+  //   return handleRedirect(request, `/${slug}/onboarding`);
+  // }
+
+  const redisUser = await getRedis({ key: `user:${userId}` });
+  if (!redisUser.success || !redisUser.data) {
+    return handleRedirect(request, '/auth/login');
+  }
+
+  const user = redisUser.data as User;
+
+  if (!user.onboarded) {
+    return handleRedirect(request, '/onboarding');
+  }
+
+  console.log('pathname', pathname);
+
+  if (SIGNED_OUT_AUTH_ROUTES.includes(pathname) || pathname === '/') {
+    console.log('redirecting to workspace');
+    // redirect to workspace on root or auth routes
+    const workspaceId = parsedAuth.org_id;
+    const workspaceData = await getRedis({ key: `workspace:${workspaceId}` });
+    const workspace = workspaceData.data as Workspace;
+    const slug = workspace.slug ?? '';
+    return handleRedirect(request, `/${slug}`);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico).*)',
-  ],
+  matcher: ['/((?!api|_next/static|_next/image|favicon.ico).*)'],
 };

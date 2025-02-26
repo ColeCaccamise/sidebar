@@ -1,17 +1,20 @@
-import { Dialog, DialogPanel, DialogBackdrop } from '@headlessui/react';
-import { Cross1Icon } from '@radix-ui/react-icons';
-import Button from '@/components/ui/button';
+'use client';
 
-export default function Modal({
-  open = false,
-  setOpen = () => {},
-  children,
-  onClose = () => {},
-  title,
-  hint,
-  canClose = true,
-  showCloseButton = true,
-}: {
+import { Dialog, DialogPanel } from '@headlessui/react';
+import { ArrowLeftIcon, Cross1Icon } from '@radix-ui/react-icons';
+import { Button } from '@/components/ui/button';
+import Spinner from './spinner';
+import { useEffect, useCallback } from 'react';
+
+interface Step {
+  children: React.ReactNode;
+  title?: string;
+  disabled?: boolean;
+  handleBack?: () => void | Promise<void>;
+  handleSubmit?: () => void | Promise<void>;
+}
+
+interface ModalProps {
   open?: boolean;
   setOpen?: (open: boolean) => void;
   children?: React.ReactNode;
@@ -20,33 +23,91 @@ export default function Modal({
   hint?: React.ReactNode;
   canClose?: boolean;
   showCloseButton?: boolean;
-}) {
-  const handleClose = () => {
-    onClose();
-    setOpen(false);
-  };
+  className?: string;
+  steps?: Step[];
+  currentStep?: number;
+  handleSubmit?: () => void | Promise<void>;
+  submitText?: string;
+  cancelText?: string;
+  showCancelButton?: boolean;
+  showSubmitButton?: boolean;
+  isLoading?: boolean;
+  destructive?: boolean;
+}
+
+export default function Modal({
+  open = false,
+  setOpen,
+  children,
+  onClose,
+  title,
+  hint,
+  canClose = true,
+  showCloseButton = true,
+  className,
+  steps,
+  currentStep = 0,
+  handleSubmit,
+  submitText = 'Submit',
+  cancelText = 'Cancel',
+  showSubmitButton = true,
+  showCancelButton = true,
+  isLoading = false,
+  destructive = false,
+}: ModalProps) {
+  const handleClose = useCallback(() => {
+    if (!canClose) return;
+    onClose?.();
+    setOpen?.(false);
+  }, [canClose, onClose, setOpen]);
+
+  const activeStep = steps?.[currentStep];
+  const showContent = !steps ? children : activeStep?.children;
+
+  useEffect(() => {
+    if (open) {
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+          if (handleSubmit && !isLoading && !activeStep?.disabled) {
+            if (activeStep?.handleSubmit) {
+              activeStep.handleSubmit();
+            } else {
+              handleSubmit();
+            }
+          }
+        }
+        if (e.key === 'Escape') {
+          handleClose();
+        }
+      };
+
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [open, handleSubmit, isLoading, activeStep, handleClose]);
 
   return (
-    <Dialog
-      open={open}
-      onClose={canClose ? (value: boolean) => handleClose() : () => {}}
-      className="relative z-50"
-    >
-      <DialogBackdrop
-        className="fixed inset-0 bg-black/40"
-        onClick={canClose ? handleClose : () => {}}
-      />
-      <div className="fixed inset-0 flex w-screen items-center justify-center p-4">
-        <DialogPanel className="max-w-lg space-y-4 rounded-md border border-stroke-weak bg-background p-8">
+    <Dialog open={open} onClose={handleClose} className="relative z-50">
+      <div className="fixed inset-0 bg-black/40" aria-hidden="true" />
+
+      <div className="fixed inset-0 flex w-screen items-center justify-center px-8">
+        <DialogPanel
+          className={`flex flex-col rounded-md border border-stroke-weak bg-background ${className}`}
+        >
           {hint && hint}
-          {title ? (
-            <div className="flex justify-between">
+          {(!steps ? title : activeStep?.title) ? (
+            <div className="flex justify-between border-b border-stroke-weak p-4">
+              {activeStep?.handleBack && (
+                <Button onClick={activeStep.handleBack} variant="ghost">
+                  <ArrowLeftIcon />
+                </Button>
+              )}
               <h3 className="text-lg font-bold text-typography-strong">
-                {title}
+                {!steps ? title : activeStep?.title}
               </h3>
               {canClose && showCloseButton && (
                 <Button
-                  handleClick={handleClose}
+                  onClick={handleClose}
                   className="transition-effect hover:opacity-80"
                   variant="unstyled"
                 >
@@ -54,8 +115,40 @@ export default function Modal({
                 </Button>
               )}
             </div>
-          ) : null}{' '}
-          {children}
+          ) : null}
+
+          <div className="p-6">{showContent}</div>
+
+          {(showCancelButton || (showSubmitButton && handleSubmit)) && (
+            <div className="border-t border-stroke-weak p-4">
+              <div className="flex justify-end gap-3">
+                {showCancelButton && (
+                  <Button
+                    variant="ghost"
+                    className="btn btn-outline btn-small"
+                    onClick={activeStep?.handleBack || handleClose}
+                  >
+                    {cancelText}
+                  </Button>
+                )}
+                {((!steps && showSubmitButton) || steps) && handleSubmit && (
+                  <Button
+                    className={`btn btn-small ${destructive ? 'btn-destructive' : 'btn-brand-secondary'}`}
+                    variant={destructive ? 'destructive' : 'secondary'}
+                    onClick={activeStep?.handleSubmit || handleSubmit}
+                    disabled={activeStep?.disabled || isLoading}
+                  >
+                    {isLoading && (
+                      <span className="mr-2">
+                        <Spinner variant="light" />
+                      </span>
+                    )}
+                    {submitText}
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
         </DialogPanel>
       </div>
     </Dialog>

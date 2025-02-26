@@ -1,15 +1,15 @@
-"use client";
+'use client';
 
-import Input from "@/components/ui/input";
-import Button from "@/components/ui/button";
-import Link from "next/link";
-import toast from "@/lib/toast";
-import { useState } from "react";
-import axios from "axios";
-import { getErrorMessage } from "@/messages";
+import Input from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import Link from 'next/link';
+import toast from '@/lib/toast';
+import { useState } from 'react';
+import axios from 'axios';
+import { getErrorMessage } from '@/messages';
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState('');
   const [emailSent, setEmailSent] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -62,12 +62,12 @@ export default function ForgotPasswordPage() {
                 },
               },
             )
-            .then((res) => {
+            .then(() => {
               toast({
-                message: "Password reset sent! ",
+                message: 'Password reset sent! ',
                 description:
                   "You'll receive an email if your are registered in our system.",
-                mode: "success",
+                mode: 'success',
               });
 
               setEmailSent(true);
@@ -75,7 +75,7 @@ export default function ForgotPasswordPage() {
             .catch((err) => {
               toast({
                 message: getErrorMessage(err.response?.data?.code),
-                mode: "error",
+                mode: 'error',
               });
             })
             .finally(() => {
@@ -92,7 +92,7 @@ export default function ForgotPasswordPage() {
           handleChange={(e) => setEmail(e.target.value)}
         />
         <Button className="w-full" type="submit" disabled={!email || loading}>
-          {loading ? "Sending..." : "Request reset link"}
+          {loading ? 'Sending...' : 'Request reset link'}
         </Button>
         <div className="text-center">
           <Link className="no-underline" href="/auth/login">
